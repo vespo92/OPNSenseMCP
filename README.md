@@ -2,6 +2,10 @@
 
 A Model Context Protocol (MCP) server for managing OPNSense firewalls through natural language interactions with Claude Desktop.
 
+<a href="https://glama.ai/mcp/servers/@vespo92/OPNSenseMCP">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@vespo92/OPNSenseMCP/badge" alt="OPNSense Server MCP server" />
+</a>
+
 ## Features
 
 ### Phase 1 & 2 (Complete)
