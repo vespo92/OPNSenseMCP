@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # Redis for fast caching and queuing
+  redis:
+    image: redis:7-alpine
+    container_name: opnsense-mcp-redis
+    restart: unless-stopped
+    ports:
+      - "10.0.0.2:6379:6379"
+    volumes:
+      - redis-data:/data
+    command: >
+      redis-server
+      --save 60 1
+      --save 300 10
+      --save 900 100
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    networks:
+      - mcp-network
+
+  # PostgreSQL for persistent storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: opnsense-mcp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: opnsense_mcp
+      POSTGRES_USER: mcp_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcp_secure_password}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "10.0.0.2:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp_user -d opnsense_mcp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: Redis Commander for GUI management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: opnsense-mcp-redis-ui
+    restart: unless-stopped
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "10.0.0.2:8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - mcp-network
+
+  # Optional: pgAdmin for PostgreSQL management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: opnsense-mcp-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@opnsense.local
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "10.0.0.2:8082:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  pgadmin-data:
+    driver: local

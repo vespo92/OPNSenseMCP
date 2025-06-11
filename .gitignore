@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files with sensitive data
+.env
+.env.local
+.env.minimal
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+.vscode/
+.idea/
+*.iml
+
+# Personal/temporary files
+VinnieSpecific/
+TODELETE/
+test-*.js
+test-*.bat
+diagnose-*.js
+*.backup
+
+#PhaseDocs
+Phase1Docs
+Phase2Docs
+Phase3Docs
+
+# Local backup directory
+backup/*.xml
+backup/*.json
+backups/
+
+# Temporary build files
+build-phase*.js
+clean-build.bat

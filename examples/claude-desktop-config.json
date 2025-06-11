@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "opnsense": {
+      "command": "node",
+      "args": ["C:\\Users\\VinSpo\\Desktop\\OPNSenseMCP\\dist\\index.js"],
+      "env": {
+        "OPNSENSE_HOST": "your-opnsense-host.example.com",
+        "OPNSENSE_API_KEY": "your-api-key",
+        "OPNSENSE_API_SECRET": "your-api-secret",
+        "OPNSENSE_VERIFY_SSL": "true"
+      }
+    }
+  }
+}
