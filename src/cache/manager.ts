@@ -1,12 +1,19 @@
 // MCP Cache Manager for Local Infrastructure Integration
 import { OPNSenseAPIClient } from '../api/client.js';
+import Redis from 'ioredis';
+import pkg from 'pg';
+const { Pool } = pkg;
 
 export interface CacheConfig {
   redisHost?: string;
   redisPort?: number;
+  redisPassword?: string;
+  redisDb?: number;
+  redisKeyPrefix?: string;
   postgresHost?: string;
   postgresPort?: number;
   postgresDb?: string;
+  postgresSchema?: string;
   postgresUser?: string;
   postgresPassword?: string;
   cacheTTL?: number;
@@ -23,28 +30,29 @@ export interface CachedData<T> {
 export class MCPCacheManager {
   private config: CacheConfig;
   private client: OPNSenseAPIClient;
-  private cache: Map<string, CachedData<any>>;
-  
-  // In production, these would be actual Redis/Postgres clients
-  private redisClient: any = null;
-  private pgClient: any = null;
+  private redisClient: Redis | null = null;
+  private pgPool: any = null;
+  private keyPrefix: string;
 
   constructor(client: OPNSenseAPIClient, config: CacheConfig = {}) {
     this.client = client;
     this.config = {
-      redisHost: config.redisHost || '10.0.0.2',
-      redisPort: config.redisPort || 6379,
-      postgresHost: config.postgresHost || '10.0.0.2',
-      postgresPort: config.postgresPort || 5432,
-      postgresDb: config.postgresDb || 'opnsense_mcp',
-      postgresUser: config.postgresUser || 'mcp_user',
-      postgresPassword: config.postgresPassword || '',
-      cacheTTL: config.cacheTTL || 300, // 5 minutes default
-      enableCache: config.enableCache !== false
+      redisHost: config.redisHost || process.env.REDIS_HOST || 'localhost',
+      redisPort: config.redisPort || parseInt(process.env.REDIS_PORT || '6379'),
+      redisPassword: config.redisPassword || process.env.REDIS_PASSWORD,
+      redisDb: config.redisDb || parseInt(process.env.REDIS_DB || '0'),
+      redisKeyPrefix: config.redisKeyPrefix || process.env.REDIS_KEY_PREFIX || 'opnsense:',
+      postgresHost: config.postgresHost || process.env.POSTGRES_HOST || 'localhost',
+      postgresPort: config.postgresPort || parseInt(process.env.POSTGRES_PORT || '5432'),
+      postgresDb: config.postgresDb || process.env.POSTGRES_DB || 'opnsense_mcp',
+      postgresSchema: config.postgresSchema || process.env.POSTGRES_SCHEMA || 'public',
+      postgresUser: config.postgresUser || process.env.POSTGRES_USER || 'mcp_user',
+      postgresPassword: config.postgresPassword || process.env.POSTGRES_PASSWORD,
+      cacheTTL: config.cacheTTL || parseInt(process.env.CACHE_TTL || '300'),
+      enableCache: config.enableCache !== false && process.env.ENABLE_CACHE !== 'false'
     };
     
-    // In-memory cache for demo
-    this.cache = new Map();
+    this.keyPrefix = this.config.redisKeyPrefix!;
     
     // Initialize connections
     this.initializeConnections();
@@ -57,11 +65,43 @@ export class MCPCacheManager {
     if (!this.config.enableCache) return;
     
     try {
-      // In production, connect to Redis
-      console.log(`Would connect to Redis at ${this.config.redisHost}:${this.config.redisPort}`);
+      // Connect to Redis with optional authentication
+      this.redisClient = new Redis({
+        host: this.config.redisHost,
+        port: this.config.redisPort,
+        password: this.config.redisPassword,
+        db: this.config.redisDb,
+        keyPrefix: this.keyPrefix,
+        retryStrategy: (times) => {
+          const delay = Math.min(times * 50, 2000);
+          return delay;
+        }
+      });
+
+      this.redisClient.on('connect', () => {
+        console.log(`Connected to Redis at ${this.config.redisHost}:${this.config.redisPort} (using database ${this.config.redisDb})`);
+      });
+
+      this.redisClient.on('error', (err) => {
+        console.error('Redis connection error:', err);
+      });
+
+      // Connect to PostgreSQL
+      this.pgPool = new Pool({
+        host: this.config.postgresHost,
+        port: this.config.postgresPort,
+        database: this.config.postgresDb,
+        user: this.config.postgresUser,
+        password: this.config.postgresPassword,
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+      });
+
+      // Set search path to include opnsense schema
+      await this.pgPool.query(`SET search_path TO ${this.config.postgresSchema}, public`);
       
-      // In production, connect to PostgreSQL
-      console.log(`Would connect to PostgreSQL at ${this.config.postgresHost}:${this.config.postgresPort}`);
+      console.log(`Connected to PostgreSQL at ${this.config.postgresHost}:${this.config.postgresPort}/${this.config.postgresDb} (schema: ${this.config.postgresSchema})`);
     } catch (error) {
       console.error('Failed to initialize cache connections:', error);
     }
@@ -75,8 +115,7 @@ export class MCPCacheManager {
     fetcher: () => Promise<T>,
     ttl?: number
   ): Promise<CachedData<T>> {
-    // Check if caching is enabled
-    if (!this.config.enableCache) {
+    if (!this.config.enableCache || !this.redisClient) {
       const data = await fetcher();
       return {
         data,
@@ -86,56 +125,73 @@ export class MCPCacheManager {
       };
     }
 
-    // Check cache
-    const cached = this.getFromCache<T>(key);
-    if (cached) {
-      return cached;
+    try {
+      // Check Redis cache (key already has prefix from Redis client)
+      const cached = await this.redisClient.get(key);
+      if (cached) {
+        await this.logCacheAccess(key, 'hit');
+        return {
+          data: JSON.parse(cached),
+          timestamp: new Date(),
+          ttl: ttl || this.config.cacheTTL!,
+          source: 'cache'
+        };
+      }
+    } catch (error) {
+      console.error('Redis get error:', error);
     }
 
     // Fetch from API
     const data = await fetcher();
     
-    // Store in cache
-    const cacheData: CachedData<T> = {
+    // Store in Redis cache
+    try {
+      await this.redisClient!.setex(
+        key,
+        ttl || this.config.cacheTTL!,
+        JSON.stringify(data)
+      );
+    } catch (error) {
+      console.error('Redis set error:', error);
+    }
+    
+    // Log cache miss
+    await this.logCacheAccess(key, 'miss');
+    
+    return {
       data,
       timestamp: new Date(),
       ttl: ttl || this.config.cacheTTL!,
       source: 'api'
     };
-    
-    this.setInCache(key, cacheData);
-    
-    // Log to database
-    await this.logAccess(key, 'miss');
-    
-    return cacheData;
   }
 
   /**
-   * Invalidate cache entry
+   * Invalidate cache entries matching pattern
    */
   async invalidate(pattern: string): Promise<void> {
-    // In production, use Redis pattern matching
-    const keysToDelete: string[] = [];
-    
-    for (const key of this.cache.keys()) {
-      if (key.includes(pattern)) {
-        keysToDelete.push(key);
+    if (!this.redisClient) return;
+
+    try {
+      // Get all keys matching pattern (accounting for key prefix)
+      const keys = await this.redisClient.keys(`${pattern}*`);
+      
+      if (keys.length > 0) {
+        // Remove the key prefix before deleting
+        const unprefixedKeys = keys.map(k => k.replace(this.keyPrefix, ''));
+        await this.redisClient.del(...unprefixedKeys);
+        console.log(`Invalidated ${keys.length} cache entries matching: ${this.keyPrefix}${pattern}`);
       }
+    } catch (error) {
+      console.error('Cache invalidation error:', error);
     }
-
-    for (const key of keysToDelete) {
-      this.cache.delete(key);
-    }
-
-    console.log(`Invalidated ${keysToDelete.length} cache entries matching: ${pattern}`);
   }
 
   /**
    * Get cached firewall rules
    */
   async getFirewallRules(): Promise<CachedData<any[]>> {
-    return this.get('firewall:rules', 
+    return this.get('cache:firewall:rules', 
       () => this.client.searchFirewallRules(),
       300 // 5 minute cache
     );
@@ -145,7 +201,7 @@ export class MCPCacheManager {
    * Get cached VLANs
    */
   async getVlans(): Promise<CachedData<any[]>> {
-    return this.get('network:vlans',
+    return this.get('cache:network:vlans',
       () => this.client.searchVlans(),
       600 // 10 minute cache
     );
@@ -155,64 +211,100 @@ export class MCPCacheManager {
    * Get cached interfaces
    */
   async getInterfaces(): Promise<CachedData<any>> {
-    return this.get('network:interfaces',
+    return this.get('cache:network:interfaces',
       () => this.client.get('/interfaces/overview/export'),
       1800 // 30 minute cache
     );
   }
 
   /**
-   * Log operation for audit trail
+   * Log operation for audit trail in PostgreSQL
    */
   async logOperation(operation: {
     type: string;
     target: string;
     action: string;
     result: 'success' | 'failure';
+    params?: any;
     backupId?: string;
     error?: string;
+    durationMs?: number;
   }): Promise<void> {
-    const entry = {
-      ...operation,
-      timestamp: new Date(),
-      source: 'mcp'
-    };
+    if (!this.pgPool) return;
 
-    // In production, insert into PostgreSQL
-    console.log('Operation log:', entry);
-    
-    // Also log to cache for quick access
-    const recentOps = this.getFromCache<any[]>('operations:recent')?.data || [];
-    recentOps.unshift(entry);
-    
-    // Keep last 100 operations in cache
-    if (recentOps.length > 100) {
-      recentOps.pop();
+    try {
+      const query = `
+        INSERT INTO opnsense.operations 
+        (operation_id, type, target, action, params, result, error_message, backup_id, duration_ms)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `;
+      
+      const operationId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      await this.pgPool.query(query, [
+        operationId,
+        operation.type,
+        operation.target,
+        operation.action,
+        JSON.stringify(operation.params || {}),
+        operation.result,
+        operation.error || null,
+        operation.backupId || null,
+        operation.durationMs || null
+      ]);
+
+      // Also cache recent operations in Redis for quick access
+      if (this.redisClient) {
+        const recentKey = 'cache:operations:recent';
+        await this.redisClient.lpush(recentKey, JSON.stringify({
+          ...operation,
+          operationId,
+          timestamp: new Date()
+        }));
+        
+        // Keep only last 100 operations
+        await this.redisClient.ltrim(recentKey, 0, 99);
+        await this.redisClient.expire(recentKey, 3600); // 1 hour TTL
+      }
+    } catch (error) {
+      console.error('Failed to log operation:', error);
     }
-    
-    this.setInCache('operations:recent', {
-      data: recentOps,
-      timestamp: new Date(),
-      ttl: 3600, // 1 hour
-      source: 'cache' as const
-    });
   }
 
   /**
-   * Get recent operations
+   * Get recent operations from cache or database
    */
   async getRecentOperations(limit: number = 10): Promise<any[]> {
-    const cached = this.getFromCache<any[]>('operations:recent');
-    if (cached) {
-      return cached.data.slice(0, limit);
+    // Try Redis first
+    if (this.redisClient) {
+      try {
+        const operations = await this.redisClient.lrange('cache:operations:recent', 0, limit - 1);
+        if (operations.length > 0) {
+          return operations.map(op => JSON.parse(op));
+        }
+      } catch (error) {
+        console.error('Redis operations fetch error:', error);
+      }
     }
 
-    // In production, query from PostgreSQL
+    // Fall back to PostgreSQL
+    if (this.pgPool) {
+      try {
+        const result = await this.pgPool.query(
+          'SELECT * FROM opnsense.recent_operations LIMIT $1',
+          [limit]
+        );
+        return result.rows;
+      } catch (error) {
+        console.error('PostgreSQL operations fetch error:', error);
+      }
+    }
+
     return [];
   }
 
   /**
-   * Store command queue for async processing
+   * Store command in Redis queue for async processing
    */
   async queueCommand(command: {
     id: string;
@@ -220,16 +312,19 @@ export class MCPCacheManager {
     params: any;
     priority?: number;
   }): Promise<void> {
-    // In production, push to Redis queue
-    console.log('Queued command:', command);
-  }
+    if (!this.redisClient) return;
 
-  /**
-   * Get queued commands
-   */
-  async getQueuedCommands(): Promise<any[]> {
-    // In production, fetch from Redis queue
-    return [];
+    try {
+      const queueKey = command.priority ? 'queue:commands:priority' : 'queue:commands:normal';
+      await this.redisClient.lpush(queueKey, JSON.stringify({
+        ...command,
+        timestamp: new Date()
+      }));
+      
+      console.log(`Queued command ${command.id} to ${queueKey}`);
+    } catch (error) {
+      console.error('Failed to queue command:', error);
+    }
   }
 
   /**
@@ -238,79 +333,112 @@ export class MCPCacheManager {
   async healthCheck(): Promise<{
     redis: boolean;
     postgres: boolean;
-    cacheSize: number;
+    redisInfo?: any;
+    postgresInfo?: any;
   }> {
-    return {
-      redis: this.redisClient !== null,
-      postgres: this.pgClient !== null,
-      cacheSize: this.cache.size
+    const health: any = {
+      redis: false,
+      postgres: false
     };
-  }
 
-  /**
-   * Get from in-memory cache
-   */
-  private getFromCache<T>(key: string): CachedData<T> | null {
-    const cached = this.cache.get(key);
-    if (!cached) return null;
-
-    // Check TTL
-    const age = (Date.now() - cached.timestamp.getTime()) / 1000;
-    if (age > cached.ttl) {
-      this.cache.delete(key);
-      return null;
-    }
-
-    return {
-      ...cached,
-      source: 'cache' as const
-    };
-  }
-
-  /**
-   * Set in cache
-   */
-  private setInCache(key: string, data: CachedData<any>): void {
-    this.cache.set(key, data);
-    
-    // In production, also set in Redis
+    // Check Redis
     if (this.redisClient) {
-      // await this.redisClient.setex(key, data.ttl, JSON.stringify(data.data));
+      try {
+        const pong = await this.redisClient.ping();
+        health.redis = pong === 'PONG';
+        
+        if (health.redis) {
+          const info = await this.redisClient.info('server');
+          health.redisInfo = {
+            version: info.match(/redis_version:(.+)/)?.[1],
+            uptime: info.match(/uptime_in_seconds:(.+)/)?.[1]
+          };
+        }
+      } catch (error) {
+        console.error('Redis health check failed:', error);
+      }
+    }
+
+    // Check PostgreSQL
+    if (this.pgPool) {
+      try {
+        const result = await this.pgPool.query('SELECT version(), current_schema()');
+        health.postgres = true;
+        health.postgresInfo = {
+          version: result.rows[0].version,
+          schema: result.rows[0].current_schema
+        };
+      } catch (error) {
+        console.error('PostgreSQL health check failed:', error);
+      }
+    }
+
+    return health;
+  }
+
+  /**
+   * Log cache access for analytics
+   */
+  private async logCacheAccess(key: string, result: 'hit' | 'miss'): Promise<void> {
+    if (!this.pgPool) return;
+
+    try {
+      await this.pgPool.query(
+        `INSERT INTO opnsense.cache_performance 
+         (time, cache_key, hit_miss, response_time_ms, data_size_bytes)
+         VALUES (NOW(), $1, $2, $3, $4)`,
+        [key, result, 0, 0]
+      );
+    } catch (error) {
+      // Don't fail operations due to logging errors
+      console.error('Cache access logging error:', error);
     }
   }
 
   /**
-   * Log cache access
-   */
-  private async logAccess(key: string, result: 'hit' | 'miss'): Promise<void> {
-    // In production, log to PostgreSQL for analytics
-    const logEntry = {
-      key,
-      result,
-      timestamp: new Date()
-    };
-    
-    console.log('Cache access:', logEntry);
-  }
-
-  /**
-   * Get cache statistics
+   * Get cache statistics from PostgreSQL
    */
   async getStats(): Promise<{
     hits: number;
     misses: number;
     hitRate: number;
-    size: number;
-    topKeys: Array<{ key: string; hits: number }>;
+    recentStats: any[];
   }> {
-    // In production, query from PostgreSQL
-    return {
-      hits: 0,
-      misses: 0,
-      hitRate: 0,
-      size: this.cache.size,
-      topKeys: []
-    };
+    if (!this.pgPool) {
+      return { hits: 0, misses: 0, hitRate: 0, recentStats: [] };
+    }
+
+    try {
+      const result = await this.pgPool.query(
+        'SELECT * FROM opnsense.cache_statistics LIMIT 24'
+      );
+      
+      const totals = result.rows.reduce((acc: {hits: number, misses: number}, row: any) => ({
+        hits: acc.hits + parseInt(row.hits),
+        misses: acc.misses + parseInt(row.misses)
+      }), { hits: 0, misses: 0 });
+
+      return {
+        ...totals,
+        hitRate: totals.hits / (totals.hits + totals.misses) * 100 || 0,
+        recentStats: result.rows
+      };
+    } catch (error) {
+      console.error('Failed to get cache stats:', error);
+      return { hits: 0, misses: 0, hitRate: 0, recentStats: [] };
+    }
+  }
+
+  /**
+   * Close all connections
+   */
+  async close(): Promise<void> {
+    if (this.redisClient) {
+      await this.redisClient.quit();
+    }
+    if (this.pgPool) {
+      await this.pgPool.end();
+    }
   }
 }
 

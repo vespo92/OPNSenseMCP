@@ -23,6 +23,7 @@ import { VlanResource } from './resources/vlan.js';
 import { FirewallRuleResource } from './resources/firewall/rule.js';
 import { BackupManager } from './resources/backup/manager.js';
 import { MCPCacheManager } from './cache/manager.js';
+import { DhcpLeaseResource } from './resources/services/dhcp/leases.js';
 
 // Configuration schema
 const ConfigSchema = z.object({
@@ -39,6 +40,7 @@ class OPNSenseMCPServer {
   private firewallRuleResource: FirewallRuleResource | null = null;
   private backupManager: BackupManager | null = null;
   private cacheManager: MCPCacheManager | null = null;
+  private dhcpResource: DhcpLeaseResource | null = null;
 
   constructor() {
     this.server = new Server(
@@ -82,6 +84,7 @@ class OPNSenseMCPServer {
       // Initialize resources
       this.vlanResource = new VlanResource(this.client);
       this.firewallRuleResource = new FirewallRuleResource(this.client);
+      this.dhcpResource = new DhcpLeaseResource(this.client);
       
       // Initialize backup manager
       if (process.env.BACKUP_ENABLED !== 'false') {
@@ -349,6 +352,65 @@ class OPNSenseMCPServer {
             type: 'object',
             properties: {}
           }
+        },
+
+        // DHCP Lease Management Tools
+        {
+          name: 'list_dhcp_leases',
+          description: 'List all DHCP leases',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interface: { 
+                type: 'string', 
+                description: 'Filter by interface (optional)' 
+              }
+            }
+          }
+        },
+        {
+          name: 'find_device_by_name',
+          description: 'Find devices by hostname pattern',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              pattern: { 
+                type: 'string', 
+                description: 'Hostname pattern to search (case-insensitive)' 
+              }
+            },
+            required: ['pattern']
+          }
+        },
+        {
+          name: 'find_device_by_mac',
+          description: 'Find device by MAC address',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              mac: { 
+                type: 'string', 
+                description: 'MAC address (with or without colons)' 
+              }
+            },
+            required: ['mac']
+          }
+        },
+        {
+          name: 'get_guest_devices',
+          description: 'Get all devices on guest network (VLAN 4)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'get_devices_by_interface',
+          description: 'Group devices by network interface',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
         }
       ]
     }));
@@ -378,6 +440,12 @@ class OPNSenseMCPServer {
           uri: 'opnsense://status',
           name: 'Connection Status',
           description: 'OPNsense connection status',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'opnsense://dhcp/leases',
+          name: 'DHCP Leases',
+          description: 'Current DHCP leases',
           mimeType: 'application/json'
         }
       ]
@@ -439,6 +507,23 @@ class OPNSenseMCPServer {
           };
         }
 
+        case 'opnsense://dhcp/leases': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'DHCP resource not initialized'
+            );
+          }
+          const leases = await this.dhcpResource.listLeases();
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(leases, null, 2)
+            }]
+          };
+        }
+
         default:
           throw new McpError(
             ErrorCode.InvalidRequest,
@@ -468,6 +553,7 @@ class OPNSenseMCPServer {
             if (test.success) {
               this.vlanResource = new VlanResource(this.client);
               this.firewallRuleResource = new FirewallRuleResource(this.client);
+              this.dhcpResource = new DhcpLeaseResource(this.client);
               
               // Optional backup manager
               if (process.env.BACKUP_ENABLED !== 'false') {
@@ -1046,6 +1132,222 @@ class OPNSenseMCPServer {
             throw new McpError(
               ErrorCode.InvalidRequest,
               error.message
+            );
+          }
+        }
+
+        // DHCP Lease Management
+        case 'list_dhcp_leases': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const leases = await this.dhcpResource.listLeases();
+            
+            // Filter by interface if specified
+            const filtered = args?.interface 
+              ? leases.filter(l => l.if === args.interface)
+              : leases;
+            
+            // Format for display
+            const formatted = filtered.map(lease => ({
+              hostname: lease.hostname || 'Unknown Device',
+              ip: lease.address,
+              mac: lease.hwaddr,
+              interface: lease.if,
+              state: lease.state,
+              starts: lease.starts,
+              ends: lease.ends,
+              deviceInfo: this.dhcpResource!.getDeviceInfo(lease)
+            }));
+            
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(formatted, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to list DHCP leases: ${error.message}`
+            );
+          }
+        }
+
+        case 'find_device_by_name': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.pattern) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'pattern parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.dhcpResource.findByHostname(args.pattern as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No devices found matching pattern "${args.pattern}"`
+                }]
+              };
+            }
+            
+            const formatted = results.map(lease => 
+              this.dhcpResource!.formatLease(lease)
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Found ${results.length} device(s):\n\n${formatted.join('\n')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to search devices: ${error.message}`
+            );
+          }
+        }
+
+        case 'find_device_by_mac': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.mac) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'mac parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.dhcpResource.findByMac(args.mac as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No device found with MAC address "${args.mac}"`
+                }]
+              };
+            }
+            
+            const formatted = results.map(lease => 
+              this.dhcpResource!.formatLease(lease)
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: formatted.join('\n')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to search by MAC: ${error.message}`
+            );
+          }
+        }
+
+        case 'get_guest_devices': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const guestDevices = await this.dhcpResource.getGuestLeases();
+            
+            if (guestDevices.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: 'No devices currently connected to guest network'
+                }]
+              };
+            }
+            
+            const formatted = guestDevices.map(lease => {
+              const info = this.dhcpResource!.getDeviceInfo(lease);
+              return `• ${info}`;
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `${guestDevices.length} device(s) on guest network:\n\n${formatted.join('\n')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get guest devices: ${error.message}`
+            );
+          }
+        }
+
+        case 'get_devices_by_interface': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const byInterface = await this.dhcpResource.getLeasesByInterface();
+            
+            let output = 'Devices by Interface:\n\n';
+            
+            for (const [iface, devices] of byInterface) {
+              output += `${iface}: ${devices.length} device(s)\n`;
+              
+              // Show first few devices per interface
+              const preview = devices.slice(0, 3);
+              for (const device of preview) {
+                const hostname = device.hostname || 'Unknown';
+                output += `  • ${hostname} (${device.address})\n`;
+              }
+              
+              if (devices.length > 3) {
+                output += `  ... and ${devices.length - 3} more\n`;
+              }
+              
+              output += '\n';
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: output
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to group devices: ${error.message}`
             );
           }
         }

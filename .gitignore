@@ -2,6 +2,8 @@
 node_modules/
 
 # Build output
+# The 'dist/' folder is built automatically when you run 'npm install'
+# via the "prepare" script in package.json
 dist/
 
 # Environment files with sensitive data
@@ -9,14 +11,17 @@ dist/
 .env.local
 .env.minimal
 .env.*.local
+.env.backup
 
 # Logs
 *.log
 npm-debug.log*
+logs/
 
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Editor files
 *.swp
@@ -24,25 +29,67 @@ Thumbs.db
 .vscode/
 .idea/
 *.iml
+*.sublime-*
 
 # Personal/temporary files
 VinnieSpecific/
 TODELETE/
-test-*.js
-test-*.bat
-diagnose-*.js
 *.backup
+*.tmp
+*.temp
 
-#PhaseDocs
-Phase1Docs
-Phase2Docs
-Phase3Docs
+# Test output
+coverage
 
-# Local backup directory
+# Local backup directory (but keep the directory itself)
 backup/*.xml
 backup/*.json
 backups/
 
-# Temporary build files
+# npm/yarn files
+.npm
+.yarn-integrity
+yarn-error.log
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Personal test files (but NOT the example test files!)
+diagnose-*.js
+explore-*.js
+quick-test-*.js
+my-test-*.js
+
+# Build artifacts from old phases
 build-phase*.js
-clean-build.bat
+
+# Temporary/deprecated files
+*.old
+*.deprecated
+PROJECT-OVERVIEW.md
+Phase*-STATUS.md
+
+# Keep test examples!
+!test-firewall.js
+!test-dhcp.js
+!test-backup.js
+!test-build.js
+
+# Keep important scripts!
+!clean-build.bat
+!build.bat
+!setup.bat
+!setup.sh
+
+# Keep important documentation!
+Phase1Docs/
+Phase2Docs/
+Phase3Docs/
+!examples/
+!roadmap/
