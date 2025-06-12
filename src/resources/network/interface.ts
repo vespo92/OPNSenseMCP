@@ -1,4 +1,5 @@
-import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState } from '../base.js';
+import { z } from 'zod';
+import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState } from '../legacy/base.js';
 
 /**
  * Interface configuration types
@@ -56,6 +57,14 @@ export interface InterfaceProperties extends ResourceProperties {
  * OPNSense Interface Resource
  */
 export class Interface extends Resource {
+  // Required abstract implementations
+  readonly type = 'opnsense:network:interface';
+  
+  readonly schema = z.object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional()
+  });
+
   constructor(
     name: string,
     properties: InterfaceProperties,
@@ -92,7 +101,7 @@ export class Interface extends Resource {
       const mtu = this.properties.mtu;
       if (!Number.isInteger(mtu) || mtu < 576 || mtu > 9000) {
         errors.push({
-          property: 'mtu',
+          path: 'mtu',
           message: 'MTU must be an integer between 576 and 9000',
           code: 'INVALID_MTU'
         });
@@ -104,7 +113,7 @@ export class Interface extends Resource {
       const mss = this.properties.mss;
       if (!Number.isInteger(mss) || mss < 536 || mss > 65495) {
         errors.push({
-          property: 'mss',
+          path: 'mss',
           message: 'MSS must be an integer between 536 and 65495',
           code: 'INVALID_MSS'
         });
@@ -116,7 +125,7 @@ export class Interface extends Resource {
       const macRegex = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
       if (!macRegex.test(this.properties.spoofmac)) {
         errors.push({
-          property: 'spoofmac',
+          path: 'spoofmac',
           message: 'Invalid MAC address format (use XX:XX:XX:XX:XX:XX)',
           code: 'INVALID_MAC'
         });
@@ -126,7 +135,7 @@ export class Interface extends Resource {
     // Warnings
     if (!this.properties.ipv4 && !this.properties.ipv6) {
       warnings.push({
-        property: 'ipv4/ipv6',
+        path: 'ipv4/ipv6',
         message: 'Interface has no IP configuration',
         code: 'NO_IP_CONFIG'
       });
@@ -134,7 +143,7 @@ export class Interface extends Resource {
 
     if (this.properties.device.startsWith('wan') && !this.properties.blockPrivate) {
       warnings.push({
-        property: 'blockPrivate',
+        path: 'blockPrivate',
         message: 'Consider enabling "Block private networks" on WAN interfaces',
         code: 'WAN_SECURITY'
       });
@@ -376,5 +385,28 @@ export class Interface extends Resource {
       return `${this.properties.ipv4.address}/${this.properties.ipv4.subnet}`;
     }
     return null;
+  }
+
+  /**
+   * Convert to API payload
+   */
+  toAPIPayload(): any {
+    return this.toApiPayload ? this.toApiPayload() : this.properties;
+  }
+
+  /**
+   * Update from API response
+   */
+  fromAPIResponse(response: any): void {
+    if (this.fromApiResponse) {
+      this.fromApiResponse(response);
+    }
+  }
+
+  /**
+   * Get required permissions
+   */
+  getRequiredPermissions(): string[] {
+    return ['interfaces.manage'];
   }
 }

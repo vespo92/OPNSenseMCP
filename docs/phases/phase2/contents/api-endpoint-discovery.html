@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OPNsense API Endpoint Discovery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #ff6c00;
+        }
+        .step {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-left: 4px solid #ff6c00;
+            border-radius: 4px;
+        }
+        .code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        .endpoint {
+            background: #e8f5e9;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        button {
+            background: #ff6c00;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #e55a00;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            display: none;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background: #ff6c00;
+            color: white;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 OPNsense API Endpoint Discovery</h1>
+        
+        <div class="warning">
+            <strong>⚠️ Important:</strong> This tool helps discover the correct API endpoints for your OPNsense installation.
+            Open this file in your browser after logging into OPNsense.
+        </div>
+
+        <div class="step">
+            <h2>Step 1: Manual Discovery Using DevTools</h2>
+            <ol>
+                <li>Open your OPNsense web interface</li>
+                <li>Press F12 to open Developer Tools</li>
+                <li>Go to the Network tab</li>
+                <li>Filter by "XHR" or "Fetch"</li>
+                <li>Navigate to <strong>Interfaces → Other Types → VLAN</strong></li>
+                <li>Look for API calls and note the endpoints</li>
+            </ol>
+            
+            <p><strong>Common endpoints to look for:</strong></p>
+            <div class="endpoint">GET/POST /api/interfaces/vlan_settings/get</div>
+            <div class="endpoint">POST /api/interfaces/vlan_settings/searchItem</div>
+            <div class="endpoint">POST /api/interfaces/vlan_settings/addItem</div>
+            <div class="endpoint">POST /api/interfaces/vlan_settings/setItem/{uuid}</div>
+            <div class="endpoint">POST /api/interfaces/vlan_settings/delItem/{uuid}</div>
+        </div>
+
+        <div class="step">
+            <h2>Step 2: Test API Endpoints</h2>
+            <p>Enter your OPNsense details to test various endpoints:</p>
+            
+            <label>Host (e.g., https://opnsense.local):</label><br>
+            <input type="text" id="host" style="width: 100%; padding: 5px; margin: 5px 0;" 
+                   value="https://opnsense.boonersystems.com:55443"><br>
+            
+            <label>API Key:</label><br>
+            <input type="text" id="apiKey" style="width: 100%; padding: 5px; margin: 5px 0;"
+                   placeholder="Your API key"><br>
+            
+            <label>API Secret:</label><br>
+            <input type="password" id="apiSecret" style="width: 100%; padding: 5px; margin: 5px 0;"
+                   placeholder="Your API secret"><br>
+            
+            <button onclick="testEndpoints()">Test Endpoints</button>
+            
+            <div id="results" class="results"></div>
+        </div>
+
+        <div class="step">
+            <h2>Step 3: Example cURL Commands</h2>
+            <p>Test these commands in your terminal:</p>
+            
+            <div class="code">
+# Test system status
+curl -k -u "API_KEY:API_SECRET" "https://opnsense.local/api/core/system/status"
+
+# Test VLAN endpoints
+curl -k -u "API_KEY:API_SECRET" "https://opnsense.local/api/interfaces/vlan_settings/get"
+
+# Test with POST
+curl -k -X POST -H "Content-Type: application/json" -d "{}" \
+     -u "API_KEY:API_SECRET" "https://opnsense.local/api/interfaces/vlan_settings/get"
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>Common Issues</h2>
+            <ul>
+                <li><strong>400 Bad Request:</strong> Check if the endpoint expects POST instead of GET</li>
+                <li><strong>404 Not Found:</strong> The endpoint path might be different in your version</li>
+                <li><strong>401 Unauthorized:</strong> Verify API credentials and user permissions</li>
+                <li><strong>Invalid JSON syntax:</strong> Some endpoints might expect an empty object {} for POST requests</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        async function testEndpoints() {
+            const host = document.getElementById('host').value;
+            const apiKey = document.getElementById('apiKey').value;
+            const apiSecret = document.getElementById('apiSecret').value;
+            const resultsDiv = document.getElementById('results');
+            
+            if (!host || !apiKey || !apiSecret) {
+                alert('Please fill in all fields');
+                return;
+            }
+            
+            resultsDiv.style.display = 'block';
+            resultsDiv.innerHTML = '<h3>Testing endpoints...</h3>';
+            
+            const endpoints = [
+                { method: 'GET', path: '/api/core/system/status', desc: 'System Status' },
+                { method: 'GET', path: '/api/interfaces/vlan_settings/get', desc: 'VLAN GET' },
+                { method: 'POST', path: '/api/interfaces/vlan_settings/get', desc: 'VLAN POST', data: {} },
+                { method: 'POST', path: '/api/interfaces/vlan_settings/searchItem', desc: 'VLAN Search', data: { current: 1, rowCount: 10 } },
+                { method: 'POST', path: '/api/interfaces/vlan_settings/search', desc: 'VLAN Search Alt', data: { current: 1, rowCount: 10 } },
+            ];
+            
+            let html = '<h3>Test Results:</h3><table><tr><th>Endpoint</th><th>Method</th><th>Status</th><th>Response</th></tr>';
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const options = {
+                        method: endpoint.method,
+                        headers: {
+                            'Authorization': 'Basic ' + btoa(apiKey + ':' + apiSecret),
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        }
+                    };
+                    
+                    if (endpoint.data) {
+                        options.body = JSON.stringify(endpoint.data);
+                    }
+                    
+                    const response = await fetch(host + endpoint.path, options);
+                    const data = await response.text();
+                    
+                    let preview = data;
+                    try {
+                        const json = JSON.parse(data);
+                        preview = JSON.stringify(json, null, 2).substring(0, 100) + '...';
+                    } catch (e) {
+                        preview = data.substring(0, 100) + '...';
+                    }
+                    
+                    const statusClass = response.ok ? 'success' : 'error';
+                    html += `<tr>
+                        <td>${endpoint.desc}</td>
+                        <td>${endpoint.method}</td>
+                        <td class="${statusClass}">${response.status} ${response.statusText}</td>
+                        <td><pre style="margin:0;font-size:12px;">${preview}</pre></td>
+                    </tr>`;
+                } catch (error) {
+                    html += `<tr>
+                        <td>${endpoint.desc}</td>
+                        <td>${endpoint.method}</td>
+                        <td class="error">Error</td>
+                        <td>${error.message}</td>
+                    </tr>`;
+                }
+            }
+            
+            html += '</table>';
+            resultsDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

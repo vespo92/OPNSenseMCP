@@ -1,4 +1,5 @@
-import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState } from '../../base.js';
+import { z } from 'zod';
+import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState } from '../../legacy/base.js';
 
 /**
  * Server modes
@@ -54,6 +55,14 @@ export interface HaproxyServerProperties extends ResourceProperties {
  * OPNSense HAProxy Server Resource
  */
 export class HaproxyServer extends Resource {
+  // Required abstract implementations
+  readonly type = 'opnsense:service:haproxy:server';
+  
+  readonly schema = z.object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional()
+  });
+
   constructor(
     name: string,
     properties: HaproxyServerProperties,
@@ -95,11 +104,7 @@ export class HaproxyServer extends Resource {
 
     // Validate mode
     if (this.properties.mode) {
-      const modeError = ValidationHelper.validateEnum(
-        this.properties.mode,
-        'mode',
-        ['active', 'backup', 'disabled']
-      );
+      const modeError = ValidationHelper.validateEnum(this.properties.mode, ['http', 'tcp'], 'mode');
       if (modeError) errors.push(modeError);
     }
 
@@ -109,7 +114,7 @@ export class HaproxyServer extends Resource {
           this.properties.weight < 0 || 
           this.properties.weight > 256) {
         errors.push({
-          property: 'weight',
+          path: 'weight',
           message: 'Weight must be an integer between 0 and 256',
           code: 'INVALID_WEIGHT'
         });
@@ -169,7 +174,7 @@ export class HaproxyServer extends Resource {
     // Warnings
     if (this.properties.mode === 'disabled') {
       warnings.push({
-        property: 'mode',
+        path: 'mode',
         message: 'Server is disabled and will not receive traffic',
         code: 'SERVER_DISABLED'
       });
@@ -177,7 +182,7 @@ export class HaproxyServer extends Resource {
 
     if (this.properties.weight === 0) {
       warnings.push({
-        property: 'weight',
+        path: 'weight',
         message: 'Server weight is 0, it will not receive traffic unless all other servers are down',
         code: 'ZERO_WEIGHT'
       });
@@ -185,7 +190,7 @@ export class HaproxyServer extends Resource {
 
     if (this.properties.ssl?.enabled && this.properties.ssl.verify === 'none') {
       warnings.push({
-        property: 'ssl.verify',
+        path: 'ssl.verify',
         message: 'SSL verification is disabled. This may pose a security risk',
         code: 'SSL_VERIFY_DISABLED'
       });
@@ -310,7 +315,7 @@ export class HaproxyServer extends Resource {
     const hostnameRegex = /^(?:[a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+$/;
     if (!hostnameRegex.test(address)) {
       return {
-        property: 'address',
+        path: 'address',
         message: 'Address must be a valid IP address or hostname',
         code: 'INVALID_ADDRESS'
       };
@@ -392,5 +397,28 @@ export class HaproxyServer extends Resource {
   getEffectiveWeight(): number {
     if (!this.isActive()) return 0;
     return this.properties.weight ?? 1;
+  }
+
+  /**
+   * Convert to API payload
+   */
+  toAPIPayload(): any {
+    return this.toApiPayload ? this.toApiPayload() : this.properties;
+  }
+
+  /**
+   * Update from API response
+   */
+  fromAPIResponse(response: any): void {
+    if (this.fromApiResponse) {
+      this.fromApiResponse(response);
+    }
+  }
+
+  /**
+   * Get required permissions
+   */
+  getRequiredPermissions(): string[] {
+    return ['haproxy.manage'];
   }
 }

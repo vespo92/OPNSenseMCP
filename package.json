@@ -1,17 +1,17 @@
 {
   "name": "opnsense-mcp-server",
-  "version": "0.3.5",
-  "description": "Model Context Protocol server for OPNSense firewall management via Claude Desktop",
+  "version": "0.4.5",
+  "description": "Model Context Protocol server for OPNSense firewall management with DNS filtering via Claude Desktop",
   "main": "dist/index.js",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/opnsense-mcp.git"
+    "url": "https://github.com/VinSpo/opnsense-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/opnsense-mcp/issues"
+    "url": "https://github.com/VinSpo/opnsense-mcp/issues"
   },
-  "homepage": "https://github.com/yourusername/opnsense-mcp#readme",
+  "homepage": "https://github.com/VinSpo/opnsense-mcp#readme",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
@@ -20,7 +20,15 @@
     "test:api": "node test-simple.js",
     "test:vlan": "node test-vlan-comprehensive.js",
     "test:minecraft": "node create-minecraft-vlan.js",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "db:generate": "drizzle-kit generate:pg",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:push": "drizzle-kit push:pg",
+    "db:studio": "drizzle-kit studio",
+    "setup:cache": "node setup-enhanced-cache.js",
+    "test:network-query": "node test-network-query.js",
+    "test:dhcp": "node test-dhcp-fix.js",
+    "debug:dhcp": "node debug-dhcp-comprehensive.js"
   },
   "keywords": [
     "mcp",
@@ -28,22 +36,27 @@
     "firewall",
     "api"
   ],
-  "author": "Your Name",
+  "author": "VinSpo",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.5.0",
     "axios": "^1.6.0",
     "dotenv": "^16.3.1",
-    "zod": "^3.22.0"
-  },
-  "optionalDependencies": {
+    "drizzle-orm": "^0.29.0",
     "ioredis": "^5.6.1",
     "pg": "^8.16.0",
-    "redis": "^4.7.1"
+    "zod": "^3.25.62"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.0.0",
-    "tsx": "^4.0.0",
+    "@types/pg": "^8.11.0",
+    "drizzle-kit": "^0.20.0",
+    "eslint": "^9.28.0",
+    "jest": "^30.0.0",
+    "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.20.1",
     "typescript": "^5.0.0"
   }
 }

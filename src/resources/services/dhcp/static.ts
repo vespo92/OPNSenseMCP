@@ -1,4 +1,5 @@
-import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState, ValidationWarning } from '../../base.js';
+import { z } from 'zod';
+import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState, ValidationWarning } from '../../legacy/base.js';
 
 /**
  * DHCP static mapping properties
@@ -16,6 +17,14 @@ export interface DhcpStaticMappingProperties extends ResourceProperties {
  * OPNSense DHCP Static Mapping Resource
  */
 export class DhcpStaticMapping extends Resource {
+  // Required abstract implementations
+  readonly type = 'opnsense:service:dhcp:static';
+  
+  readonly schema = z.object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional()
+  });
+
   constructor(
     name: string,
     properties: DhcpStaticMappingProperties,
@@ -41,7 +50,7 @@ export class DhcpStaticMapping extends Resource {
       const macRegex = /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/;
       if (!macRegex.test(this.properties.mac)) {
         errors.push({
-          property: 'mac',
+          path: 'mac',
           message: 'Invalid MAC address format (use XX:XX:XX:XX:XX:XX)',
           code: 'INVALID_MAC'
         });
@@ -57,7 +66,7 @@ export class DhcpStaticMapping extends Resource {
     // Validate hostname
     if (this.properties.hostname && !/^[a-zA-Z0-9-]+$/.test(this.properties.hostname)) {
       errors.push({
-        property: 'hostname',
+        path: 'hostname',
         message: 'Hostname must contain only letters, numbers, and hyphens',
         code: 'INVALID_HOSTNAME'
       });
@@ -98,5 +107,28 @@ export class DhcpStaticMapping extends Resource {
    */
   getNormalizedMac(): string {
     return this.properties.mac.toLowerCase();
+  }
+
+  /**
+   * Convert to API payload
+   */
+  toAPIPayload(): any {
+    return this.toApiPayload ? this.toApiPayload() : this.properties;
+  }
+
+  /**
+   * Update from API response
+   */
+  fromAPIResponse(response: any): void {
+    if (this.fromApiResponse) {
+      this.fromApiResponse(response);
+    }
+  }
+
+  /**
+   * Get required permissions
+   */
+  getRequiredPermissions(): string[] {
+    return ['dhcp.manage'];
   }
 }

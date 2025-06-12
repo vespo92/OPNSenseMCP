@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { Resource, ResourceState } from '../resources/base.js';
+import path from 'path';
+import { IaCResource as Resource, ResourceState } from '../resources/base.js';
 
 /**
  * State entry for a resource
@@ -61,6 +62,7 @@ export interface StateStoreOptions {
 export class ResourceStateStore {
   private state: Map<string, DeploymentState> = new Map();
   private options: Required<StateStoreOptions>;
+  private plans: Map<string, any> = new Map();
   
   constructor(options: StateStoreOptions = {}) {
     this.options = {
@@ -149,15 +151,16 @@ export class ResourceStateStore {
   ): Promise<void> {
     const deployment = await this.getOrCreateDeployment(deploymentId);
     
+    const resourceState = resource.toState();
     deployment.resources[resource.id] = {
       id: resource.id,
       type: resource.type,
       name: resource.name,
-      state: resource.state,
-      properties: resource.properties,
-      outputs: resource.outputs,
-      metadata: resource.metadata,
-      dependencies: resource.dependencies
+      state: resourceState,
+      properties: resource.getProperties(),
+      outputs: resource.getOutputs(),
+      metadata: resourceState.metadata,
+      dependencies: resource.getDependencies().map((d: any) => d.resourceId)
     };
     
     await this.saveDeployment(deployment);
@@ -173,16 +176,17 @@ export class ResourceStateStore {
     const deployment = await this.getOrCreateDeployment(deploymentId);
     
     for (const resource of resources) {
-      deployment.resources[resource.id] = {
-        id: resource.id,
-        type: resource.type,
-        name: resource.name,
-        state: resource.state,
-        properties: resource.properties,
-        outputs: resource.outputs,
-        metadata: resource.metadata,
-        dependencies: resource.dependencies
-      };
+      const resourceState = resource.toState();
+    deployment.resources[resource.id] = {
+      id: resource.id,
+      type: resource.type,
+      name: resource.name,
+      state: resourceState,
+      properties: resource.getProperties(),
+      outputs: resource.getOutputs(),
+      metadata: resourceState.metadata,
+      dependencies: resource.getDependencies().map((d: any) => d.resourceId)
+    };
     }
     
     await this.saveDeployment(deployment);
@@ -305,7 +309,8 @@ export class ResourceStateStore {
       resourcesByType[resource.type] = (resourcesByType[resource.type] || 0) + 1;
       
       // Count by state
-      resourcesByState[resource.state] = (resourcesByState[resource.state] || 0) + 1;
+      const stateKey = String(resource.state);
+      resourcesByState[stateKey] = (resourcesByState[stateKey] || 0) + 1;
     }
     
     return {
@@ -380,6 +385,99 @@ export class ResourceStateStore {
       await lockFd.close();
       await fs.unlink(lockPath);
     };
+  }
+
+  /**
+   * Get current state of all deployments
+   */
+  async getCurrentState(): Promise<Record<string, DeploymentState>> {
+    const result: Record<string, DeploymentState> = {};
+    for (const [id, deployment] of this.state) {
+      result[id] = deployment;
+    }
+    return result;
+  }
+
+  /**
+   * Get deployment by name
+   */
+  async getDeployment(name: string): Promise<DeploymentState | null> {
+    for (const [id, deployment] of this.state) {
+      if (deployment.name === name) {
+        return deployment;
+      }
+    }
+    
+    try {
+      const files = await fs.readdir(this.options.directory);
+      for (const file of files) {
+        if (file.endsWith('.json')) {
+          const deployment = await this.loadDeployment(file.replace('.json', ''));
+          if (deployment && deployment.name === name) {
+            return deployment;
+          }
+        }
+      }
+    } catch (error) {
+      // Directory might not exist yet
+    }
+    
+    return null;
+  }
+
+  /**
+   * Get deployment state (alias for getDeployment)
+   */
+  async getDeploymentState(name: string): Promise<DeploymentState | null> {
+    return await this.getDeployment(name);
+  }
+
+  /**
+   * Store a deployment plan
+   */
+  async storePlan(plan: any): Promise<void> {
+    if (!this.plans) {
+      this.plans = new Map();
+    }
+    this.plans.set(plan.id, plan);
+  }
+
+  /**
+   * Get a stored plan
+   */
+  async getPlan(planId: string): Promise<any | null> {
+    if (!this.plans) {
+      return null;
+    }
+    return this.plans.get(planId) || null;
+  }
+
+  /**
+   * Update deployment state with execution result
+   */
+  async updateDeploymentState(name: string, result: any): Promise<void> {
+    let deployment = await this.getDeployment(name);
+    
+    if (!deployment) {
+      deployment = await this.createDeployment(name, name);
+    }
+    
+    deployment.updatedAt = new Date().toISOString();
+    deployment.version++;
+    
+    if (result.resources) {
+      if (Array.isArray(result.resources)) {
+        const resourceMap: Record<string, StateEntry> = {};
+        result.resources.forEach((res: any) => {
+          resourceMap[res.id || res.name] = res;
+        });
+        deployment.resources = resourceMap;
+      } else {
+        deployment.resources = result.resources;
+      }
+    }
+    
+    await this.saveDeployment(deployment);
   }
 }
 

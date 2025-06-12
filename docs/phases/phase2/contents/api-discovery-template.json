@@ -1,0 +1,116 @@
+{
+  "description": "OPNSense API Discovery Results",
+  "discoveryDate": "2024-12-10",
+  "testedVersion": "OPNSense version here",
+  
+  "discoveries": {
+    "vlan": {
+      "tested": false,
+      "endpoints": {
+        "list": "GET /api/interfaces/vlan_settings/searchItem",
+        "create": "POST /api/interfaces/vlan_settings/addItem",
+        "update": "POST /api/interfaces/vlan_settings/setItem/{uuid}",
+        "delete": "POST /api/interfaces/vlan_settings/delItem/{uuid}",
+        "apply": "POST /api/interfaces/vlan_settings/reconfigure"
+      },
+      "createPayload": {
+        "expected": {
+          "vlan": {
+            "if": "igc3",
+            "tag": "120",
+            "descr": "Description",
+            "vlanif": "igc3.120"
+          }
+        },
+        "actual": null,
+        "notes": "Fill in actual after DevTools capture"
+      },
+      "responseFormat": {
+        "expected": {
+          "result": "saved",
+          "uuid": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        },
+        "actual": null
+      }
+    },
+    
+    "firewallAlias": {
+      "tested": false,
+      "endpoints": {
+        "list": "GET /api/firewall/alias/searchItem",
+        "create": "POST /api/firewall/alias/addItem",
+        "update": "POST /api/firewall/alias/setItem/{uuid}",
+        "delete": "POST /api/firewall/alias/delItem/{uuid}",
+        "apply": "POST /api/firewall/alias/reconfigure"
+      },
+      "createPayload": {
+        "expected": {
+          "alias": {
+            "name": "test_alias",
+            "type": "host",
+            "content": "10.2.120.10",
+            "description": "Test"
+          }
+        },
+        "actual": null
+      }
+    },
+    
+    "firewallRule": {
+      "tested": false,
+      "endpoints": {
+        "create": "POST /api/firewall/filter/addRule",
+        "apply": "POST /api/firewall/filter/apply/{interface}"
+      },
+      "createPayload": {
+        "expected": {
+          "rule": {
+            "interface": "vlan120",
+            "type": "pass",
+            "ipprotocol": "inet",
+            "protocol": "tcp",
+            "src": "lan",
+            "dst": "10.2.120.10",
+            "dstport": "25565"
+          }
+        },
+        "actual": null
+      }
+    },
+    
+    "dhcpStatic": {
+      "tested": false,
+      "endpoints": {
+        "create": "POST /api/dhcpv4/leases/addStaticMap",
+        "notes": "Need to find correct endpoint"
+      }
+    },
+    
+    "dnsOverride": {
+      "tested": false,
+      "endpoints": {
+        "create": "POST /api/unbound/settings/addHostOverride",
+        "notes": "Need to find correct endpoint"
+      }
+    }
+  },
+  
+  "commonPatterns": {
+    "authentication": "Basic Auth with API key:secret",
+    "contentType": "application/json",
+    "uuidFormat": "Standard UUID v4",
+    "successResponses": ["saved", "created"],
+    "errorResponses": {
+      "400": "Bad request - usually wrong payload format",
+      "401": "Authentication failed",
+      "404": "Endpoint not found"
+    }
+  },
+  
+  "notes": [
+    "All POST requests seem to use /addItem pattern",
+    "Updates use /setItem/{uuid}",
+    "Most resources need /reconfigure or /apply after changes",
+    "Field names don't always match UI labels"
+  ]
+}

@@ -1,4 +1,5 @@
-import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState, ValidationWarning } from '../../base.js';
+import { z } from 'zod';
+import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState, ValidationWarning } from '../../legacy/base.js';
 
 /**
  * DNS override properties
@@ -15,6 +16,14 @@ export interface DnsOverrideProperties extends ResourceProperties {
  * OPNSense DNS Override Resource
  */
 export class DnsOverride extends Resource {
+  // Required abstract implementations
+  readonly type = 'opnsense:service:dns:override';
+  
+  readonly schema = z.object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional()
+  });
+
   constructor(
     name: string,
     properties: DnsOverrideProperties,
@@ -38,7 +47,7 @@ export class DnsOverride extends Resource {
     // Validate hostname
     if (this.properties.host && !/^[a-zA-Z0-9-]+$/.test(this.properties.host)) {
       errors.push({
-        property: 'host',
+        path: 'host',
         message: 'Host must contain only letters, numbers, and hyphens',
         code: 'INVALID_HOST'
       });
@@ -47,7 +56,7 @@ export class DnsOverride extends Resource {
     // Validate domain
     if (this.properties.domain && !/^(?:[a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+$/.test(this.properties.domain)) {
       errors.push({
-        property: 'domain',
+        path: 'domain',
         message: 'Invalid domain format',
         code: 'INVALID_DOMAIN'
       });
@@ -93,5 +102,28 @@ export class DnsOverride extends Resource {
    */
   getFullHostname(): string {
     return `${this.properties.host}.${this.properties.domain}`;
+  }
+
+  /**
+   * Convert to API payload
+   */
+  toAPIPayload(): any {
+    return this.toApiPayload ? this.toApiPayload() : this.properties;
+  }
+
+  /**
+   * Update from API response
+   */
+  fromAPIResponse(response: any): void {
+    if (this.fromApiResponse) {
+      this.fromApiResponse(response);
+    }
+  }
+
+  /**
+   * Get required permissions
+   */
+  getRequiredPermissions(): string[] {
+    return ['dns.manage'];
   }
 }

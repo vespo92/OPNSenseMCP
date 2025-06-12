@@ -314,6 +314,91 @@ export class OPNSenseAPIClient {
   async applyDhcpChanges(): Promise<any> {
     return this.post('/dhcpv4/service/reconfigure');
   }
+
+  // ===== DNS/UNBOUND METHODS =====
+
+  /**
+   * Get Unbound DNS settings
+   */
+  async getUnboundSettings(): Promise<any> {
+    return this.get('/unbound/settings/get');
+  }
+
+  /**
+   * Get specific Unbound host override
+   */
+  async getUnboundHost(uuid: string): Promise<any> {
+    return this.get(`/unbound/settings/getHostOverride/${uuid}`);
+  }
+
+  /**
+   * Add Unbound host override (for DNS blocking)
+   */
+  async addUnboundHost(hostData: any): Promise<any> {
+    return this.post('/unbound/settings/addHostOverride', { host: hostData });
+  }
+
+  /**
+   * Update Unbound host override
+   */
+  async setUnboundHost(uuid: string, hostData: any): Promise<any> {
+    return this.post(`/unbound/settings/setHostOverride/${uuid}`, { host: hostData });
+  }
+
+  /**
+   * Delete Unbound host override
+   */
+  async delUnboundHost(uuid: string): Promise<any> {
+    return this.post(`/unbound/settings/delHostOverride/${uuid}`);
+  }
+
+  /**
+   * Search Unbound host overrides
+   */
+  async searchUnboundHosts(params: any = {}): Promise<any> {
+    const searchParams = {
+      current: params.current || 1,
+      rowCount: params.rowCount || 1000,
+      sort: params.sort || {},
+      searchPhrase: params.searchPhrase || ''
+    };
+    return this.post('/unbound/settings/searchHostOverride', searchParams);
+  }
+
+  /**
+   * Apply Unbound configuration changes
+   */
+  async applyUnboundChanges(): Promise<any> {
+    return this.post('/unbound/service/reconfigure');
+  }
+
+  /**
+   * Get Unbound access lists (for interface-specific DNS)
+   */
+  async getUnboundAccessLists(): Promise<any> {
+    return this.get('/unbound/settings/get');
+  }
+
+  /**
+   * Add Unbound access list
+   */
+  async addUnboundAccessList(aclData: any): Promise<any> {
+    return this.post('/unbound/settings/addAcl', { acl: aclData });
+  }
+
+  /**
+   * Update Unbound access list
+   */
+  async setUnboundAccessList(uuid: string, aclData: any): Promise<any> {
+    return this.post(`/unbound/settings/setAcl/${uuid}`, { acl: aclData });
+  }
+
+  /**
+   * Delete Unbound access list
+   */
+  async delUnboundAccessList(uuid: string): Promise<any> {
+    return this.post(`/unbound/settings/delAcl/${uuid}`);
+  }
 }
 
 // Export for both TypeScript and JavaScript usage

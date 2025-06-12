@@ -1,4 +1,5 @@
-import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState } from '../../base.js';
+import { z } from 'zod';
+import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState } from '../../legacy/base.js';
 
 /**
  * HAProxy backend modes
@@ -97,6 +98,14 @@ export interface HaproxyBackendProperties extends ResourceProperties {
  * OPNSense HAProxy Backend Resource
  */
 export class HaproxyBackend extends Resource {
+  // Required abstract implementations
+  readonly type = 'opnsense:service:haproxy:backend';
+  
+  readonly schema = z.object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional()
+  });
+
   constructor(
     name: string,
     properties: HaproxyBackendProperties,
@@ -121,11 +130,7 @@ export class HaproxyBackend extends Resource {
 
     // Validate mode
     if (this.properties.mode) {
-      const modeError = ValidationHelper.validateEnum(
-        this.properties.mode,
-        'mode',
-        ['http', 'tcp']
-      );
+      const modeError = ValidationHelper.validateEnum(this.properties.mode, ['http', 'tcp'], 'mode');
       if (modeError) errors.push(modeError);
     }
 
@@ -135,11 +140,7 @@ export class HaproxyBackend extends Resource {
         'roundrobin', 'static-rr', 'leastconn', 'first',
         'source', 'uri', 'url_param', 'hdr', 'random', 'rdp-cookie'
       ];
-      const balanceError = ValidationHelper.validateEnum(
-        this.properties.balance,
-        'balance',
-        validAlgorithms
-      );
+      const balanceError = ValidationHelper.validateEnum(this.properties.balance, validAlgorithms, 'balance');
       if (balanceError) errors.push(balanceError);
     }
 
@@ -148,7 +149,7 @@ export class HaproxyBackend extends Resource {
       const httpOnlyAlgorithms = ['uri', 'url_param', 'hdr'];
       if (httpOnlyAlgorithms.includes(this.properties.balance)) {
         errors.push({
-          property: 'balance',
+          path: 'balance',
           message: `Balance algorithm '${this.properties.balance}' is only valid for HTTP mode`,
           code: 'INVALID_ALGORITHM_FOR_MODE'
         });
@@ -159,7 +160,7 @@ export class HaproxyBackend extends Resource {
     if (this.properties.connectionTimeout !== undefined) {
       if (this.properties.connectionTimeout < 1 || this.properties.connectionTimeout > 3600000) {
         errors.push({
-          property: 'connectionTimeout',
+          path: 'connectionTimeout',
           message: 'Connection timeout must be between 1 and 3600000 milliseconds',
           code: 'INVALID_TIMEOUT'
         });
@@ -169,7 +170,7 @@ export class HaproxyBackend extends Resource {
     if (this.properties.serverTimeout !== undefined) {
       if (this.properties.serverTimeout < 1 || this.properties.serverTimeout > 3600000) {
         errors.push({
-          property: 'serverTimeout',
+          path: 'serverTimeout',
           message: 'Server timeout must be between 1 and 3600000 milliseconds',
           code: 'INVALID_TIMEOUT'
         });
@@ -185,7 +186,7 @@ export class HaproxyBackend extends Resource {
     // Validate HTTP options only in HTTP mode
     if (this.properties.httpOptions && this.properties.mode !== 'http') {
       errors.push({
-        property: 'httpOptions',
+        path: 'httpOptions',
         message: 'HTTP options are only valid for HTTP mode',
         code: 'HTTP_OPTIONS_IN_TCP_MODE'
       });
@@ -200,7 +201,7 @@ export class HaproxyBackend extends Resource {
     // Warnings
     if (!this.properties.healthCheck || this.properties.healthCheck.type === 'none') {
       warnings.push({
-        property: 'healthCheck',
+        path: 'healthCheck',
         message: 'No health check configured. Consider adding health checks for better reliability',
         code: 'NO_HEALTH_CHECK'
       });
@@ -208,7 +209,7 @@ export class HaproxyBackend extends Resource {
 
     if (this.properties.retries === 0) {
       warnings.push({
-        property: 'retries',
+        path: 'retries',
         message: 'Retries set to 0. Failed connections will not be retried',
         code: 'NO_RETRIES'
       });
@@ -471,5 +472,28 @@ export class HaproxyBackend extends Resource {
     }
     
     return config;
+  }
+
+  /**
+   * Convert to API payload
+   */
+  toAPIPayload(): any {
+    return this.toApiPayload ? this.toApiPayload() : this.properties;
+  }
+
+  /**
+   * Update from API response
+   */
+  fromAPIResponse(response: any): void {
+    if (this.fromApiResponse) {
+      this.fromApiResponse(response);
+    }
+  }
+
+  /**
+   * Get required permissions
+   */
+  getRequiredPermissions(): string[] {
+    return ['haproxy.manage'];
   }
 }

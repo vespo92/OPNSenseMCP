@@ -1,0 +1,805 @@
+========================================
+ OPNsense API Test Results
+ Date: Tue 06/10/2025 16:29:22.25
+========================================
+
+
+[1/6] MINIMAL CONNECTION TEST
+==============================
+
+=== Minimal OPNsense API Test ===
+
+Host: https://opnsense.boonersystems.com:55443
+Key: hQ9xhZuHIx...
+
+Test 1: GET request (no headers, no body)
+Status: 200
+Response: {"product_id":"opnsense","product_version":"25.1.5_5","package":[{"name":"abseil","version":"20250127.0","comment":"Abseil Common Libraries (C++)","flatsize":"5.55MiB","locked":"N/A","automatic":"1","
+
+------------------------------------------------------------
+
+Test 2: GET request with JSON headers
+Status: 400
+Got 400 error as before: { status: 400, message: 'Invalid JSON syntax' }
+
+------------------------------------------------------------
+
+Test 3: POST request with empty JSON body
+Status: 200
+Response type: object
+Response: {"metadata":{"system":{"status":2,"message":"No pending messages","title":"System"},"translations":{"dialogTitle":"System Status","dialogCloseButton":"Close"},"subsystems":[]}}
+
+------------------------------------------------------------
+
+Test 4: Testing different content types
+
+Trying Content-Type: application/json
+  Status: 200
+  ✅ This content type works!
+
+Trying Content-Type: application/x-www-form-urlencoded
+  Status: 200
+  ✅ This content type works!
+
+Trying Content-Type: text/plain
+  Status: 200
+  ✅ This content type works!
+
+
+[2/6] API STRUCTURE EXPLORER
+============================
+
+=== OPNsense API Structure Explorer ===
+
+1. Fetching menu structure...
+✅ Menu data retrieved
+
+Interface-related menu items:
+92: /ui/interfaces/vlan
+
+2. Checking available controllers...
+
+interfaces module:
+
+diagnostics module:
+
+firewall module:
+
+dhcpv4 module:
+
+3. Testing VLAN-specific patterns...
+
+Trying various VLAN endpoints:
+✅ GET /api/interfaces/vlan_settings/get - SUCCESS
+   Contains VLAN data!
+   Structure: {
+  "vlan": {
+    "vlan": {
+      "15ca2b8c-051f-45d2-8f80-ac8538cbd2dd": {
+        "if": {
+          "igc0": {
+            "value": "igc0 (24:5e:be:7f:16:26) [WAN]",
+            "selected": 0
+       ...
+✅ POST /api/interfaces/vlan_settings/get - SUCCESS
+   Contains VLAN data!
+   Structure: []...
+✅ POST /api/interfaces/vlan_settings/searchItem - SUCCESS
+   Contains VLAN data!
+   Structure: {
+  "rows": [
+    {
+      "uuid": "7d192321-e08f-4712-a5ec-f937f0b77a72",
+      "if": "igc2 (24:5e:be:7f:16:25) [VLANIOT]",
+      "tag": "2",
+      "pcp": "Best Effort (0, default)",
+      "proto": "A...
+
+4. Recommendations:
+   - Run test-curl.bat to verify raw API access
+   - Check OPNsense version with: /api/core/firmware/info
+   - Use browser DevTools on OPNsense UI to capture actual API calls
+   - Look for VLAN configuration under Interfaces → Other Types → VLAN
+
+
+[3/6] COMPREHENSIVE DIAGNOSTICS
+===============================
+
+=== OPNsense API Comprehensive Diagnostic ===
+
+Testing API at: https://opnsense.boonersystems.com:55443
+Timestamp: 2025-06-10T21:29:28.427Z
+
+
+============================================================
+Testing with: Standard JSON Headers
+============================================================
+
+Firmware Info:
+  GET /api/core/firmware/info
+  ❌ Status: 400 - Bad Request
+  Error: {"status":400,"message":"Invalid JSON syntax"}
+
+System Status GET:
+  GET /api/core/system/status
+  ❌ Status: 400 - Bad Request
+  Error: {"status":400,"message":"Invalid JSON syntax"}
+
+System Status POST:
+  POST /api/core/system/status
+  ✅ Status: 200
+  Data keys: metadata
+
+Interface List:
+  GET /api/diagnostics/interface/getInterfaceList
+  ❌ Status: 404 - Not Found
+  Error: {"errorMessage":"Endpoint not found"}
+
+Interface Names:
+  GET /api/diagnostics/interface/getInterfaceNames
+  ❌ Status: 400 - Bad Request
+  Error: {"status":400,"message":"Invalid JSON syntax"}
+
+Menu Tree:
+  GET /api/core/menu/tree
+  ❌ Status: 400 - Bad Request
+  Error: {"status":400,"message":"Invalid JSON syntax"}
+
+Menu Search:
+  GET /api/core/menu/search
+  ❌ Status: 400 - Bad Request
+  Error: {"status":400,"message":"Invalid JSON syntax"}
+
+
+============================================================
+Testing with: Form-encoded Headers
+============================================================
+
+Firmware Info:
+  GET /api/core/firmware/info
+  ✅ Status: 200
+  Data keys: product_id, product_version, package, plugin, changelog...
+
+System Status GET:
+  GET /api/core/system/status
+  ✅ Status: 200
+  Data keys: metadata
+
+System Status POST:
+  POST /api/core/system/status
+  ✅ Status: 200
+  Data keys: metadata
+
+Interface List:
+  GET /api/diagnostics/interface/getInterfaceList
+  ❌ Status: 404 - Not Found
+  Error: {"errorMessage":"Endpoint not found"}
+
+Interface Names:
+  GET /api/diagnostics/interface/getInterfaceNames
+  ✅ Status: 200
+  Data keys: igc0, igc1, lo0, igc2, igc3...
+
+Menu Tree:
+  GET /api/core/menu/tree
+  ✅ Status: 200
+  Data keys: 0, 1, 2, 3, 4...
+
+Menu Search:
+  GET /api/core/menu/search
+  ✅ Status: 200
+  Data keys: 0, 1, 2, 3, 4...
+
+
+============================================================
+Testing with: Minimal Headers
+============================================================
+
+Firmware Info:
+  GET /api/core/firmware/info
+  ✅ Status: 200
+  Data keys: product_id, product_version, package, plugin, changelog...
+
+System Status GET:
+  GET /api/core/system/status
+  ✅ Status: 200
+  Data keys: metadata
+
+System Status POST:
+  POST /api/core/system/status
+  ✅ Status: 200
+  Data keys: metadata
+
+Interface List:
+  GET /api/diagnostics/interface/getInterfaceList
+  ❌ Status: 404 - Not Found
+  Error: {"errorMessage":"Endpoint not found"}
+
+Interface Names:
+  GET /api/diagnostics/interface/getInterfaceNames
+  ✅ Status: 200
+  Data keys: igc0, igc1, lo0, igc2, igc3...
+
+Menu Tree:
+  GET /api/core/menu/tree
+  ✅ Status: 200
+  Data keys: 0, 1, 2, 3, 4...
+
+Menu Search:
+  GET /api/core/menu/search
+  ✅ Status: 200
+  Data keys: 0, 1, 2, 3, 4...
+
+
+============================================================
+VLAN Endpoint Discovery
+============================================================
+
+✅ FOUND: GET /api/interfaces/vlan_settings/get
+   Response preview: {"vlan":{"vlan":{"15ca2b8c-051f-45d2-8f80-ac8538cbd2dd":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16...
+✅ FOUND: POST /api/interfaces/vlan_settings/get
+   Response has: other data
+✅ FOUND: GET /api/interfaces/vlan_settings/searchItem
+   Response preview: {"rows":[{"uuid":"7d192321-e08f-4712-a5ec-f937f0b77a72","if":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","t...
+✅ FOUND: POST /api/interfaces/vlan_settings/searchItem
+   Response has: rows
+
+============================================================
+Manual Test Commands
+============================================================
+
+Try these curl commands manually:
+
+# Basic system status:
+curl -k -u "hQ9xhZuHIxFzgTB0tpgNKKKbnnNvLTf+4tS0tMonaO8RuXtmDUdONu0fA3M4aexWaGe4zX04TqJvEuh5:7Dh8akddpwqNRAXKXCGHFFxHT/vHLlYF3pjFpRfy30mJvj4iLya1vYNCuDiPHGGuZni6u+Q1RRuIhR38" "https://opnsense.boonersystems.com:55443/api/core/system/status"
+
+# With POST:
+curl -k -X POST -u "hQ9xhZuHIxFzgTB0tpgNKKKbnnNvLTf+4tS0tMonaO8RuXtmDUdONu0fA3M4aexWaGe4zX04TqJvEuh5:7Dh8akddpwqNRAXKXCGHFFxHT/vHLlYF3pjFpRfy30mJvj4iLya1vYNCuDiPHGGuZni6u+Q1RRuIhR38" -H "Content-Type: application/json" -d '{}' "https://opnsense.boonersystems.com:55443/api/core/system/status"
+
+# VLAN search:
+curl -k -X POST -u "hQ9xhZuHIxFzgTB0tpgNKKKbnnNvLTf+4tS0tMonaO8RuXtmDUdONu0fA3M4aexWaGe4zX04TqJvEuh5:7Dh8akddpwqNRAXKXCGHFFxHT/vHLlYF3pjFpRfy30mJvj4iLya1vYNCuDiPHGGuZni6u+Q1RRuIhR38" -H "Content-Type: application/json" -d '{"current":1,"rowCount":10,"sort":{},"searchPhrase":""}' "https://opnsense.boonersystems.com:55443/api/interfaces/vlan_settings/search"
+
+
+[4/6] FIXED CLIENT TEST
+=======================
+
+=== Testing with Fixed API Client ===
+
+1. Testing connection...
+[API Request] {
+  method: 'GET',
+  url: '/core/firmware/info',
+  headers: Object [AxiosHeaders] {
+    Accept: 'application/json',
+    'Content-Type': undefined
+  },
+  data: undefined
+}
+[API Response] {
+  status: 200,
+  statusText: 'OK',
+  headers: Object [AxiosHeaders] {
+    'set-cookie': [
+      'PHPSESSID=76da4f84f733f8e7875097835aad5f69; path=/; secure; HttpOnly; SameSite=Lax'
+    ],
+    expires: 'Thu, 19 Nov 1981 08:52:00 GMT',
+    'cache-control': 'no-store, no-cache, must-revalidate',
+    pragma: 'no-cache',
+    'content-type': 'application/json; charset=UTF-8',
+    'strict-transport-security': 'max-age=31536000',
+    'transfer-encoding': 'chunked',
+    connection: 'close',
+    date: 'Tue, 10 Jun 2025 21:29:43 GMT',
+    server: 'OPNsense'
+  },
+  data: {
+    product_id: 'opnsense',
+    product_version: '25.1.5_5',
+    package: [
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object],
+      ... 766 more items
+    ],
+    plugin: [
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object]
+    ],
+    changelog: [
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object], [Object], [Object],
+      [Object], [Object], [Object], [Object],
+      ... 18 more items
+    ],
+    product: {
+      product_abi: '25.1',
+      product_arch: 'amd64',
+      product_check: null,
+      product_conflicts: 'os-firewall os-firewall-devel os-wireguard os-wireguard-devel os-wireguard-go os-wireguard-go-devel',
+      product_copyright_owner: 'Deciso B.V.',
+      product_copyright_url: 'https://www.deciso.com/',
+      product_copyright_years: '2014-2025',
+      product_email: 'project@opnsense.org',
+      product_hash: 'e0b2e6696',
+      product_id: 'opnsense',
+      product_latest: '25.1.7',
+      product_license: [],
+      product_log: 1,
+      product_mirror: 'https://pkg.opnsense.org/FreeBSD:14:amd64/25.1',
+      product_name: 'OPNsense',
+      product_nickname: 'Ultimate Unicorn',
+      product_repos: 'OPNsense (Priority: 11)',
+      product_series: '25.1',
+      product_tier: '1',
+      product_time: 'Tue Apr 15 08:41:25 CDT 2025',
+      product_version: '25.1.5_5',
+      product_website: 'https://opnsense.org/'
+    }
+  }
+}
+✅ Connected successfully using: /core/firmware/info
+   Response preview: {"product_id":"opnsense","product_version":"25.1.5_5","package":[{"name":"abseil","version":"2025012...
+
+2. Testing VLAN search with auto-detection...
+Trying search pattern: /interfaces/vlan_settings/search
+[API Request] {
+  method: 'POST',
+  url: '/interfaces/vlan_settings/search',
+  headers: Object [AxiosHeaders] {
+    Accept: 'application/json',
+    'Content-Type': 'application/json'
+  },
+  data: { current: 1, rowCount: 100, sort: {}, searchPhrase: '' }
+}
+[API Response] {
+  status: 404,
+  statusText: 'Not Found',
+  headers: Object [AxiosHeaders] {
+    'set-cookie': [
+      'PHPSESSID=a03c9af6f90872d747e3316b09285b9d; path=/; secure; HttpOnly; SameSite=Lax'
+    ],
+    expires: 'Thu, 19 Nov 1981 08:52:00 GMT',
+    'cache-control': 'no-store, no-cache, must-revalidate',
+    pragma: 'no-cache',
+    'content-type': 'application/json;charset=utf-8',
+    'strict-transport-security': 'max-age=31536000',
+    'transfer-encoding': 'chunked',
+    connection: 'close',
+    date: 'Tue, 10 Jun 2025 21:29:43 GMT',
+    server: 'OPNsense'
+  },
+  data: { errorMessage: 'Endpoint not found' }
+}
+Trying search pattern: /interfaces/vlan_settings/searchItem
+[API Request] {
+  method: 'POST',
+  url: '/interfaces/vlan_settings/searchItem',
+  headers: Object [AxiosHeaders] {
+    Accept: 'application/json',
+    'Content-Type': 'application/json'
+  },
+  data: { current: 1, rowCount: 100, sort: {}, searchPhrase: '' }
+}
+[API Response] {
+  status: 200,
+  statusText: 'OK',
+  headers: Object [AxiosHeaders] {
+    'set-cookie': [
+      'PHPSESSID=aae46d4bf6cd5d014128d45f953047a8; path=/; secure; HttpOnly; SameSite=Lax'
+    ],
+    expires: 'Thu, 19 Nov 1981 08:52:00 GMT',
+    'cache-control': 'no-store, no-cache, must-revalidate',
+    pragma: 'no-cache',
+    'content-type': 'application/json; charset=UTF-8',
+    'strict-transport-security': 'max-age=31536000',
+    'transfer-encoding': 'chunked',
+    connection: 'close',
+    date: 'Tue, 10 Jun 2025 21:29:43 GMT',
+    server: 'OPNsense'
+  },
+  data: {
+    rows: [
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object], [Object],
+      [Object]
+    ],
+    rowCount: 17,
+    total: 17,
+    current: 1
+  }
+}
+✅ Found 17 VLANs
+
+Existing VLANs:
+  - Tag: 10, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: InternalServers
+  - Tag: 2, Device: igc2 (24:5e:be:7f:16:25) [VLANIOT], Description: IoT
+  - Tag: 6, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: DMZ
+  - Tag: 4, Device: igc2 (24:5e:be:7f:16:25) [VLANIOT], Description: Guest
+  - Tag: 5, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: LAN Party
+  - Tag: 8, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: Security
+  - Tag: 3, Device: igc2 (24:5e:be:7f:16:25) [VLANIOT], Description: Outside
+  - Tag: 9, Device: igc2 (24:5e:be:7f:16:25) [VLANIOT], Description: Sandbox
+  - Tag: 716, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: Goldman Psax
+  - Tag: 400, Device: igc2 (24:5e:be:7f:16:25) [VLANIOT], Description: PureWaterTech
+  - Tag: 200, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: SteamServer0
+  - Tag: 201, Device: igc2 (24:5e:be:7f:16:25) [VLANIOT], Description: SteamServer1
+  - Tag: 100, Device: igc2 (24:5e:be:7f:16:25) [VLANIOT], Description: HomeAssistant
+  - Tag: 300, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: GunRun
+  - Tag: 299, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: testAPI
+  - Tag: 298, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: apitest2
+  - Tag: 120, Device: igc3 (24:5e:be:7f:16:23) [VLANSer], Description: Minecraft Server DMZ - API Test
+
+3. Testing manual endpoint discovery...
+   Trying GET /interfaces/vlan_settings/get...
+[API Request] {
+  method: 'GET',
+  url: '/interfaces/vlan_settings/get',
+  headers: Object [AxiosHeaders] {
+    Accept: 'application/json',
+    'Content-Type': undefined
+  },
+  data: undefined
+}
+[API Response] {
+  status: 200,
+  statusText: 'OK',
+  headers: Object [AxiosHeaders] {
+    'set-cookie': [
+      'PHPSESSID=37e5a7a7cb12bdb18d7fe8045b04948b; path=/; secure; HttpOnly; SameSite=Lax'
+    ],
+    expires: 'Thu, 19 Nov 1981 08:52:00 GMT',
+    'cache-control': 'no-store, no-cache, must-revalidate',
+    pragma: 'no-cache',
+    'content-type': 'application/json; charset=UTF-8',
+    'strict-transport-security': 'max-age=31536000',
+    'transfer-encoding': 'chunked',
+    connection: 'close',
+    date: 'Tue, 10 Jun 2025 21:29:44 GMT',
+    server: 'OPNsense'
+  },
+  data: { vlan: { vlan: [Object] } }
+}
+   ✅ SUCCESS! Response has keys: vlan
+   Found VLAN data: {
+  "vlan": {
+    "vlan": {
+      "15ca2b8c-051f-45d2-8f80-ac8538cbd2dd": {
+        "if": {
+          "igc0": {
+            "value": "igc0 (24:5e:be:7f:16:26) [WAN]",
+            "selected": 0
+       
+   Trying POST /interfaces/vlan_settings/get...
+[API Request] {
+  method: 'POST',
+  url: '/interfaces/vlan_settings/get',
+  headers: Object [AxiosHeaders] {
+    Accept: 'application/json',
+    'Content-Type': 'application/json'
+  },
+  data: {}
+}
+[API Response] {
+  status: 200,
+  statusText: 'OK',
+  headers: Object [AxiosHeaders] {
+    'set-cookie': [
+      'PHPSESSID=553cfa8b55710d1c90760755af114df7; path=/; secure; HttpOnly; SameSite=Lax'
+    ],
+    expires: 'Thu, 19 Nov 1981 08:52:00 GMT',
+    'cache-control': 'no-store, no-cache, must-revalidate',
+    pragma: 'no-cache',
+    'content-type': 'application/json; charset=UTF-8',
+    'strict-transport-security': 'max-age=31536000',
+    'transfer-encoding': 'chunked',
+    connection: 'close',
+    date: 'Tue, 10 Jun 2025 21:29:44 GMT',
+    server: 'OPNsense'
+  },
+  data: []
+}
+   ✅ SUCCESS! Response has keys: 
+   Trying GET /interfaces/vlan/get...
+[API Request] {
+  method: 'GET',
+  url: '/interfaces/vlan/get',
+  headers: Object [AxiosHeaders] {
+    Accept: 'application/json',
+    'Content-Type': undefined
+  },
+  data: undefined
+}
+[API Response] {
+  status: 404,
+  statusText: 'Not Found',
+  headers: Object [AxiosHeaders] {
+    'content-type': 'application/json;charset=utf-8',
+    'strict-transport-security': 'max-age=31536000',
+    'transfer-encoding': 'chunked',
+    connection: 'close',
+    date: 'Tue, 10 Jun 2025 21:29:44 GMT',
+    server: 'OPNsense'
+  },
+  data: { errorMessage: 'Endpoint not found' }
+}
+   Trying POST /interfaces/vlan/get...
+[API Request] {
+  method: 'POST',
+  url: '/interfaces/vlan/get',
+  headers: Object [AxiosHeaders] {
+    Accept: 'application/json',
+    'Content-Type': 'application/json'
+  },
+  data: {}
+}
+[API Response] {
+  status: 404,
+  statusText: 'Not Found',
+  headers: Object [AxiosHeaders] {
+    'content-type': 'application/json;charset=utf-8',
+    'strict-transport-security': 'max-age=31536000',
+    'transfer-encoding': 'chunked',
+    connection: 'close',
+    date: 'Tue, 10 Jun 2025 21:29:44 GMT',
+    server: 'OPNsense'
+  },
+  data: { errorMessage: 'Endpoint not found' }
+}
+   Trying GET /interfaces/overview/get...
+[API Request] {
+  method: 'GET',
+  url: '/interfaces/overview/get',
+  headers: Object [AxiosHeaders] {
+    Accept: 'application/json',
+    'Content-Type': undefined
+  },
+  data: undefined
+}
+[API Response] {
+  status: 404,
+  statusText: 'Not Found',
+  headers: Object [AxiosHeaders] {
+    'set-cookie': [
+      'PHPSESSID=bf756d9dc5ad2ec4d87925a1a18b2abf; path=/; secure; HttpOnly; SameSite=Lax'
+    ],
+    expires: 'Thu, 19 Nov 1981 08:52:00 GMT',
+    'cache-control': 'no-store, no-cache, must-revalidate',
+    pragma: 'no-cache',
+    'content-type': 'application/json;charset=utf-8',
+    'strict-transport-security': 'max-age=31536000',
+    'transfer-encoding': 'chunked',
+    connection: 'close',
+    date: 'Tue, 10 Jun 2025 21:29:44 GMT',
+    server: 'OPNsense'
+  },
+  data: { errorMessage: 'Endpoint not found' }
+}
+   Trying GET /interfaces/lagg/get...
+[API Request] {
+  method: 'GET',
+  url: '/interfaces/lagg/get',
+  headers: Object [AxiosHeaders] {
+    Accept: 'application/json',
+    'Content-Type': undefined
+  },
+  data: undefined
+}
+[API Response] {
+  status: 404,
+  statusText: 'Not Found',
+  headers: Object [AxiosHeaders] {
+    'content-type': 'application/json;charset=utf-8',
+    'strict-transport-security': 'max-age=31536000',
+    'transfer-encoding': 'chunked',
+    connection: 'close',
+    date: 'Tue, 10 Jun 2025 21:29:44 GMT',
+    server: 'OPNsense'
+  },
+  data: { errorMessage: 'Endpoint not found' }
+}
+
+
+[5/6] ENDPOINT TEST
+===================
+
+=== OPNsense API Endpoint Test ===
+
+Testing API at: https://opnsense.boonersystems.com:55443/api
+Using credentials: hQ9xhZuH...
+
+
+Testing: System Status (No Body)
+GET /core/system/status
+Status: 400 Bad Request
+❌ FAILED
+Error response: {
+  "status": 400,
+  "message": "Invalid JSON syntax"
+}
+
+Testing: System Status (Empty Body)
+POST /core/system/status
+Body: {}
+Status: 200 OK
+✅ SUCCESS
+Response: {
+  "metadata": {
+    "system": {
+      "status": 2,
+      "message": "No pending messages",
+      "title": "System"
+    },
+    "translations": {
+      "dialogTitle": "System Status",
+      "dialogCloseButton": "Close"
+    },
+    "subsystems": []
+  }
+}
+
+Testing: VLAN Get
+GET /interfaces/vlan/get
+Status: 404 Not Found
+❌ FAILED
+Error response: {
+  "errorMessage": "Endpoint not found"
+}
+
+Testing: VLAN Settings Get
+GET /interfaces/vlan_settings/get
+Status: 400 Bad Request
+❌ FAILED
+Error response: {
+  "status": 400,
+  "message": "Invalid JSON syntax"
+}
+
+Testing: Interfaces VLAN Search
+POST /interfaces/vlan/search
+Body: {"current":1,"rowCount":10,"sort":{},"searchPhrase":""}
+Status: 404 Not Found
+❌ FAILED
+Error response: {
+  "errorMessage": "Endpoint not found"
+}
+
+Testing: Interfaces VLAN Settings Search
+POST /interfaces/vlan_settings/search
+Body: {"current":1,"rowCount":10,"sort":{},"searchPhrase":""}
+Status: 404 Not Found
+❌ FAILED
+Error response: {
+  "errorMessage": "Endpoint not found"
+}
+
+Testing: Interface Names
+GET /diagnostics/interface/getInterfaceNames
+Status: 400 Bad Request
+❌ FAILED
+Error response: {
+  "status": 400,
+  "message": "Invalid JSON syntax"
+}
+
+Testing: Interface List
+GET /diagnostics/interface/getInterfaceList
+Status: 404 Not Found
+❌ FAILED
+Error response: {
+  "errorMessage": "Endpoint not found"
+}
+
+Testing: Core Menu
+GET /core/menu/get
+Status: 404 Not Found
+❌ FAILED
+Error response: {
+  "errorMessage": "Endpoint not found"
+}
+
+
+=== Testing with minimal headers ===
+Minimal request status: 200
+Response: {
+  "metadata": {
+    "system": {
+      "status": 2,
+      "message": "No pending messages",
+      "title": "System"
+    },
+    "translations": {
+      "dialogTitle": "System Status",
+      "dialogClo
+
+
+[6/6] CURL TEST
+===============
+
+Testing OPNsense API with curl...
+
+1. Testing system status endpoint...
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100   176    0   176    0     0   1493      0 --:--:-- --:--:-- --:--:--  1517
+{"metadata":{"system":{"status":2,"message":"No pending messages","title":"System"},"translations":{"dialogTitle":"System Status","dialogCloseButton":"Close"},"subsystems":[]}}
+
+2. Testing diagnostics endpoint...
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100   458    0   458    0     0   9250      0 --:--:-- --:--:-- --:--:--  9541
+{"igc0":"WAN","igc1":"LAN","lo0":"Loopback","igc2":"VLANIOT","igc3":"VLANSer","igc3_vlan10":"InternalServers","igc2_vlan2":"IoT","igc2_vlan3":"Outside","igc2_vlan4":"Guest","igc3_vlan5":"LANParty","igc3_vlan6":"DMZ","igc3_vlan8":"Security","igc2_vlan9":"Sandbox","igc3_vlan716":"GoldmanPsax","openvpn":"OpenVPN","igc2_vlan400":"PureWaterTech","igc3_vlan200":"SteamServer0","igc2_vlan100":"HomeAssistant","igc2_vlan201":"SteamServer1","igc3_vlan300":"GunRun"}
+
+3. Testing VLAN endpoints...
+GET method:
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0{"vlan":{"vlan":{"15ca2b8c-051f-45d2-8f80-ac8538cbd2dd":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"10","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"InternalServers","vlanif":"igc3_vlan10"},"7d192321-e08f-4712-a5ec-f937f0b77a72":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":1},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":0},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"2","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"IoT","vlanif":"igc2_vlan2"},"df166930-6659-4136-961a-3451e828264c":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"6","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"DMZ","vlanif":"igc3_vlan6"},"d2ea5b43-94df-4672-a4c3-699390ade83d":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":1},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":0},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"4","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"Guest","vlanif":"igc2_vlan4"},"ab65d120-9bbb-446b-aea1-383c23373b40":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"5","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"LAN Party","vlanif":"igc3_vlan5"},"8a44fd36-a378-49e0-8861-1003aa6cb4e7":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"8","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"Security","vlanif":"igc3_vlan8"},"797973ae-bbb1-4115-9ef0-8c7a8643ea1c":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":1},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":0},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"3","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"Outside","vlanif":"igc2_vlan3"},"c96f4eb1-460c-4f8f-a0f4-ef6ccd060c40":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":1},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":0},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"9","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"Sandbox","vlanif":"igc2_vlan9"},"dab3bc82-2a52-4996-aeec-a51237a67c7b":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"716","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"Goldman Psax","vlanif":"igc3_vlan716"},"25c2cda4-83d2-4bd9-8762-6402a0a58ec5":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":1},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":0},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"400","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"PureWaterTech","vlanif":"igc2_vlan400"},"00d3192e-b8ab-40f2-a549-3f5ee8d35a07":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"200","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"SteamServer0","vlanif":"igc3_vlan200"},"89dff665-299d-4924-a806-b9b38709095b":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":1},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":0},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"201","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"SteamServer1","vlanif":"igc2_vlan201"},"fcb9713b-0c56-485d-9328-45ec44105747":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":1},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":0},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"100","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"HomeAssistant","vlanif":"igc2_vlan100"},"37b9e942-743d-4eaf-ab8b-0b4913827ce5":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"300","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"GunRun","vlanif":"igc3_vlan300"},"959cefef-5db6-4806-93f9-ce0498770819":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"299","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"testAPI","vlanif":"igc3_vlan299"},"f4127d7d-f0e9-4063-91e9-2d901895b7d9":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{100 39889    0 39889    0     0   232k      0 --:--:-- --:--:-- --:--:--  234k
+"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"298","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"apitest2","vlanif":"igc3_vlan298"},"0f8db1b0-6310-4864-a968-ecc971334f52":{"if":{"igc0":{"value":"igc0 (24:5e:be:7f:16:26) [WAN]","selected":0},"igc1":{"value":"igc1 (24:5e:be:7f:16:24) [LAN]","selected":0},"igc2":{"value":"igc2 (24:5e:be:7f:16:25) [VLANIOT]","selected":0},"igc3":{"value":"igc3 (24:5e:be:7f:16:23) [VLANSer]","selected":1},"igc3_vlan10":{"value":"igc3_vlan10 (Tag: 10, Parent: igc3) [InternalServers]","selected":0},"igc2_vlan2":{"value":"igc2_vlan2 (Tag: 2, Parent: igc2) [IoT]","selected":0},"igc3_vlan6":{"value":"igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]","selected":0},"igc2_vlan4":{"value":"igc2_vlan4 (Tag: 4, Parent: igc2) [Guest]","selected":0},"igc3_vlan5":{"value":"igc3_vlan5 (Tag: 5, Parent: igc3) [LANParty]","selected":0},"igc3_vlan8":{"value":"igc3_vlan8 (Tag: 8, Parent: igc3) [Security]","selected":0},"igc2_vlan3":{"value":"igc2_vlan3 (Tag: 3, Parent: igc2) [Outside]","selected":0},"igc2_vlan9":{"value":"igc2_vlan9 (Tag: 9, Parent: igc2) [Sandbox]","selected":0},"igc3_vlan716":{"value":"igc3_vlan716 (Tag: 716, Parent: igc3) [GoldmanPsax]","selected":0},"igc2_vlan400":{"value":"igc2_vlan400 (Tag: 400, Parent: igc2) [PureWaterTech]","selected":0},"igc3_vlan200":{"value":"igc3_vlan200 (Tag: 200, Parent: igc3) [SteamServer0]","selected":0},"igc2_vlan201":{"value":"igc2_vlan201 (Tag: 201, Parent: igc2) [SteamServer1]","selected":0},"igc2_vlan100":{"value":"igc2_vlan100 (Tag: 100, Parent: igc2) [HomeAssistant]","selected":0},"igc3_vlan300":{"value":"igc3_vlan300 (Tag: 300, Parent: igc3) [GunRun]","selected":0},"igc3_vlan299":{"value":"igc3_vlan299 (Tag: 299, Parent: igc3)","selected":0},"igc3_vlan298":{"value":"igc3_vlan298 (Tag: 298, Parent: igc3)","selected":0},"igc3_vlan120":{"value":"igc3_vlan120 (Tag: 120, Parent: igc3)","selected":0}},"tag":"120","pcp":{"1":{"value":"Background (1, lowest)","selected":0},"0":{"value":"Best Effort (0, default)","selected":1},"2":{"value":"Excellent Effort (2)","selected":0},"3":{"value":"Critical Applications (3)","selected":0},"4":{"value":"Video (4)","selected":0},"5":{"value":"Voice (5)","selected":0},"6":{"value":"Internetwork Control (6)","selected":0},"7":{"value":"Network Control (7, highest)","selected":0}},"proto":{"":{"value":"Auto","selected":1},"802.1q":{"value":"802.1Q","selected":0},"802.1ad":{"value":"802.1ad","selected":0}},"descr":"Minecraft Server DMZ - API Test","vlanif":"igc3_vlan120"}}}}
+
+POST method with empty data:
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100     4    0     2  100     2     40     40 --:--:-- --:--:-- --:--:--    83
+[]
+
+4. Testing alternative VLAN path...
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100    37    0    37    0     0   2052      0 --:--:-- --:--:-- --:--:--  2176
+{"errorMessage":"Endpoint not found"}
+Press any key to continue . . . 
+Terminate batch job (Y/N)? Terminate batch job (Y/N)? Terminate batch job (Y/N)? Terminate batch job (Y/N)? 
+^C
+
+========================================
+ All tests completed at 16:29:22.25
+========================================

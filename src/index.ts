@@ -23,6 +23,8 @@ import { VlanResource } from './resources/vlan.js';
 import { FirewallRuleResource } from './resources/firewall/rule.js';
 import { BackupManager } from './resources/backup/manager.js';
 import { MCPCacheManager } from './cache/manager.js';
+import { DhcpLeaseResource } from './resources/services/dhcp/leases.js';
+import { DnsBlocklistResource } from './resources/services/dns/blocklist.js';
 
 // Configuration schema
 const ConfigSchema = z.object({
@@ -39,13 +41,15 @@ class OPNSenseMCPServer {
   private firewallRuleResource: FirewallRuleResource | null = null;
   private backupManager: BackupManager | null = null;
   private cacheManager: MCPCacheManager | null = null;
+  private dhcpResource: DhcpLeaseResource | null = null;
+  private dnsBlocklistResource: DnsBlocklistResource | null = null;
 
   constructor() {
     this.server = new Server(
       {
         name: 'opnsense-mcp',
-        version: '0.3.5',
-        description: 'OPNsense firewall management via MCP with backup and caching'
+        version: '0.4.0',
+        description: 'OPNsense firewall management via MCP with DNS filtering'
       },
       {
         capabilities: {
@@ -82,6 +86,8 @@ class OPNSenseMCPServer {
       // Initialize resources
       this.vlanResource = new VlanResource(this.client);
       this.firewallRuleResource = new FirewallRuleResource(this.client);
+      this.dhcpResource = new DhcpLeaseResource(this.client);
+      this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
       
       // Initialize backup manager
       if (process.env.BACKUP_ENABLED !== 'false') {
@@ -349,6 +355,169 @@ class OPNSenseMCPServer {
             type: 'object',
             properties: {}
           }
+        },
+
+        // DHCP Lease Management Tools
+        {
+          name: 'list_dhcp_leases',
+          description: 'List all DHCP leases',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interface: { 
+                type: 'string', 
+                description: 'Filter by interface (optional)' 
+              }
+            }
+          }
+        },
+        {
+          name: 'find_device_by_name',
+          description: 'Find devices by hostname pattern',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              pattern: { 
+                type: 'string', 
+                description: 'Hostname pattern to search (case-insensitive)' 
+              }
+            },
+            required: ['pattern']
+          }
+        },
+        {
+          name: 'find_device_by_mac',
+          description: 'Find device by MAC address',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              mac: { 
+                type: 'string', 
+                description: 'MAC address (with or without colons)' 
+              }
+            },
+            required: ['mac']
+          }
+        },
+        {
+          name: 'get_guest_devices',
+          description: 'Get all devices on guest network (VLAN 4)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'get_devices_by_interface',
+          description: 'Group devices by network interface',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+
+        // DNS Blocklist Management Tools
+        {
+          name: 'list_dns_blocklist',
+          description: 'List all DNS blocklist entries',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'block_domain',
+          description: 'Add a domain to the DNS blocklist',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              domain: { 
+                type: 'string', 
+                description: 'Domain to block (e.g., pornhub.com)' 
+              },
+              description: {
+                type: 'string',
+                description: 'Optional description for the block'
+              }
+            },
+            required: ['domain']
+          }
+        },
+        {
+          name: 'unblock_domain',
+          description: 'Remove a domain from the DNS blocklist',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              domain: { 
+                type: 'string', 
+                description: 'Domain to unblock' 
+              }
+            },
+            required: ['domain']
+          }
+        },
+        {
+          name: 'block_multiple_domains',
+          description: 'Block multiple domains at once',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              domains: { 
+                type: 'array',
+                items: { type: 'string' },
+                description: 'List of domains to block' 
+              },
+              description: {
+                type: 'string',
+                description: 'Optional description for the blocks'
+              }
+            },
+            required: ['domains']
+          }
+        },
+        {
+          name: 'apply_blocklist_category',
+          description: 'Apply a predefined category of domain blocks',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              category: { 
+                type: 'string',
+                enum: ['adult', 'malware', 'ads', 'social'],
+                description: 'Category of domains to block' 
+              }
+            },
+            required: ['category']
+          }
+        },
+        {
+          name: 'search_dns_blocklist',
+          description: 'Search DNS blocklist entries',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              pattern: { 
+                type: 'string', 
+                description: 'Pattern to search for in domains or descriptions' 
+              }
+            },
+            required: ['pattern']
+          }
+        },
+        {
+          name: 'toggle_blocklist_entry',
+          description: 'Enable/disable a DNS blocklist entry',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { 
+                type: 'string', 
+                description: 'UUID of the blocklist entry' 
+              }
+            },
+            required: ['uuid']
+          }
         }
       ]
     }));
@@ -378,6 +547,18 @@ class OPNSenseMCPServer {
           uri: 'opnsense://status',
           name: 'Connection Status',
           description: 'OPNsense connection status',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'opnsense://dhcp/leases',
+          name: 'DHCP Leases',
+          description: 'Current DHCP leases',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'opnsense://dns/blocklist',
+          name: 'DNS Blocklist',
+          description: 'DNS blocklist entries',
           mimeType: 'application/json'
         }
       ]
@@ -439,6 +620,40 @@ class OPNSenseMCPServer {
           };
         }
 
+        case 'opnsense://dhcp/leases': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'DHCP resource not initialized'
+            );
+          }
+          const leases = await this.dhcpResource.listLeases();
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(leases, null, 2)
+            }]
+          };
+        }
+
+        case 'opnsense://dns/blocklist': {
+          if (!this.dnsBlocklistResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'DNS blocklist resource not initialized'
+            );
+          }
+          const blocklist = await this.dnsBlocklistResource.list();
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(blocklist, null, 2)
+            }]
+          };
+        }
+
         default:
           throw new McpError(
             ErrorCode.InvalidRequest,
@@ -468,6 +683,8 @@ class OPNSenseMCPServer {
             if (test.success) {
               this.vlanResource = new VlanResource(this.client);
               this.firewallRuleResource = new FirewallRuleResource(this.client);
+              this.dhcpResource = new DhcpLeaseResource(this.client);
+              this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
               
               // Optional backup manager
               if (process.env.BACKUP_ENABLED !== 'false') {
@@ -1040,6 +1257,461 @@ class OPNSenseMCPServer {
                 text: success ? 
                   `Backup ${args.backupId} restored successfully` :
                   `Failed to restore backup ${args.backupId}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        // DHCP Lease Management
+        case 'list_dhcp_leases': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const leases = await this.dhcpResource.listLeases();
+            
+            // Filter by interface if specified
+            const filtered = args?.interface 
+              ? leases.filter(l => l.if === args.interface)
+              : leases;
+            
+            // Format for display
+            const formatted = filtered.map(lease => ({
+              hostname: lease.hostname || 'Unknown Device',
+              ip: lease.address,
+              mac: lease.hwaddr,
+              interface: lease.if,
+              state: lease.state,
+              starts: lease.starts,
+              ends: lease.ends,
+              deviceInfo: this.dhcpResource!.getDeviceInfo(lease)
+            }));
+            
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(formatted, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to list DHCP leases: ${error.message}`
+            );
+          }
+        }
+
+        case 'find_device_by_name': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.pattern) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'pattern parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.dhcpResource.findByHostname(args.pattern as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No devices found matching pattern "${args.pattern}"`
+                }]
+              };
+            }
+            
+            const formatted = results.map(lease => 
+              this.dhcpResource!.formatLease(lease)
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Found ${results.length} device(s):\n\n${formatted.join('\n')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to search devices: ${error.message}`
+            );
+          }
+        }
+
+        case 'find_device_by_mac': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.mac) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'mac parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.dhcpResource.findByMac(args.mac as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No device found with MAC address "${args.mac}"`
+                }]
+              };
+            }
+            
+            const formatted = results.map(lease => 
+              this.dhcpResource!.formatLease(lease)
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: formatted.join('\n')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to search by MAC: ${error.message}`
+            );
+          }
+        }
+
+        case 'get_guest_devices': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const guestDevices = await this.dhcpResource.getGuestLeases();
+            
+            if (guestDevices.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: 'No devices currently connected to guest network'
+                }]
+              };
+            }
+            
+            const formatted = guestDevices.map(lease => {
+              const info = this.dhcpResource!.getDeviceInfo(lease);
+              return `• ${info}`;
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `${guestDevices.length} device(s) on guest network:\n\n${formatted.join('\n')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get guest devices: ${error.message}`
+            );
+          }
+        }
+
+        case 'get_devices_by_interface': {
+          if (!this.dhcpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const byInterface = await this.dhcpResource.getLeasesByInterface();
+            
+            let output = 'Devices by Interface:\n\n';
+            
+            for (const [iface, devices] of byInterface) {
+              output += `${iface}: ${devices.length} device(s)\n`;
+              
+              // Show first few devices per interface
+              const preview = devices.slice(0, 3);
+              for (const device of preview) {
+                const hostname = device.hostname || 'Unknown';
+                output += `  • ${hostname} (${device.address})\n`;
+              }
+              
+              if (devices.length > 3) {
+                output += `  ... and ${devices.length - 3} more\n`;
+              }
+              
+              output += '\n';
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: output
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to group devices: ${error.message}`
+            );
+          }
+        }
+
+        // DNS Blocklist Management
+        case 'list_dns_blocklist': {
+          if (!this.dnsBlocklistResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const blocklist = await this.dnsBlocklistResource.list();
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(blocklist, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to list DNS blocklist: ${error.message}`
+            );
+          }
+        }
+
+        case 'block_domain': {
+          if (!this.dnsBlocklistResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.domain) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'domain parameter is required'
+            );
+          }
+          
+          try {
+            const result = await this.dnsBlocklistResource.blockDomain(
+              args.domain as string,
+              args.description as string
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully blocked domain ${args.domain} with UUID: ${result.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'unblock_domain': {
+          if (!this.dnsBlocklistResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.domain) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'domain parameter is required'
+            );
+          }
+          
+          try {
+            await this.dnsBlocklistResource.unblockDomain(args.domain as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully unblocked domain ${args.domain}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'block_multiple_domains': {
+          if (!this.dnsBlocklistResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.domains || !Array.isArray(args.domains)) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'domains array parameter is required'
+            );
+          }
+          
+          try {
+            const result = await this.dnsBlocklistResource.blockMultipleDomains(
+              args.domains as string[],
+              args.description as string
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Blocked ${result.blocked.length} domains successfully.\n` +
+                      (result.failed.length > 0 ? `Failed to block: ${result.failed.join(', ')}` : '')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'apply_blocklist_category': {
+          if (!this.dnsBlocklistResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.category) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'category parameter is required'
+            );
+          }
+          
+          try {
+            const result = await this.dnsBlocklistResource.applyBlocklistCategory(
+              args.category as 'adult' | 'malware' | 'ads' | 'social'
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Applied ${args.category} blocklist category.\n` +
+                      `Blocked ${result.blocked.length} domains successfully.\n` +
+                      (result.failed.length > 0 ? `Failed to block: ${result.failed.join(', ')}` : '')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'search_dns_blocklist': {
+          if (!this.dnsBlocklistResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.pattern) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'pattern parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.dnsBlocklistResource.searchBlocklist(args.pattern as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No blocklist entries found matching pattern "${args.pattern}"`
+                }]
+              };
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Found ${results.length} blocklist entries:\n\n` +
+                      results.map(entry => 
+                        `• ${entry.host} ${entry.enabled ? '(enabled)' : '(disabled)'}` +
+                        (entry.description ? ` - ${entry.description}` : '')
+                      ).join('\n')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to search blocklist: ${error.message}`
+            );
+          }
+        }
+
+        case 'toggle_blocklist_entry': {
+          if (!this.dnsBlocklistResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+          
+          try {
+            await this.dnsBlocklistResource.toggleBlocklistEntry(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully toggled blocklist entry ${args.uuid}`
               }]
             };
           } catch (error: any) {

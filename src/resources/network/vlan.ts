@@ -1,4 +1,5 @@
-import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState } from '../base.js';
+import { z } from 'zod';
+import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState } from '../legacy/base.js';
 
 /**
  * VLAN properties interface
@@ -15,6 +16,14 @@ export interface VlanProperties extends ResourceProperties {
  * OPNSense VLAN Resource
  */
 export class Vlan extends Resource {
+  // Required abstract implementations
+  readonly type = 'opnsense:network:vlan';
+  
+  readonly schema = z.object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional()
+  });
+
   constructor(
     name: string,
     properties: VlanProperties,
@@ -51,7 +60,7 @@ export class Vlan extends Resource {
       const tag = this.properties.tag;
       if (!Number.isInteger(tag) || tag < 1 || tag > 4094) {
         errors.push({
-          property: 'tag',
+          path: 'tag',
           message: 'VLAN tag must be an integer between 1 and 4094',
           code: 'INVALID_VLAN_TAG'
         });
@@ -63,7 +72,7 @@ export class Vlan extends Resource {
       const pcp = parseInt(this.properties.pcp, 10);
       if (isNaN(pcp) || pcp < 0 || pcp > 7) {
         errors.push({
-          property: 'pcp',
+          path: 'pcp',
           message: 'Priority Code Point must be between 0 and 7',
           code: 'INVALID_PCP'
         });
@@ -77,7 +86,7 @@ export class Vlan extends Resource {
       const validInterfaces = this.getValidInterfaces();
       if (!validInterfaces.includes(this.properties.device)) {
         warnings.push({
-          property: 'device',
+          path: 'device',
           message: `Device '${this.properties.device}' may not exist. Valid interfaces include: ${validInterfaces.join(', ')}`,
           code: 'UNKNOWN_DEVICE'
         });
@@ -89,7 +98,7 @@ export class Vlan extends Resource {
     // Warnings
     if (this.properties.tag === 1) {
       warnings.push({
-        property: 'tag',
+        path: 'tag',
         message: 'VLAN tag 1 is typically reserved for the default VLAN',
         code: 'RESERVED_VLAN'
       });
@@ -218,5 +227,28 @@ export class Vlan extends Resource {
         subnet: subnet
       }
     };
+  }
+
+  /**
+   * Convert to API payload
+   */
+  toAPIPayload(): any {
+    return this.toApiPayload ? this.toApiPayload() : this.properties;
+  }
+
+  /**
+   * Update from API response
+   */
+  fromAPIResponse(response: any): void {
+    if (this.fromApiResponse) {
+      this.fromApiResponse(response);
+    }
+  }
+
+  /**
+   * Get required permissions
+   */
+  getRequiredPermissions(): string[] {
+    return ['interfaces.vlan.manage'];
   }
 }
