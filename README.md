@@ -1,162 +1,126 @@
 # OPNSense MCP Server
 
-A Model Context Protocol (MCP) server for managing OPNSense firewalls through natural language interactions with Claude Desktop.
+A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infrastructure as Code (IaC) capabilities.
 
-## Features
+![Version](https://img.shields.io/badge/version-0.4.5-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![MCP](https://img.shields.io/badge/MCP-Compatible-orange)
 
-### Phase 1 & 2 (Complete)
-- **VLAN Management**: Create, update, delete, and list VLANs
-- **Firewall Rules**: Manage firewall rules with presets and custom configurations
-- **Network Interfaces**: Query available network interfaces
+## 🚀 Features
 
-### Phase 3 (Infrastructure Ready)
-- **Configuration Backup System**: Automatic backups before changes
-- **Cache Layer**: Redis-based caching for improved performance
-- **Audit Database**: PostgreSQL-based audit trail
-- **DHCP Lease Management**: View and search connected devices
+- **Complete OPNsense API Integration** - Manage VLANs, firewall rules, services, and more
+- **Infrastructure as Code** - Deploy and manage network infrastructure declaratively
+- **State Management** - Track resource state with rollback capabilities
+- **Caching Support** - Redis and PostgreSQL integration for performance
+- **DNS Blocking** - Built-in DNS blocklist management
+- **Backup & Restore** - Configuration backup management
 
-## Prerequisites
+## 📋 Prerequisites
 
-- Node.js 18+ and npm
-- OPNSense firewall with API access enabled
-- Claude Desktop with MCP support
-- (Optional) Docker for Redis/PostgreSQL deployment
+- Node.js 18+ 
+- OPNsense firewall with API access enabled
+- (Optional) Redis for caching
+- (Optional) PostgreSQL for persistent cache
 
-## Installation
+## 🛠️ Installation
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/opnsense-mcp.git
-cd opnsense-mcp
-```
+# Clone the repository
+git clone https://github.com/yourusername/opnsense-mcp-server.git
+cd opnsense-mcp-server
 
-2. Install dependencies:
-```bash
+# Install dependencies
 npm install
-```
 
-3. Copy the environment template:
-```bash
-cp .env.example .env
-```
-
-4. Configure your OPNSense API credentials in `.env`:
-```env
-OPNSENSE_HOST=https://your-opnsense-ip:port
-OPNSENSE_API_KEY=your-api-key
-OPNSENSE_API_SECRET=your-api-secret
-OPNSENSE_VERIFY_SSL=true
-
-# Start with optional features disabled
-ENABLE_CACHE=false
-BACKUP_ENABLED=false
-```
-
-5. Build the project:
-```bash
+# Build the project
 npm run build
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your OPNsense credentials
 ```
 
-## Claude Desktop Configuration
+## ⚙️ Configuration
 
-Add this to your Claude Desktop configuration:
+Create a `.env` file with your OPNsense configuration:
 
-```json
+```env
+# Required
+OPNSENSE_HOST=https://192.168.1.1
+OPNSENSE_API_KEY=your_api_key
+OPNSENSE_API_SECRET=your_api_secret
+
+# Optional
+IAC_ENABLED=true
+ENABLE_CACHE=false
+REDIS_HOST=localhost
+POSTGRES_HOST=localhost
+```
+
+## 🚦 Quick Start
+
+```bash
+# Start the MCP server
+npm start
+
+# Or use with Claude Desktop
+# Add to claude_desktop_config.json:
 {
   "mcpServers": {
     "opnsense": {
       "command": "node",
-      "args": ["C:\\path\\to\\opnsense-mcp\\dist\\index.js"],
-      "cwd": "C:\\path\\to\\opnsense-mcp"
+      "args": ["dist/index.js"],
+      "cwd": "/path/to/opnsense-mcp-server"
     }
   }
 }
 ```
 
-## Usage Examples
+## 📚 Documentation
 
-Once configured in Claude Desktop, you can use natural language commands:
+- [Getting Started Guide](docs/getting-started/README.md)
+- [API Reference](docs/api/README.md)
+- [IaC Architecture](docs/IaC-ARCHITECTURE.md)
+- [Troubleshooting](docs/troubleshooting/README.md)
 
-- "List all VLANs"
-- "Create VLAN 30 for gaming on interface igc3"
-- "Show all firewall rules"
-- "Create a rule to allow Minecraft on the gaming VLAN"
-- "Find all rules that allow SSH"
-- "Disable the rule blocking port 80"
+### Infrastructure as Code Example
 
-## Optional Features
+Deploy network infrastructure declaratively:
 
-### Redis Cache & PostgreSQL Audit (Phase 3)
-
-For enhanced performance and audit trails, deploy Redis and PostgreSQL:
-
-```bash
-# On your infrastructure server
-docker run -d --name mcp-redis -p 6379:6379 redis:7-alpine
-docker run -d --name mcp-postgres -p 5432:5432 \
-  -e POSTGRES_DB=opnsense_mcp \
-  -e POSTGRES_USER=mcp_user \
-  -e POSTGRES_PASSWORD=secure_password \
-  postgres:15-alpine
+```json
+{
+  "name": "home-network",
+  "resources": [{
+    "type": "opnsense:network:vlan",
+    "id": "guest-vlan",
+    "name": "Guest Network",
+    "properties": {
+      "interface": "igc3",
+      "tag": 10,
+      "description": "Isolated guest network"
+    }
+  }]
+}
 ```
 
-Then update your `.env`:
-```env
-ENABLE_CACHE=true
-REDIS_HOST=your-redis-host
-POSTGRES_HOST=your-postgres-host
-```
+## 🗺️ Roadmap
 
-## Architecture
+- [ ] Proxmox MCP integration
+- [ ] Docker MCP integration  
+- [ ] Unified IaC orchestrator
+- [ ] Web UI for deployment management
+- [ ] Multi-firewall support
 
-```
-Claude Desktop <--> MCP Server (Local) <--> OPNSense API
-                           |
-                           └--> (Optional) Redis/PostgreSQL
-```
+## 🤝 Contributing
 
-## Security Notes
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
 
-- Never commit `.env` files with real credentials
-- Use HTTPS for OPNSense API connections
-- Store API keys securely
-- Consider network segmentation for management interfaces
+## 📄 License
 
-## Development
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-```bash
-# Run TypeScript directly (development)
-npm run dev
+## 🙏 Acknowledgments
 
-# Build for production
-npm run build
-
-# Run tests
-npm test
-```
-
-## Roadmap
-
-- [x] Phase 1: Basic VLAN management
-- [x] Phase 2: Firewall rule management
-- [x] Phase 3: Infrastructure (backup, cache, audit)
-- [ ] Phase 4: DHCP static mappings
-- [ ] Phase 5: Multi-MCP orchestration
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Acknowledgments
-
-- Built for the [Model Context Protocol](https://github.com/anthropics/mcp)
-- Designed to work with Claude Desktop
-- Part of a larger Infrastructure as Code vision
+- Built for the MCP (Model Context Protocol) ecosystem
+- Inspired by Pulumi and SST infrastructure patterns
+- Part of a larger vision for home infrastructure automation

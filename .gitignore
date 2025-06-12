@@ -2,94 +2,73 @@
 node_modules/
 
 # Build output
-# The 'dist/' folder is built automatically when you run 'npm install'
-# via the "prepare" script in package.json
 dist/
+*.js
+*.js.map
+*.d.ts
+*.tsbuildinfo
+!jest.config.js
+!rollup.config.js
+!drizzle.config.js
 
-# Environment files with sensitive data
+# Environment
 .env
-.env.local
-.env.minimal
-.env.*.local
-.env.backup
+.env.*
+!.env.example
+!.env.iac-example
 
-# Logs
-*.log
-npm-debug.log*
-logs/
-
-# OS files
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Editor files
-*.swp
-*.swo
+# IDE
 .vscode/
 .idea/
-*.iml
-*.sublime-*
+*.swp
+*.swo
+.DS_Store
 
-# Personal/temporary files
-VinnieSpecific/
-TODELETE/
-*.backup
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
 *.tmp
 *.temp
+TODELETE/
+temp/
+tmp/
 
-# Test output
-coverage
+# Backup files
+*.backup
+*.bak
+backup/
 
-# Local backup directory (but keep the directory itself)
-backup/*.xml
-backup/*.json
-backups/
+# Cache
+.cache/
+.npm/
 
-# npm/yarn files
-.npm
-.yarn-integrity
-yarn-error.log
+# Database
+*.sqlite
+*.sqlite3
+*.db
 
-# TypeScript cache
-*.tsbuildinfo
+# OS
+Thumbs.db
+Desktop.ini
 
-# Optional npm cache directory
-.npm
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Optional eslint cache
-.eslintcache
-
-# Personal test files (but NOT the example test files!)
-diagnose-*.js
-explore-*.js
-quick-test-*.js
-my-test-*.js
-
-# Build artifacts from old phases
-build-phase*.js
-
-# Temporary/deprecated files
-*.old
-*.deprecated
-PROJECT-OVERVIEW.md
-Phase*-STATUS.md
-
-# Keep test examples!
-!test-firewall.js
-!test-dhcp.js
-!test-backup.js
-!test-build.js
-
-# Keep important scripts!
-!clean-build.bat
-!build.bat
-!setup.bat
-!setup.sh
-
-# Keep important documentation!
-Phase1Docs/
-Phase2Docs/
-Phase3Docs/
-!examples/
-!roadmap/
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

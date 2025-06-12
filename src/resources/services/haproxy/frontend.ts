@@ -1,4 +1,5 @@
-import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState, ValidationWarning } from '../../base.js';
+import { z } from 'zod';
+import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState, ValidationWarning } from '../../legacy/base.js';
 
 /**
  * HAProxy frontend properties
@@ -20,6 +21,14 @@ export interface HaproxyFrontendProperties extends ResourceProperties {
  * OPNSense HAProxy Frontend Resource
  */
 export class HaproxyFrontend extends Resource {
+  // Required abstract implementations
+  readonly type = 'opnsense:service:haproxy:frontend';
+  
+  readonly schema = z.object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional()
+  });
+
   constructor(
     name: string,
     properties: HaproxyFrontendProperties,
@@ -60,11 +69,7 @@ export class HaproxyFrontend extends Resource {
 
     // Validate mode
     if (this.properties.mode) {
-      const modeError = ValidationHelper.validateEnum(
-        this.properties.mode,
-        'mode',
-        ['http', 'tcp']
-      );
+      const modeError = ValidationHelper.validateEnum(this.properties.mode, ['http', 'tcp'], 'mode');
       if (modeError) errors.push(modeError);
     }
 
@@ -101,5 +106,28 @@ export class HaproxyFrontend extends Resource {
     if (response.result === 'saved') {
       this.state = ResourceState.Created;
     }
+  }
+
+  /**
+   * Convert to API payload
+   */
+  toAPIPayload(): any {
+    return this.toApiPayload ? this.toApiPayload() : this.properties;
+  }
+
+  /**
+   * Update from API response
+   */
+  fromAPIResponse(response: any): void {
+    if (this.fromApiResponse) {
+      this.fromApiResponse(response);
+    }
+  }
+
+  /**
+   * Get required permissions
+   */
+  getRequiredPermissions(): string[] {
+    return ['haproxy.manage'];
   }
 }

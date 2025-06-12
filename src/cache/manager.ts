@@ -55,7 +55,14 @@ export class MCPCacheManager {
     this.keyPrefix = this.config.redisKeyPrefix!;
     
     // Initialize connections
-    this.initializeConnections();
+    // Don't auto-initialize - wait for connect() to be called
+  }
+
+  /**
+   * Connect to cache services
+   */
+  async connect(): Promise<void> {
+    await this.initializeConnections();
   }
 
   /**

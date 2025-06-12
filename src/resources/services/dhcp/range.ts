@@ -1,4 +1,5 @@
-import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState, ValidationWarning } from '../../base.js';
+import { z } from 'zod';
+import { Resource, ValidationResult, ValidationHelper, ResourceProperties, ResourceState, ValidationWarning } from '../../legacy/base.js';
 
 /**
  * DHCP range properties
@@ -14,6 +15,14 @@ export interface DhcpRangeProperties extends ResourceProperties {
  * OPNSense DHCP Range Resource
  */
 export class DhcpRange extends Resource {
+  // Required abstract implementations
+  readonly type = 'opnsense:service:dhcp:range';
+  
+  readonly schema = z.object({
+    name: z.string().optional(),
+    enabled: z.boolean().optional()
+  });
+
   constructor(
     name: string,
     properties: DhcpRangeProperties,
@@ -97,5 +106,28 @@ export class DhcpRange extends Resource {
     
     // Simple calculation for same subnet
     return toParts[3] - fromParts[3] + 1;
+  }
+
+  /**
+   * Convert to API payload
+   */
+  toAPIPayload(): any {
+    return this.toApiPayload ? this.toApiPayload() : this.properties;
+  }
+
+  /**
+   * Update from API response
+   */
+  fromAPIResponse(response: any): void {
+    if (this.fromApiResponse) {
+      this.fromApiResponse(response);
+    }
+  }
+
+  /**
+   * Get required permissions
+   */
+  getRequiredPermissions(): string[] {
+    return ['dhcp.manage'];
   }
 }
