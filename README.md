@@ -26,8 +26,8 @@ A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infra
 
 ```bash
 # Clone the repository
-git clone https://github.com/vespo92/OPNSenseMCP.git
-cd opnsense-mcp-server
+git clone https://github.com/VinSpo/opnsense-mcp.git
+cd opnsense-mcp
 
 # Install dependencies
 npm install
@@ -70,7 +70,7 @@ npm start
     "opnsense": {
       "command": "node",
       "args": ["dist/index.js"],
-      "cwd": "/path/to/opnsense-mcp-server"
+      "cwd": "/path/to/opnsense-mcp"
     }
   }
 }
