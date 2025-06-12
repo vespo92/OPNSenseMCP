@@ -2,9 +2,17 @@
 
 A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infrastructure as Code (IaC) capabilities.
 
+
+<a href="https://glama.ai/mcp/servers/@vespo92/OPNSenseMCP">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@vespo92/OPNSenseMCP/badge" alt="OPNSense Server MCP server" />
+</a>
+
+## Features
+=======
 ![Version](https://img.shields.io/badge/version-0.4.5-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![MCP](https://img.shields.io/badge/MCP-Compatible-orange)
+
 
 ## 🚀 Features
 
@@ -26,7 +34,7 @@ A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infra
 
 ```bash
 # Clone the repository
-git clone https://github.com/VinSpo/opnsense-mcp.git
+git clone https://github.com/vespo92/OPNSenseMCP
 cd opnsense-mcp
 
 # Install dependencies
