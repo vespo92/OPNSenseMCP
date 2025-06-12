@@ -26,7 +26,7 @@ A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infra
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/opnsense-mcp-server.git
+git clone https://github.com/vespo92/OPNSenseMCP.git
 cd opnsense-mcp-server
 
 # Install dependencies
@@ -104,9 +104,6 @@ Deploy network infrastructure declaratively:
 ```
 
 ## 🗺️ Roadmap
-
-- [ ] Proxmox MCP integration
-- [ ] Docker MCP integration  
 - [ ] Unified IaC orchestrator
 - [ ] Web UI for deployment management
 - [ ] Multi-firewall support
