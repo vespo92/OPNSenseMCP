@@ -1,49 +1,58 @@
 # OPNSense MCP Documentation
 
+Welcome to the comprehensive documentation for the OPNSense MCP Server.
+
 ## 📚 Documentation Structure
 
-- **[Getting Started](getting-started/)** - Installation and setup guides
-- **[API Reference](api/)** - Detailed API documentation
-- **[Architecture](IaC-ARCHITECTURE.md)** - System architecture and design
-- **[Phases](phases/)** - Development phase documentation
-- **[Troubleshooting](troubleshooting/)** - Common issues and solutions
-
-## 🚀 Quick Links
-
 ### Getting Started
-- [Initial Setup Guide](getting-started/setup.md)
-- [Environment Configuration](getting-started/configuration.md)
-- [First Deployment](getting-started/first-deployment.md)
+- [Setup Guide](getting-started/SETUP-GUIDE.md) - Initial setup and configuration
+- [Quick Start Examples](../examples/) - Code examples to get you started
 
-### Infrastructure as Code
-- [IaC Overview](IaC-ARCHITECTURE.md)
-- [Resource Types](api/resources.md)
-- [Deployment Guide](getting-started/iac-deployment.md)
+### Core Concepts
+- [IaC Architecture](IaC-ARCHITECTURE.md) - Infrastructure as Code design
+- [IaC Vision](IaC-VISION.md) - Future roadmap and integration plans
 
-### Features
-- [DNS Blocking Setup](dns/DNS-QUICKSTART.md)
-- [Backup Management](api/backup.md)
-- [Cache Configuration](getting-started/cache-setup.md)
+### API Documentation
+- [API Endpoints](api/API-ENDPOINTS.md) - Complete API reference
 
-## 💡 Key Concepts
+### Feature Guides
+- [DNS Blocking](dns/DNS-QUICKSTART.md) - DNS filtering setup
+- [DNS Solution Overview](dns/DNS-SOLUTION-README.md) - DNS architecture
 
-### MCP (Model Context Protocol)
-This server implements the MCP protocol, allowing AI assistants to interact with OPNsense firewalls programmatically.
+### Troubleshooting
+- [Common Issues](troubleshooting/README.md) - Solutions to frequent problems
+- [DHCP Troubleshooting](troubleshooting/DHCP-TROUBLESHOOTING.md) - DHCP-specific issues
+- [Build Errors](troubleshooting/BUILD-ERRORS-FIXED.md) - Compilation problems
 
-### Infrastructure as Code
-Deploy and manage network infrastructure using declarative configurations with built-in state management and rollback capabilities.
+### Development
+- [Phase Documentation](phases/) - Development history and decisions
+- [Architecture Diagram](ARCHITECTURE-DIAGRAM.md) - System overview
 
-### Resource Management
-All OPNsense configurations are abstracted as resources that can be created, updated, and deleted through a consistent API.
+## 🎯 Quick Links
 
-## 📖 Development Documentation
+**New to OPNSense MCP?**
+Start with the [Setup Guide](getting-started/SETUP-GUIDE.md)
 
-- [Contributing Guide](../CONTRIBUTING.md)
-- [Development Phases](phases/)
-- [Troubleshooting Fixes](troubleshooting/fixes/)
+**Looking for examples?**
+Check out the [Examples Directory](../examples/)
 
-## 🔧 Advanced Topics
+**Having issues?**
+See [Troubleshooting](troubleshooting/README.md)
 
-- [State Management](IaC-ARCHITECTURE.md#state-management)
-- [Dependency Resolution](IaC-ARCHITECTURE.md#dependency-resolution)
-- [Custom Resources](api/custom-resources.md)
+**Want to contribute?**
+Read our [Contributing Guide](../CONTRIBUTING.md)
+
+## 🔍 Finding Information
+
+Use these keywords to find what you need:
+- **vlan** - VLAN management and configuration
+- **firewall** - Firewall rules and policies
+- **dns** - DNS blocking and filtering
+- **backup** - Configuration backup/restore
+- **iac** - Infrastructure as Code features
+- **dhcp** - DHCP lease management
+
+## 📞 Support
+
+- GitHub Issues: [Report bugs or request features](https://github.com/VinSpo/opnsense-mcp/issues)
+- Discussions: [Ask questions and share ideas](https://github.com/VinSpo/opnsense-mcp/discussions)
