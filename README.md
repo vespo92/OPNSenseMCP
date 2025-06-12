@@ -26,7 +26,7 @@ A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infra
 
 ```bash
 # Clone the repository
-git clone https://github.com/VinSpo/opnsense-mcp.git
+git clone https://github.com/vespo92/OPNSenseMCP
 cd opnsense-mcp
 
 # Install dependencies
