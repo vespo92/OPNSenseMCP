@@ -9,7 +9,7 @@ A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infra
 
 ## Features
 =======
-![Version](https://img.shields.io/badge/version-0.4.5-blue)
+![Version](https://img.shields.io/badge/version-0.6.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![MCP](https://img.shields.io/badge/MCP-Compatible-orange)
 
@@ -22,6 +22,7 @@ A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infra
 - **Caching Support** - Redis and PostgreSQL integration for performance
 - **DNS Blocking** - Built-in DNS blocklist management
 - **Backup & Restore** - Configuration backup management
+- **Dual Transport Support** - STDIO for Claude Desktop, SSE for agents/containers
 
 ## 📋 Prerequisites
 
@@ -47,6 +48,30 @@ npm run build
 cp .env.example .env
 # Edit .env with your OPNsense credentials
 ```
+
+## 🚀 Transport Modes
+
+The server supports two transport modes:
+
+### STDIO Mode (Default)
+For direct integration with Claude Desktop:
+```bash
+npm start                  # or npm run start:stdio
+```
+
+### SSE Mode
+For HTTP-based integration with agents and containers:
+```bash
+npm run start:sse          # Starts on port 3000
+npm run start:sse -- --port 8080  # Custom port
+```
+
+**SSE Endpoints:**
+- `GET /sse` - SSE connection endpoint
+- `POST /messages` - Message handling
+- `GET /health` - Health check
+
+See [SSE Deployment Guide](docs/SSE-DEPLOYMENT.md) for container deployment.
 
 ## ⚙️ Configuration
 

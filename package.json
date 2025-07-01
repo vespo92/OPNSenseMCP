@@ -15,7 +15,11 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "start:stdio": "node dist/index.js --transport stdio",
+    "start:sse": "node dist/index.js --transport sse --port 3000",
     "dev": "tsx src/index.ts",
+    "dev:stdio": "tsx src/index.ts --transport stdio",
+    "dev:sse": "tsx src/index.ts --transport sse --port 3000",
     "test": "tsx src/test-resources.ts",
     "test:api": "node test-simple.js",
     "test:vlan": "node test-vlan-comprehensive.js",

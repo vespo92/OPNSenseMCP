@@ -35,6 +35,7 @@ lerna-debug.log*
 # Testing
 coverage/
 .nyc_output/
+test-sse.js
 
 # Temporary files
 *.tmp

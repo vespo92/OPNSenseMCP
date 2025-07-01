@@ -1,0 +1,73 @@
+version: '3.8'
+
+# SSE Deployment Configuration for OPNSense MCP Server
+# This file configures the MCP server to run with SSE transport
+# Use with: docker-compose -f docker-compose.sse.yml up
+
+services:
+  opnsense-mcp-sse:
+    build: .
+    container_name: opnsense-mcp-server-sse
+    environment:
+      # OPNSense connection settings
+      - OPNSENSE_HOST=${OPNSENSE_HOST}
+      - OPNSENSE_API_KEY=${OPNSENSE_API_KEY}
+      - OPNSENSE_API_SECRET=${OPNSENSE_API_SECRET}
+      - OPNSENSE_VERIFY_SSL=${OPNSENSE_VERIFY_SSL:-true}
+      
+      # Transport settings (SSE specific)
+      - MCP_TRANSPORT=sse
+      - MCP_SSE_PORT=3000
+      - MCP_SSE_HOST=0.0.0.0
+      - MCP_CORS_ORIGIN=${MCP_CORS_ORIGIN:-*}
+      
+      # Optional features
+      - ENABLE_CACHING=${ENABLE_CACHING:-false}
+      - CACHE_TYPE=${CACHE_TYPE:-memory}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_password}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-opnsense_mcp}
+      - POSTGRES_USER=${POSTGRES_USER:-mcp_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-mcp_secure_password}
+      - ENABLE_BACKUP=${ENABLE_BACKUP:-false}
+      - BACKUP_PATH=${BACKUP_PATH:-/app/backups}
+      - MACRO_STORAGE_PATH=${MACRO_STORAGE_PATH:-/app/macros}
+      
+    ports:
+      - "3000:3000"
+    
+    volumes:
+      # Mount volumes for persistent data
+      - ./backups:/app/backups
+      - ./macros:/app/macros
+      
+    restart: unless-stopped
+    
+    networks:
+      - mcp-network
+    
+    # Depend on infrastructure services if using the main docker-compose.yml
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+      postgres:
+        condition: service_healthy
+        required: false
+
+    # Health check for SSE endpoint
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); })"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+# Use the existing network from main docker-compose.yml
+networks:
+  mcp-network:
+    external: true
+    name: opnsensemcp_mcp-network

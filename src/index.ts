@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// OPNsense MCP Server - Phase 3 Implementation
+// OPNsense MCP Server - Phase 3 Implementation with Dual Transport Support
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -16,6 +16,11 @@ import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
+
+// Import transport management
+import { TransportManager } from './transports/TransportManager.js';
+import { SSETransportServer } from './transports/SSETransportServer.js';
+import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 
 // Import our API client and resources
 import { OPNSenseAPIClient } from './api/client.js';
@@ -2948,9 +2953,28 @@ class OPNSenseMCPServer {
       console.error('Auto-initialization failed. Use configure tool to set up connection.');
     }
 
-    const transport = new StdioServerTransport();
-    await this.server.connect(transport);
-    console.error('OPNsense MCP server running on stdio');
+    // Get transport configuration
+    const transportType = TransportManager.getTransportType();
+    const transportOptions = TransportManager.getTransportOptions();
+
+    // Create and connect transport
+    const transportOrServer = await TransportManager.createTransport(transportType, transportOptions);
+    
+    if (transportType === 'stdio') {
+      // For STDIO, connect directly
+      await this.server.connect(transportOrServer as Transport);
+      console.error('OPNsense MCP server running on stdio');
+    } else if (transportType === 'sse') {
+      // For SSE, set up connection handler
+      const sseServer = transportOrServer as SSETransportServer;
+      sseServer.onConnection(async (transport) => {
+        // Connect each new SSE client
+        await this.server.connect(transport);
+        console.error('New SSE client connected');
+      });
+      console.error(`OPNsense MCP server running on SSE (port: ${transportOptions.port || 3000})`);
+      console.error('Waiting for SSE client connections...');
+    }
   }
 }
 
