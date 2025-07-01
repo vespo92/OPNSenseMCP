@@ -1,0 +1,179 @@
+name: "opnsense-mcp"
+version: "0.4.5"
+description: "OPNsense firewall management with comprehensive network control and DNS filtering"
+author: "VinOrg2025"
+license: "MIT"
+
+capabilities:
+  # Configuration
+  - "config.connection.setup"
+  - "config.connection.test"
+  
+  # Network Interfaces
+  - "network.interfaces.list"
+  
+  # VLAN Management
+  - "vlan.list"
+  - "vlan.read"
+  - "vlan.create"
+  - "vlan.update"
+  - "vlan.delete"
+  
+  # Firewall Rules
+  - "firewall.rules.list"
+  - "firewall.rules.read"
+  - "firewall.rules.create"
+  - "firewall.rules.create_preset"
+  - "firewall.rules.update"
+  - "firewall.rules.delete"
+  - "firewall.rules.toggle"
+  - "firewall.rules.search"
+  
+  # Backup Management
+  - "backup.create"
+  - "backup.list"
+  - "backup.restore"
+  
+  # DHCP Management
+  - "dhcp.leases.list"
+  - "dhcp.devices.find_by_name"
+  - "dhcp.devices.find_by_mac"
+  - "dhcp.devices.list_guest"
+  - "dhcp.devices.group_by_interface"
+  
+  # DNS Filtering
+  - "dns.blocklist.list"
+  - "dns.blocklist.add"
+  - "dns.blocklist.remove"
+  - "dns.blocklist.add_multiple"
+  - "dns.blocklist.apply_category"
+  - "dns.blocklist.search"
+  - "dns.blocklist.toggle"
+
+required_env:
+  - "OPNSENSE_HOST"
+  - "OPNSENSE_API_KEY"
+  - "OPNSENSE_API_SECRET"
+
+optional_env:
+  - "OPNSENSE_SSL_VERIFY"
+  - "REDIS_URL"
+  - "DATABASE_URL"
+  - "CACHE_TTL"
+  - "MCP_PORT"
+
+rate_limits:
+  requests_per_minute: 60
+  burst: 10
+  concurrent_requests: 5
+
+error_handling:
+  retry_attempts: 3
+  retry_delay_ms: 1000
+  exponential_backoff: true
+  circuit_breaker_threshold: 5
+  circuit_breaker_reset_ms: 60000
+
+health_check:
+  endpoint: "/health"
+  interval_seconds: 30
+  timeout_ms: 5000
+  failure_threshold: 3
+
+authentication:
+  type: "api_key"
+  method: "header"
+  header_format: "X-API-KEY: {key}, X-API-SECRET: {secret}"
+
+caching:
+  enabled: true
+  default_ttl_seconds: 300
+  backends:
+    - type: "redis"
+      required: false
+    - type: "postgresql"
+      required: false
+
+logging:
+  level: "info"
+  format: "json"
+  include_correlation_id: true
+  sensitive_fields:
+    - "api_key"
+    - "api_secret"
+    - "password"
+
+monitoring:
+  metrics_enabled: true
+  trace_enabled: true
+  metrics_port: 9090
+
+resource_limits:
+  max_response_size_mb: 10
+  max_request_size_mb: 1
+  timeout_seconds: 30
+
+features:
+  - name: "vlan_management"
+    description: "Complete VLAN lifecycle management"
+    stability: "stable"
+  
+  - name: "firewall_management"
+    description: "Comprehensive firewall rule management with presets"
+    stability: "stable"
+  
+  - name: "dns_filtering"
+    description: "DNS-based content filtering with category support"
+    stability: "stable"
+  
+  - name: "dhcp_monitoring"
+    description: "DHCP lease monitoring and device discovery"
+    stability: "stable"
+  
+  - name: "backup_restore"
+    description: "Configuration backup and restore capabilities"
+    stability: "beta"
+
+dependencies:
+  - name: "OPNsense API"
+    version: ">=24.7"
+    required: true
+  
+  - name: "Redis"
+    version: ">=6.0"
+    required: false
+  
+  - name: "PostgreSQL"
+    version: ">=13.0"
+    required: false
+
+security:
+  ssl_verification: true
+  api_key_rotation_days: 90
+  audit_logging: true
+  allowed_networks: []  # Empty means all networks allowed
+
+deployment:
+  docker_image: "vinorg2025/opnsense-mcp:latest"
+  min_memory_mb: 256
+  recommended_memory_mb: 512
+  cpu_cores: 1
+  
+tags:
+  - "networking"
+  - "firewall"
+  - "security"
+  - "infrastructure"
+  - "dns"
+  - "vlan"
+  - "dhcp"
+
+agent_notes: |
+  This MCP server provides comprehensive control over OPNsense firewalls.
+  Key considerations for agents:
+  - Always test connection before performing operations
+  - Firewall rules are order-dependent; be careful with rule positioning
+  - DNS blocklist changes require explicit apply to take effect
+  - VLAN operations may cause temporary network disruptions
+  - Backup before making major changes
+  - Guest network is typically on VLAN 4

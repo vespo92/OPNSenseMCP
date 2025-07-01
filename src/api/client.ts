@@ -1,11 +1,13 @@
 // Fixed OPNsense API Client that handles the Content-Type header quirk
 import axios from 'axios';
 import https from 'https';
+import { APICall } from '../macro/types.js';
 
 export class OPNSenseAPIClient {
   private config: any;
   private axios: any;
   private debugMode: boolean;
+  private recorder?: (call: Omit<APICall, 'id' | 'timestamp'>) => void;
 
   constructor(config: any) {
     this.config = config;
@@ -53,9 +55,24 @@ export class OPNSenseAPIClient {
   }
 
   /**
+   * Set a recorder function to capture API calls
+   */
+  setRecorder(recorder: (call: Omit<APICall, 'id' | 'timestamp'>) => void): void {
+    this.recorder = recorder;
+  }
+
+  /**
+   * Remove the recorder
+   */
+  removeRecorder(): void {
+    this.recorder = undefined;
+  }
+
+  /**
    * GET request - NO Content-Type header for OPNsense compatibility
    */
   async get(path: string): Promise<any> {
+    const startTime = Date.now();
     const response = await this.axios.get(path, {
       headers: {
         'Accept': 'application/json'
@@ -63,14 +80,25 @@ export class OPNSenseAPIClient {
       }
     });
 
+    const duration = Date.now() - startTime;
+
     if (response.status === 404) {
+      this.recordCall('GET', path, undefined, undefined, response, duration, {
+        code: 'NOT_FOUND',
+        message: `Endpoint not found: ${path}`
+      });
       throw new Error(`Endpoint not found: ${path}`);
     }
 
     if (response.status >= 200 && response.status < 300) {
+      this.recordCall('GET', path, undefined, undefined, response, duration);
       return response.data;
     }
 
+    this.recordCall('GET', path, undefined, undefined, response, duration, {
+      code: 'API_ERROR',
+      message: `API error: ${response.status} ${response.statusText}`
+    });
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
@@ -78,6 +106,7 @@ export class OPNSenseAPIClient {
    * POST request - WITH Content-Type header
    */
   async post(path: string, data: any = {}): Promise<any> {
+    const startTime = Date.now();
     const response = await this.axios.post(path, data, {
       headers: {
         'Accept': 'application/json',
@@ -85,14 +114,25 @@ export class OPNSenseAPIClient {
       }
     });
 
+    const duration = Date.now() - startTime;
+
     if (response.status === 404) {
+      this.recordCall('POST', path, undefined, data, response, duration, {
+        code: 'NOT_FOUND',
+        message: `Endpoint not found: ${path}`
+      });
       throw new Error(`Endpoint not found: ${path}`);
     }
 
     if (response.status >= 200 && response.status < 300) {
+      this.recordCall('POST', path, undefined, data, response, duration);
       return response.data;
     }
 
+    this.recordCall('POST', path, undefined, data, response, duration, {
+      code: 'API_ERROR',
+      message: `API error: ${response.status} ${response.statusText}`
+    });
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
@@ -398,6 +438,110 @@ export class OPNSenseAPIClient {
    */
   async delUnboundAccessList(uuid: string): Promise<any> {
     return this.post(`/unbound/settings/delAcl/${uuid}`);
+  }
+
+  /**
+   * PUT request - WITH Content-Type header
+   */
+  async put(path: string, data: any = {}): Promise<any> {
+    const startTime = Date.now();
+    const response = await this.axios.put(path, data, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const duration = Date.now() - startTime;
+
+    if (response.status === 404) {
+      this.recordCall('PUT', path, undefined, data, response, duration, {
+        code: 'NOT_FOUND',
+        message: `Endpoint not found: ${path}`
+      });
+      throw new Error(`Endpoint not found: ${path}`);
+    }
+
+    if (response.status >= 200 && response.status < 300) {
+      this.recordCall('PUT', path, undefined, data, response, duration);
+      return response.data;
+    }
+
+    this.recordCall('PUT', path, undefined, data, response, duration, {
+      code: 'API_ERROR',
+      message: `API error: ${response.status} ${response.statusText}`
+    });
+    throw new Error(`API error: ${response.status} ${response.statusText}`);
+  }
+
+  /**
+   * DELETE request
+   */
+  async delete(path: string): Promise<any> {
+    const startTime = Date.now();
+    const response = await this.axios.delete(path, {
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    const duration = Date.now() - startTime;
+
+    if (response.status === 404) {
+      this.recordCall('DELETE', path, undefined, undefined, response, duration, {
+        code: 'NOT_FOUND',
+        message: `Endpoint not found: ${path}`
+      });
+      throw new Error(`Endpoint not found: ${path}`);
+    }
+
+    if (response.status >= 200 && response.status < 300) {
+      this.recordCall('DELETE', path, undefined, undefined, response, duration);
+      return response.data;
+    }
+
+    this.recordCall('DELETE', path, undefined, undefined, response, duration, {
+      code: 'API_ERROR',
+      message: `API error: ${response.status} ${response.statusText}`
+    });
+    throw new Error(`API error: ${response.status} ${response.statusText}`);
+  }
+
+  /**
+   * Record an API call if a recorder is set
+   */
+  private recordCall(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    path: string,
+    params?: Record<string, any>,
+    payload?: any,
+    response?: any,
+    duration?: number,
+    error?: { code: string; message: string }
+  ): void {
+    if (!this.recorder) return;
+
+    const call: Omit<APICall, 'id' | 'timestamp'> = {
+      method,
+      path,
+      params,
+      payload,
+      duration
+    };
+
+    if (response) {
+      call.response = {
+        status: response.status,
+        data: response.data,
+        headers: response.headers
+      };
+    }
+
+    if (error) {
+      call.error = error;
+    }
+
+    this.recorder(call);
   }
 }
 

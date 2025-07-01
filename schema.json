@@ -1,0 +1,477 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "opnsense-mcp",
+  "version": "0.4.5",
+  "description": "OPNsense firewall management via Model Context Protocol with DNS filtering capabilities",
+  "resources": {
+    "opnsense://vlans": {
+      "description": "List of all configured VLANs",
+      "mimeType": "application/json"
+    },
+    "opnsense://firewall/rules": {
+      "description": "List of all firewall rules",
+      "mimeType": "application/json"
+    },
+    "opnsense://interfaces": {
+      "description": "Available network interfaces",
+      "mimeType": "application/json"
+    },
+    "opnsense://status": {
+      "description": "OPNsense connection status",
+      "mimeType": "application/json"
+    },
+    "opnsense://dhcp/leases": {
+      "description": "Current DHCP leases",
+      "mimeType": "application/json"
+    },
+    "opnsense://dns/blocklist": {
+      "description": "DNS blocklist entries",
+      "mimeType": "application/json"
+    }
+  },
+  "tools": {
+    "configure": {
+      "description": "Configure OPNsense connection",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "OPNsense host (e.g., https://10.0.0.1:50443)"
+          },
+          "key": {
+            "type": "string",
+            "description": "API key"
+          },
+          "secret": {
+            "type": "string",
+            "description": "API secret"
+          },
+          "ssl_verify": {
+            "type": "boolean",
+            "description": "Whether to verify SSL certificates",
+            "default": false
+          }
+        },
+        "required": ["host", "key", "secret"]
+      }
+    },
+    "test_connection": {
+      "description": "Test API connection and authentication",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "get_interfaces": {
+      "description": "List available network interfaces",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "list_vlans": {
+      "description": "List all VLANs",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "get_vlan": {
+      "description": "Get VLAN details",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "vlan_id": {
+            "type": "integer",
+            "description": "VLAN ID to retrieve"
+          }
+        },
+        "required": ["vlan_id"]
+      }
+    },
+    "create_vlan": {
+      "description": "Create a new VLAN",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "tag": {
+            "type": "integer",
+            "description": "VLAN tag (1-4094)"
+          },
+          "parent_interface": {
+            "type": "string",
+            "description": "Parent interface (e.g., vtnet1)"
+          },
+          "description": {
+            "type": "string",
+            "description": "VLAN description"
+          },
+          "priority": {
+            "type": "integer",
+            "description": "802.1p priority (0-7)",
+            "default": 0
+          }
+        },
+        "required": ["tag", "parent_interface", "description"]
+      }
+    },
+    "delete_vlan": {
+      "description": "Delete a VLAN",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "vlan_id": {
+            "type": "string",
+            "description": "VLAN ID to delete"
+          }
+        },
+        "required": ["vlan_id"]
+      }
+    },
+    "update_vlan": {
+      "description": "Update VLAN description",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "vlan_id": {
+            "type": "string",
+            "description": "VLAN ID to update"
+          },
+          "description": {
+            "type": "string",
+            "description": "New description"
+          }
+        },
+        "required": ["vlan_id", "description"]
+      }
+    },
+    "list_firewall_rules": {
+      "description": "List all firewall rules",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "get_firewall_rule": {
+      "description": "Get firewall rule details",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "description": "Firewall rule UUID"
+          }
+        },
+        "required": ["rule_id"]
+      }
+    },
+    "create_firewall_rule": {
+      "description": "Create a new firewall rule",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "interface": {
+            "type": "string",
+            "description": "Interface to apply rule to"
+          },
+          "direction": {
+            "type": "string",
+            "enum": ["in", "out"],
+            "description": "Traffic direction"
+          },
+          "action": {
+            "type": "string",
+            "enum": ["pass", "block", "reject"],
+            "description": "Rule action"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source address/network"
+          },
+          "destination": {
+            "type": "string",
+            "description": "Destination address/network"
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Protocol (tcp, udp, icmp, any)"
+          },
+          "source_port": {
+            "type": "string",
+            "description": "Source port or range"
+          },
+          "destination_port": {
+            "type": "string",
+            "description": "Destination port or range"
+          },
+          "description": {
+            "type": "string",
+            "description": "Rule description"
+          }
+        },
+        "required": ["interface", "direction", "action", "description"]
+      }
+    },
+    "create_firewall_preset": {
+      "description": "Create a firewall rule from a preset",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": ["allow_web", "allow_ssh", "allow_dns", "block_all", "allow_ping"],
+            "description": "Preset rule type"
+          },
+          "interface": {
+            "type": "string",
+            "description": "Interface to apply rule to"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source address/network (optional)"
+          },
+          "destination": {
+            "type": "string",
+            "description": "Destination address/network (optional)"
+          }
+        },
+        "required": ["preset", "interface"]
+      }
+    },
+    "update_firewall_rule": {
+      "description": "Update a firewall rule",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "description": "Firewall rule UUID"
+          },
+          "updates": {
+            "type": "object",
+            "description": "Fields to update"
+          }
+        },
+        "required": ["rule_id", "updates"]
+      }
+    },
+    "delete_firewall_rule": {
+      "description": "Delete a firewall rule",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "description": "Firewall rule UUID"
+          }
+        },
+        "required": ["rule_id"]
+      }
+    },
+    "toggle_firewall_rule": {
+      "description": "Toggle firewall rule enabled/disabled",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "description": "Firewall rule UUID"
+          }
+        },
+        "required": ["rule_id"]
+      }
+    },
+    "find_firewall_rules": {
+      "description": "Find firewall rules by description",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "search_text": {
+            "type": "string",
+            "description": "Text to search for in rule descriptions"
+          }
+        },
+        "required": ["search_text"]
+      }
+    },
+    "create_backup": {
+      "description": "Create a configuration backup",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Backup description"
+          }
+        },
+        "required": ["description"]
+      }
+    },
+    "list_backups": {
+      "description": "List available backups",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "restore_backup": {
+      "description": "Restore a configuration backup",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "backup_id": {
+            "type": "string",
+            "description": "Backup ID to restore"
+          }
+        },
+        "required": ["backup_id"]
+      }
+    },
+    "list_dhcp_leases": {
+      "description": "List all DHCP leases",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "find_device_by_name": {
+      "description": "Find devices by hostname pattern",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Hostname pattern to search for (case-insensitive)"
+          }
+        },
+        "required": ["pattern"]
+      }
+    },
+    "find_device_by_mac": {
+      "description": "Find device by MAC address",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mac_address": {
+            "type": "string",
+            "description": "MAC address to search for"
+          }
+        },
+        "required": ["mac_address"]
+      }
+    },
+    "get_guest_devices": {
+      "description": "Get all devices on guest network (VLAN 4)",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "get_devices_by_interface": {
+      "description": "Group devices by network interface",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "list_dns_blocklist": {
+      "description": "List all DNS blocklist entries",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "block_domain": {
+      "description": "Add a domain to the DNS blocklist",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "Domain to block (e.g., example.com)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description for the block entry"
+          }
+        },
+        "required": ["domain"]
+      }
+    },
+    "unblock_domain": {
+      "description": "Remove a domain from the DNS blocklist",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "description": "Domain to unblock"
+          }
+        },
+        "required": ["domain"]
+      }
+    },
+    "block_multiple_domains": {
+      "description": "Block multiple domains at once",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of domains to block"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description for all entries"
+          }
+        },
+        "required": ["domains"]
+      }
+    },
+    "apply_blocklist_category": {
+      "description": "Apply a predefined category of domain blocks",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": ["ads", "social_media", "adult", "malware", "gambling"],
+            "description": "Category to block"
+          }
+        },
+        "required": ["category"]
+      }
+    },
+    "search_dns_blocklist": {
+      "description": "Search DNS blocklist entries",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    "toggle_blocklist_entry": {
+      "description": "Enable/disable a DNS blocklist entry",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "entry_id": {
+            "type": "string",
+            "description": "Blocklist entry ID"
+          }
+        },
+        "required": ["entry_id"]
+      }
+    }
+  },
+  "prompts": {}
+}

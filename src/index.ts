@@ -25,6 +25,8 @@ import { BackupManager } from './resources/backup/manager.js';
 import { MCPCacheManager } from './cache/manager.js';
 import { DhcpLeaseResource } from './resources/services/dhcp/leases.js';
 import { DnsBlocklistResource } from './resources/services/dns/blocklist.js';
+import { HAProxyResource } from './resources/services/haproxy/index.js';
+import { MacroRecorder } from './macro/index.js';
 
 // Configuration schema
 const ConfigSchema = z.object({
@@ -43,13 +45,15 @@ class OPNSenseMCPServer {
   private cacheManager: MCPCacheManager | null = null;
   private dhcpResource: DhcpLeaseResource | null = null;
   private dnsBlocklistResource: DnsBlocklistResource | null = null;
+  private haproxyResource: HAProxyResource | null = null;
+  private macroRecorder: MacroRecorder | null = null;
 
   constructor() {
     this.server = new Server(
       {
         name: 'opnsense-mcp',
-        version: '0.4.0',
-        description: 'OPNsense firewall management via MCP with DNS filtering'
+        version: '0.6.0',
+        description: 'OPNsense firewall management via MCP with DNS filtering and HAProxy support'
       },
       {
         capabilities: {
@@ -75,6 +79,12 @@ class OPNSenseMCPServer {
       // Create API client
       this.client = new OPNSenseAPIClient(config);
       
+      // Initialize macro recorder
+      this.macroRecorder = new MacroRecorder(this.client, process.env.MACRO_STORAGE_PATH);
+      
+      // Set up recording in the API client
+      this.client.setRecorder((call) => this.macroRecorder?.recordAPICall(call));
+      
       // Test connection
       const connectionTest = await this.client.testConnection();
       if (!connectionTest.success) {
@@ -88,6 +98,7 @@ class OPNSenseMCPServer {
       this.firewallRuleResource = new FirewallRuleResource(this.client);
       this.dhcpResource = new DhcpLeaseResource(this.client);
       this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
+      this.haproxyResource = new HAProxyResource(this.client);
       
       // Initialize backup manager
       if (process.env.BACKUP_ENABLED !== 'false') {
@@ -518,6 +529,339 @@ class OPNSenseMCPServer {
             },
             required: ['uuid']
           }
+        },
+
+        // HAProxy Service Control
+        {
+          name: 'haproxy_service_control',
+          description: 'Control HAProxy service (start, stop, restart, reload)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              action: {
+                type: 'string',
+                enum: ['start', 'stop', 'restart', 'reload', 'status'],
+                description: 'Service action to perform'
+              }
+            },
+            required: ['action']
+          }
+        },
+
+        // HAProxy Backend Management
+        {
+          name: 'haproxy_backend_create',
+          description: 'Create a new HAProxy backend',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Backend name' },
+              mode: { type: 'string', enum: ['http', 'tcp'], description: 'Backend mode' },
+              balance: {
+                type: 'string',
+                enum: ['roundrobin', 'leastconn', 'source', 'uri', 'hdr', 'random'],
+                description: 'Load balancing algorithm'
+              },
+              servers: {
+                type: 'array',
+                description: 'List of backend servers',
+                items: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string' },
+                    address: { type: 'string' },
+                    port: { type: 'number' },
+                    ssl: { type: 'boolean' },
+                    verify: { type: 'string', enum: ['none', 'required'] }
+                  },
+                  required: ['name', 'address', 'port']
+                }
+              },
+              description: { type: 'string' }
+            },
+            required: ['name', 'mode', 'balance']
+          }
+        },
+        {
+          name: 'haproxy_backend_list',
+          description: 'List all HAProxy backends',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'haproxy_backend_delete',
+          description: 'Delete an HAProxy backend',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Backend UUID' }
+            },
+            required: ['uuid']
+          }
+        },
+
+        // HAProxy Frontend Management
+        {
+          name: 'haproxy_frontend_create',
+          description: 'Create a new HAProxy frontend',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Frontend name' },
+              bind: { type: 'string', description: 'Bind address (e.g., 0.0.0.0:443)' },
+              ssl: { type: 'boolean', description: 'Enable SSL' },
+              certificates: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Certificate UUIDs or names'
+              },
+              mode: { type: 'string', enum: ['http', 'tcp'], description: 'Frontend mode' },
+              backend: { type: 'string', description: 'Default backend name' },
+              acls: {
+                type: 'array',
+                description: 'Access control lists',
+                items: {
+                  type: 'object',
+                  properties: {
+                    name: { type: 'string' },
+                    expression: { type: 'string' }
+                  },
+                  required: ['name', 'expression']
+                }
+              },
+              description: { type: 'string' }
+            },
+            required: ['name', 'bind', 'mode', 'backend']
+          }
+        },
+        {
+          name: 'haproxy_frontend_list',
+          description: 'List all HAProxy frontends',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'haproxy_frontend_delete',
+          description: 'Delete an HAProxy frontend',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Frontend UUID' }
+            },
+            required: ['uuid']
+          }
+        },
+
+        // HAProxy Certificate Management
+        {
+          name: 'haproxy_certificate_list',
+          description: 'List available certificates for HAProxy',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'haproxy_certificate_create',
+          description: 'Create a certificate for HAProxy',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Certificate name' },
+              type: {
+                type: 'string',
+                enum: ['selfsigned', 'import', 'acme'],
+                description: 'Certificate type'
+              },
+              cn: { type: 'string', description: 'Common name (for self-signed)' },
+              san: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Subject alternative names'
+              },
+              certificate: { type: 'string', description: 'Certificate content (for import)' },
+              key: { type: 'string', description: 'Private key (for import)' },
+              ca: { type: 'string', description: 'CA certificate (for import)' }
+            },
+            required: ['name', 'type']
+          }
+        },
+
+        // HAProxy ACL Management
+        {
+          name: 'haproxy_acl_create',
+          description: 'Create an ACL for HAProxy frontend',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              frontend: { type: 'string', description: 'Frontend UUID' },
+              name: { type: 'string', description: 'ACL name' },
+              expression: { type: 'string', description: 'ACL expression' }
+            },
+            required: ['frontend', 'name', 'expression']
+          }
+        },
+
+        // HAProxy Action Management
+        {
+          name: 'haproxy_action_create',
+          description: 'Create an action for HAProxy frontend',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              frontend: { type: 'string', description: 'Frontend UUID' },
+              type: {
+                type: 'string',
+                enum: ['use_backend', 'redirect', 'add_header', 'set_header', 'del_header'],
+                description: 'Action type'
+              },
+              backend: { type: 'string', description: 'Backend name (for use_backend)' },
+              condition: { type: 'string', description: 'ACL condition' },
+              value: { type: 'string', description: 'Action value' }
+            },
+            required: ['frontend', 'type']
+          }
+        },
+
+        // HAProxy Stats
+        {
+          name: 'haproxy_stats',
+          description: 'Get HAProxy statistics',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'haproxy_backend_health',
+          description: 'Get health status of a specific backend',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              backend: { type: 'string', description: 'Backend name' }
+            },
+            required: ['backend']
+          }
+        },
+
+        // Macro Recording Tools
+        {
+          name: 'macro_start_recording',
+          description: 'Start recording API calls to create a macro',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Macro name' },
+              description: { type: 'string', description: 'Macro description' }
+            },
+            required: ['name', 'description']
+          }
+        },
+        {
+          name: 'macro_stop_recording',
+          description: 'Stop recording and save the macro',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'macro_list',
+          description: 'List all saved macros',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'macro_play',
+          description: 'Play a saved macro',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Macro ID' },
+              parameters: { 
+                type: 'object', 
+                description: 'Parameters to substitute in the macro',
+                additionalProperties: true
+              },
+              dryRun: { 
+                type: 'boolean', 
+                description: 'Execute in dry-run mode without making actual API calls',
+                default: false
+              }
+            },
+            required: ['id']
+          }
+        },
+        {
+          name: 'macro_delete',
+          description: 'Delete a saved macro',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Macro ID' }
+            },
+            required: ['id']
+          }
+        },
+        {
+          name: 'macro_analyze',
+          description: 'Analyze a macro to detect patterns and parameters',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Macro ID' }
+            },
+            required: ['id']
+          }
+        },
+        {
+          name: 'macro_generate_tool',
+          description: 'Generate an MCP tool definition from a macro',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'Macro ID' },
+              save: { 
+                type: 'boolean', 
+                description: 'Save the generated tool to a file',
+                default: false
+              }
+            },
+            required: ['id']
+          }
+        },
+        {
+          name: 'macro_export',
+          description: 'Export all macros to a file',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'Export file path' }
+            },
+            required: ['path']
+          }
+        },
+        {
+          name: 'macro_import',
+          description: 'Import macros from a file',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: 'Import file path' },
+              overwrite: { 
+                type: 'boolean', 
+                description: 'Overwrite existing macros',
+                default: false
+              }
+            },
+            required: ['path']
+          }
         }
       ]
     }));
@@ -559,6 +903,30 @@ class OPNSenseMCPServer {
           uri: 'opnsense://dns/blocklist',
           name: 'DNS Blocklist',
           description: 'DNS blocklist entries',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'opnsense://haproxy/backends',
+          name: 'HAProxy Backends',
+          description: 'HAProxy backend configurations',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'opnsense://haproxy/frontends',
+          name: 'HAProxy Frontends',
+          description: 'HAProxy frontend configurations',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'opnsense://haproxy/stats',
+          name: 'HAProxy Statistics',
+          description: 'HAProxy statistics and health status',
+          mimeType: 'application/json'
+        },
+        {
+          uri: 'opnsense://macros',
+          name: 'Recorded Macros',
+          description: 'List of recorded API macros',
           mimeType: 'application/json'
         }
       ]
@@ -654,6 +1022,74 @@ class OPNSenseMCPServer {
           };
         }
 
+        case 'opnsense://haproxy/backends': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'HAProxy resource not initialized'
+            );
+          }
+          const backends = await this.haproxyResource.listBackends();
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(backends, null, 2)
+            }]
+          };
+        }
+
+        case 'opnsense://haproxy/frontends': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'HAProxy resource not initialized'
+            );
+          }
+          const frontends = await this.haproxyResource.listFrontends();
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(frontends, null, 2)
+            }]
+          };
+        }
+
+        case 'opnsense://haproxy/stats': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'HAProxy resource not initialized'
+            );
+          }
+          const stats = await this.haproxyResource.getStats();
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(stats, null, 2)
+            }]
+          };
+        }
+
+        case 'opnsense://macros': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized'
+            );
+          }
+          const macros = await this.macroRecorder.listMacros();
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(macros, null, 2)
+            }]
+          };
+        }
+
         default:
           throw new McpError(
             ErrorCode.InvalidRequest,
@@ -685,6 +1121,11 @@ class OPNSenseMCPServer {
               this.firewallRuleResource = new FirewallRuleResource(this.client);
               this.dhcpResource = new DhcpLeaseResource(this.client);
               this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
+              this.haproxyResource = new HAProxyResource(this.client);
+              
+              // Initialize macro recorder
+              this.macroRecorder = new MacroRecorder(this.client, process.env.MACRO_STORAGE_PATH);
+              this.client.setRecorder((call) => this.macroRecorder?.recordAPICall(call));
               
               // Optional backup manager
               if (process.env.BACKUP_ENABLED !== 'false') {
@@ -1712,6 +2153,774 @@ class OPNSenseMCPServer {
               content: [{
                 type: 'text',
                 text: `Successfully toggled blocklist entry ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        // HAProxy Service Control
+        case 'haproxy_service_control': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.action) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'action parameter is required'
+            );
+          }
+          
+          try {
+            if (args.action === 'status') {
+              const status = await this.haproxyResource.getServiceStatus();
+              return {
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify(status, null, 2)
+                }]
+              };
+            } else {
+              const result = await this.haproxyResource.controlService(args.action as any);
+              return {
+                content: [{
+                  type: 'text',
+                  text: `HAProxy service ${args.action} completed: ${result ? 'success' : 'failed'}`
+                }]
+              };
+            }
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              error.message
+            );
+          }
+        }
+
+        // HAProxy Backend Management
+        case 'haproxy_backend_create': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.name || !args.mode || !args.balance) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'name, mode, and balance parameters are required'
+            );
+          }
+          
+          try {
+            const result = await this.haproxyResource.createBackend({
+              name: args.name as string,
+              mode: args.mode as 'http' | 'tcp',
+              balance: args.balance as any,
+              servers: args.servers as any[] || [],
+              description: args.description as string
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully created HAProxy backend ${args.name} with UUID: ${result.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'haproxy_backend_list': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const backends = await this.haproxyResource.listBackends();
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(backends, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              error.message
+            );
+          }
+        }
+
+        case 'haproxy_backend_delete': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+          
+          try {
+            await this.haproxyResource.deleteBackend(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully deleted HAProxy backend ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        // HAProxy Frontend Management
+        case 'haproxy_frontend_create': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.name || !args.bind || !args.mode || !args.backend) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'name, bind, mode, and backend parameters are required'
+            );
+          }
+          
+          try {
+            const result = await this.haproxyResource.createFrontend({
+              name: args.name as string,
+              bind: args.bind as string,
+              mode: args.mode as 'http' | 'tcp',
+              backend: args.backend as string,
+              acls: args.acls as any[] || [],
+              description: args.description as string,
+              bindOptions: {
+                ssl: args.ssl as boolean,
+                certificates: args.certificates as string[] || []
+              }
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully created HAProxy frontend ${args.name} with UUID: ${result.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'haproxy_frontend_list': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const frontends = await this.haproxyResource.listFrontends();
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(frontends, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              error.message
+            );
+          }
+        }
+
+        case 'haproxy_frontend_delete': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+          
+          try {
+            await this.haproxyResource.deleteFrontend(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully deleted HAProxy frontend ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        // HAProxy Certificate Management
+        case 'haproxy_certificate_list': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const certificates = await this.haproxyResource.listCertificates();
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(certificates, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              error.message
+            );
+          }
+        }
+
+        case 'haproxy_certificate_create': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.name || !args.type) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'name and type parameters are required'
+            );
+          }
+          
+          try {
+            const result = await this.haproxyResource.createCertificate({
+              name: args.name as string,
+              type: args.type as any,
+              cn: args.cn as string,
+              san: args.san as string[],
+              certificate: args.certificate as string,
+              key: args.key as string,
+              ca: args.ca as string
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully created certificate ${args.name} with UUID: ${result.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        // HAProxy ACL Management
+        case 'haproxy_acl_create': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.frontend || !args.name || !args.expression) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'frontend, name, and expression parameters are required'
+            );
+          }
+          
+          try {
+            const result = await this.haproxyResource.addACLToFrontend(
+              args.frontend as string,
+              {
+                name: args.name as string,
+                expression: args.expression as string
+              }
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully created ACL ${args.name} with UUID: ${result.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        // HAProxy Action Management
+        case 'haproxy_action_create': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.frontend || !args.type) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'frontend and type parameters are required'
+            );
+          }
+          
+          try {
+            const result = await this.haproxyResource.addActionToFrontend(
+              args.frontend as string,
+              {
+                type: args.type as any,
+                backend: args.backend as string,
+                condition: args.condition as string,
+                value: args.value as string
+              }
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully created action with UUID: ${result.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        // HAProxy Stats
+        case 'haproxy_stats': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const stats = await this.haproxyResource.getStats();
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(stats, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              error.message
+            );
+          }
+        }
+
+        case 'haproxy_backend_health': {
+          if (!this.haproxyResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Not configured. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.backend) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'backend parameter is required'
+            );
+          }
+          
+          try {
+            const health = await this.haproxyResource.getBackendHealth(args.backend as string);
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(health, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              error.message
+            );
+          }
+        }
+
+        // Macro Recording Tools
+        case 'macro_start_recording': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.name || !args.description) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'name and description parameters are required'
+            );
+          }
+          
+          try {
+            this.macroRecorder.startRecording(args.name as string, args.description as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Started recording macro: ${args.name}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'macro_stop_recording': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const recording = this.macroRecorder.stopRecording();
+            if (!recording) {
+              throw new Error('No recording in progress');
+            }
+            
+            await this.macroRecorder.saveMacro(recording);
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Stopped recording and saved macro: ${recording.name}\nID: ${recording.id}\nCalls recorded: ${recording.calls.length}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'macro_list': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized. Use configure tool first.'
+            );
+          }
+          
+          try {
+            const macros = await this.macroRecorder.listMacros();
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(macros.map(m => ({
+                  id: m.id,
+                  name: m.name,
+                  description: m.description,
+                  created: m.created,
+                  callCount: m.calls.length,
+                  parameters: m.parameters.length
+                })), null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              error.message
+            );
+          }
+        }
+
+        case 'macro_play': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.id) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'id parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.macroRecorder.playMacro(args.id as string, {
+              parameters: args.parameters as Record<string, any>,
+              dryRun: args.dryRun as boolean
+            });
+            
+            const summary = results.map((r, i) => ({
+              step: i + 1,
+              method: r.call.method,
+              path: r.call.path,
+              success: !r.error,
+              dryRun: r.dryRun,
+              duration: r.duration
+            }));
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Macro playback ${args.dryRun ? '(dry run) ' : ''}completed:\n${JSON.stringify(summary, null, 2)}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'macro_delete': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.id) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'id parameter is required'
+            );
+          }
+          
+          try {
+            await this.macroRecorder.deleteMacro(args.id as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully deleted macro ${args.id}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'macro_analyze': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.id) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'id parameter is required'
+            );
+          }
+          
+          try {
+            const macro = await this.macroRecorder.loadMacro(args.id as string);
+            if (!macro) {
+              throw new Error(`Macro ${args.id} not found`);
+            }
+            
+            const analysis = this.macroRecorder.analyzeMacro(macro);
+            
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(analysis, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'macro_generate_tool': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.id) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'id parameter is required'
+            );
+          }
+          
+          try {
+            const macro = await this.macroRecorder.loadMacro(args.id as string);
+            if (!macro) {
+              throw new Error(`Macro ${args.id} not found`);
+            }
+            
+            const tool = this.macroRecorder.generateTool(macro);
+            
+            if (args.save) {
+              // Save to a file
+              const fs = await import('fs/promises');
+              const path = await import('path');
+              const filename = path.default.join(
+                process.cwd(),
+                'generated-tools',
+                `${tool.name}.ts`
+              );
+              
+              await fs.mkdir(path.default.dirname(filename), { recursive: true });
+              await fs.writeFile(filename, tool.implementation || '');
+              
+              return {
+                content: [{
+                  type: 'text',
+                  text: `Generated tool saved to: ${filename}\n\nTool Definition:\n${JSON.stringify(tool, null, 2)}`
+                }]
+              };
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(tool, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'macro_export': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.path) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'path parameter is required'
+            );
+          }
+          
+          try {
+            const storage = (this.macroRecorder as any).storage;
+            await storage.exportAll(args.path as string);
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully exported macros to: ${args.path}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'macro_import': {
+          if (!this.macroRecorder) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'Macro recorder not initialized. Use configure tool first.'
+            );
+          }
+          
+          if (!args || !args.path) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'path parameter is required'
+            );
+          }
+          
+          try {
+            const storage = (this.macroRecorder as any).storage;
+            const imported = await storage.importAll(
+              args.path as string,
+              args.overwrite as boolean
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully imported ${imported} macro(s) from: ${args.path}`
               }]
             };
           } catch (error: any) {
