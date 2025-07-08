@@ -9,7 +9,7 @@ A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infra
 
 ## Features
 =======
-![Version](https://img.shields.io/badge/version-0.6.0-blue)
+![Version](https://img.shields.io/badge/version-0.7.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![MCP](https://img.shields.io/badge/MCP-Compatible-orange)
 
@@ -17,10 +17,12 @@ A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infra
 ## 🚀 Features
 
 - **Complete OPNsense API Integration** - Manage VLANs, firewall rules, services, and more
+- **ARP Table Management** - View and search ARP entries, find devices by IP/MAC/hostname
 - **Infrastructure as Code** - Deploy and manage network infrastructure declaratively
 - **State Management** - Track resource state with rollback capabilities
 - **Caching Support** - Redis and PostgreSQL integration for performance
 - **DNS Blocking** - Built-in DNS blocklist management
+- **HAProxy Support** - Full HAProxy configuration and management
 - **Backup & Restore** - Configuration backup management
 - **Dual Transport Support** - STDIO for Claude Desktop, SSE for agents/containers
 

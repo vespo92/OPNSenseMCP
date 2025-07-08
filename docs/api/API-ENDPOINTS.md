@@ -56,6 +56,12 @@ All requests use HTTP Basic Auth with:
 - `GET /api/core/backup/list` - List available backups
 - `POST /api/core/backup/restore` - Restore configuration
 
+## ARP Table (Diagnostics)
+- `GET /api/diagnostics/interface/getArp` - Get ARP table entries
+- `POST /api/diagnostics/interface/searchArp` - Search ARP table entries
+- `POST /api/diagnostics/interface/flushArp` - Clear/flush ARP entry
+- `POST /api/diagnostics/interface/setArp` - Add static ARP entry
+
 ## Common Patterns
 
 ### Search/List Operations

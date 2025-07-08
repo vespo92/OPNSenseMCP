@@ -33,6 +33,7 @@ import { DhcpLeaseResource } from './resources/services/dhcp/leases.js';
 import { DnsBlocklistResource } from './resources/services/dns/blocklist.js';
 import { HAProxyResource } from './resources/services/haproxy/index.js';
 import { MacroRecorder } from './macro/index.js';
+import { ArpTableResource } from './resources/network/arp.js';
 
 // Configuration schema
 const ConfigSchema = z.object({
@@ -53,13 +54,14 @@ class OPNSenseMCPServer {
   private dnsBlocklistResource: DnsBlocklistResource | null = null;
   private haproxyResource: HAProxyResource | null = null;
   private macroRecorder: MacroRecorder | null = null;
+  private arpResource: ArpTableResource | null = null;
 
   constructor() {
     this.server = new Server(
       {
         name: 'opnsense-mcp',
-        version: '0.6.0',
-        description: 'OPNsense firewall management via MCP with DNS filtering and HAProxy support'
+        version: '0.7.0',
+        description: 'OPNsense firewall management via MCP with ARP table, DNS filtering and HAProxy support'
       },
       {
         capabilities: {
@@ -119,6 +121,7 @@ class OPNSenseMCPServer {
       this.dhcpResource = new DhcpLeaseResource(this.client);
       this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
       this.haproxyResource = new HAProxyResource(this.client);
+      this.arpResource = new ArpTableResource(this.client);
       
       // Initialize backup manager
       if (process.env.BACKUP_ENABLED !== 'false') {
@@ -458,6 +461,94 @@ class OPNSenseMCPServer {
           inputSchema: {
             type: 'object',
             properties: {}
+          }
+        },
+
+        // ARP Table Management Tools
+        {
+          name: 'list_arp_entries',
+          description: 'List all ARP table entries',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'find_arp_by_ip',
+          description: 'Find ARP entries by IP address or subnet',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              ipPattern: {
+                type: 'string',
+                description: 'IP address, prefix, or subnet (e.g., "10.0.6", "10.0.6.0/24")'
+              }
+            },
+            required: ['ipPattern']
+          }
+        },
+        {
+          name: 'find_arp_by_mac',
+          description: 'Find ARP entries by MAC address',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              macPattern: {
+                type: 'string',
+                description: 'MAC address or partial MAC (with or without colons)'
+              }
+            },
+            required: ['macPattern']
+          }
+        },
+        {
+          name: 'find_arp_by_interface',
+          description: 'Find ARP entries on specific interface',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interface: {
+                type: 'string',
+                description: 'Interface name (e.g., "igc3_vlan6", "lan")'
+              }
+            },
+            required: ['interface']
+          }
+        },
+        {
+          name: 'find_arp_by_hostname',
+          description: 'Find ARP entries by hostname pattern',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              pattern: {
+                type: 'string',
+                description: 'Hostname pattern to search'
+              }
+            },
+            required: ['pattern']
+          }
+        },
+        {
+          name: 'get_arp_stats',
+          description: 'Get ARP table statistics',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'find_devices_on_vlan',
+          description: 'Find devices on specific VLAN',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              vlanTag: {
+                type: 'string',
+                description: 'VLAN tag number (e.g., "6" for DMZ)'
+              }
+            },
+            required: ['vlanTag']
           }
         },
 
@@ -962,6 +1053,12 @@ class OPNSenseMCPServer {
           name: 'Recorded Macros',
           description: 'List of recorded API macros',
           mimeType: 'application/json'
+        },
+        {
+          uri: 'opnsense://arp',
+          name: 'ARP Table',
+          description: 'ARP table entries showing IP to MAC mappings',
+          mimeType: 'application/json'
         }
       ]
     }));
@@ -1119,6 +1216,23 @@ class OPNSenseMCPServer {
           };
         }
 
+        case 'opnsense://arp': {
+          if (!this.arpResource) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              'ARP resource not initialized'
+            );
+          }
+          const arpEntries = await this.arpResource!.list();
+          return {
+            contents: [{
+              uri,
+              mimeType: 'application/json',
+              text: JSON.stringify(arpEntries, null, 2)
+            }]
+          };
+        }
+
         default:
           throw new McpError(
             ErrorCode.InvalidRequest,
@@ -1151,6 +1265,7 @@ class OPNSenseMCPServer {
               this.dhcpResource = new DhcpLeaseResource(this.client);
               this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
               this.haproxyResource = new HAProxyResource(this.client);
+              this.arpResource = new ArpTableResource(this.client);
               
               // Initialize macro recorder
               this.macroRecorder = new MacroRecorder(this.client, process.env.MACRO_STORAGE_PATH);
@@ -1852,6 +1967,236 @@ class OPNSenseMCPServer {
             throw new McpError(
               ErrorCode.InternalError,
               `Failed to group devices: ${error.message}`
+            );
+          }
+        }
+
+        // ARP Table Management
+        case 'list_arp_entries': {
+          await this.ensureInitialized();
+          
+          try {
+            const entries = await this.arpResource!.list();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(entries, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to list ARP entries: ${error.message}`
+            );
+          }
+        }
+
+        case 'find_arp_by_ip': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.ipPattern) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'ipPattern parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.arpResource!.findByIp(args.ipPattern as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No ARP entries found for IP pattern "${args.ipPattern}"`
+                }]
+              };
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Found ${results.length} ARP entries:\n\n` +
+                      results.map(entry => this.arpResource!.formatEntry(entry)).join('\n')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to search ARP by IP: ${error.message}`
+            );
+          }
+        }
+
+        case 'find_arp_by_mac': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.macPattern) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'macPattern parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.arpResource!.findByMac(args.macPattern as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No ARP entries found for MAC pattern "${args.macPattern}"`
+                }]
+              };
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Found ${results.length} ARP entries:\n\n` +
+                      results.map(entry => this.arpResource!.formatEntry(entry)).join('\n')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to search ARP by MAC: ${error.message}`
+            );
+          }
+        }
+
+        case 'find_arp_by_interface': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.interface) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'interface parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.arpResource!.findByInterface(args.interface as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No ARP entries found on interface "${args.interface}"`
+                }]
+              };
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Found ${results.length} ARP entries on ${args.interface}:\n\n` +
+                      results.map(entry => this.arpResource!.formatEntry(entry)).join('\n')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to search ARP by interface: ${error.message}`
+            );
+          }
+        }
+
+        case 'find_arp_by_hostname': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.pattern) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'pattern parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.arpResource!.findByHostname(args.pattern as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No ARP entries found with hostname pattern "${args.pattern}"`
+                }]
+              };
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Found ${results.length} ARP entries:\n\n` +
+                      results.map(entry => this.arpResource!.formatEntry(entry)).join('\n')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to search ARP by hostname: ${error.message}`
+            );
+          }
+        }
+
+        case 'get_arp_stats': {
+          await this.ensureInitialized();
+          
+          try {
+            const stats = await this.arpResource!.getStats();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `ARP Table Statistics:\n\n` +
+                      `Total entries: ${stats.totalEntries}\n` +
+                      `Dynamic entries: ${stats.dynamicEntries}\n` +
+                      `Static entries: ${stats.staticEntries}\n` +
+                      `Interfaces: ${stats.interfaces.join(', ')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get ARP stats: ${error.message}`
+            );
+          }
+        }
+
+        case 'find_devices_on_vlan': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.vlanTag) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'vlanTag parameter is required'
+            );
+          }
+          
+          try {
+            const results = await this.arpResource!.findOnVlan(args.vlanTag as string);
+            
+            if (results.length === 0) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `No devices found on VLAN ${args.vlanTag}`
+                }]
+              };
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Found ${results.length} devices on VLAN ${args.vlanTag}:\n\n` +
+                      results.map(entry => this.arpResource!.formatEntry(entry)).join('\n')
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to find devices on VLAN: ${error.message}`
             );
           }
         }

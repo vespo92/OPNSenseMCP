@@ -507,6 +507,42 @@ export class OPNSenseAPIClient {
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
+  // ===== ARP TABLE METHODS =====
+
+  /**
+   * Get ARP table entries
+   */
+  async getArpTable(): Promise<any> {
+    return this.get('/diagnostics/interface/getArp');
+  }
+
+  /**
+   * Search ARP table entries
+   */
+  async searchArpTable(params: any = {}): Promise<any> {
+    const searchParams = {
+      current: params.current || 1,
+      rowCount: params.rowCount || 10000,
+      sort: params.sort || {},
+      searchPhrase: params.searchPhrase || ''
+    };
+    return this.post('/diagnostics/interface/searchArp', searchParams);
+  }
+
+  /**
+   * Clear/flush ARP entry
+   */
+  async flushArpEntry(data: { address: string; interface?: string }): Promise<any> {
+    return this.post('/diagnostics/interface/flushArp', data);
+  }
+
+  /**
+   * Add static ARP entry
+   */
+  async setArpEntry(data: { address: string; mac: string; interface: string }): Promise<any> {
+    return this.post('/diagnostics/interface/setArp', data);
+  }
+
   /**
    * Record an API call if a recorder is set
    */

@@ -1,7 +1,7 @@
 {
   "name": "opnsense-mcp-server",
-  "version": "0.6.0",
-  "description": "Model Context Protocol server for OPNSense firewall management with DNS filtering and HAProxy support via Claude Desktop",
+  "version": "0.7.0",
+  "description": "Model Context Protocol server for OPNSense firewall management with ARP table, DNS filtering and HAProxy support via Claude Desktop",
   "main": "dist/index.js",
   "type": "module",
   "repository": {
