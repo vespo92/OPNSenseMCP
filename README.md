@@ -75,11 +75,14 @@ See [SSE Deployment Guide](docs/SSE-DEPLOYMENT.md) for container deployment.
 
 ## ⚙️ Configuration
 
-Create a `.env` file with your OPNsense configuration:
+The server supports multiple configuration methods:
+
+### Environment Variables (Auto-configuration)
+The server automatically attempts to connect using environment variables on startup. Create a `.env` file:
 
 ```env
 # Required
-OPNSENSE_HOST=https://192.168.1.1
+OPNSENSE_HOST=https://192.168.1.1  # or just 192.168.1.1:55443
 OPNSENSE_API_KEY=your_api_key
 OPNSENSE_API_SECRET=your_api_secret
 
@@ -88,6 +91,18 @@ IAC_ENABLED=true
 ENABLE_CACHE=false
 REDIS_HOST=localhost
 POSTGRES_HOST=localhost
+```
+
+### Manual Configuration
+If environment variables are not set or connection fails, use the `configure` tool:
+```javascript
+// Configure connection manually
+await configure({
+  host: "https://192.168.1.1",
+  apiKey: "your_api_key",
+  apiSecret: "your_api_secret",
+  verifySsl: true
+});
 ```
 
 ## 🚦 Quick Start
@@ -103,7 +118,13 @@ npm start
     "opnsense": {
       "command": "node",
       "args": ["dist/index.js"],
-      "cwd": "/path/to/opnsense-mcp"
+      "cwd": "/path/to/opnsense-mcp",
+      "env": {
+        "OPNSENSE_HOST": "https://192.168.1.1:55443",
+        "OPNSENSE_API_KEY": "your_api_key",
+        "OPNSENSE_API_SECRET": "your_api_secret",
+        "OPNSENSE_VERIFY_SSL": "true"
+      }
     }
   }
 }

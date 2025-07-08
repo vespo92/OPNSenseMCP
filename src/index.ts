@@ -13,6 +13,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import { logger } from './utils/logger.js';
 
 // Load environment variables
 dotenv.config();
@@ -71,11 +72,25 @@ class OPNSenseMCPServer {
     this.setupHandlers();
   }
 
+  private formatHostUrl(host: string): string {
+    // If host doesn't start with http:// or https://, add https://
+    if (!host.startsWith('http://') && !host.startsWith('https://')) {
+      return `https://${host}`;
+    }
+    return host;
+  }
+
   private async initialize() {
     try {
+      // Check if we have environment variables configured
+      if (!process.env.OPNSENSE_HOST || !process.env.OPNSENSE_API_KEY || !process.env.OPNSENSE_API_SECRET) {
+        logger.info('OPNsense environment variables not configured. Server will start but requires configure tool to be called.');
+        return false;
+      }
+
       // Validate configuration
       const config = ConfigSchema.parse({
-        host: process.env.OPNSENSE_HOST,
+        host: this.formatHostUrl(process.env.OPNSENSE_HOST),
         apiKey: process.env.OPNSENSE_API_KEY,
         apiSecret: process.env.OPNSENSE_API_SECRET,
         verifySsl: process.env.OPNSENSE_VERIFY_SSL !== 'false'
@@ -96,7 +111,7 @@ class OPNSenseMCPServer {
         throw new Error(`Failed to connect to OPNsense: ${connectionTest.error}`);
       }
 
-      console.error(`Connected to OPNsense ${connectionTest.version}`);
+      logger.info(`Connected to OPNsense ${connectionTest.version}`);
 
       // Initialize resources
       this.vlanResource = new VlanResource(this.client);
@@ -124,15 +139,29 @@ class OPNSenseMCPServer {
             cacheTTL: parseInt(process.env.CACHE_TTL || '300'),
             enableCache: true
           });
-          console.error('Cache manager initialized');
+          logger.info('Cache manager initialized');
         } catch (error) {
-          console.error('Cache manager disabled:', error instanceof Error ? error.message : 'Unknown error');
+          logger.warn('Cache manager disabled:', error instanceof Error ? error.message : 'Unknown error');
         }
       }
 
+      return true;
     } catch (error) {
-      console.error('Failed to initialize OPNsense MCP server:', error instanceof Error ? error.message : 'Unknown error');
-      throw error;
+      logger.error('Failed to initialize OPNsense MCP server:', error instanceof Error ? error.message : 'Unknown error');
+      return false;
+    }
+  }
+
+  private async ensureInitialized(): Promise<void> {
+    if (!this.client) {
+      // Try to initialize with environment variables
+      const initialized = await this.initialize();
+      if (!initialized) {
+        throw new McpError(
+          ErrorCode.InternalError,
+          'OPNsense client not initialized. Use configure tool first.'
+        );
+      }
     }
   }
 
@@ -939,18 +968,13 @@ class OPNSenseMCPServer {
 
     // Read resource
     this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-      if (!this.client || !this.vlanResource || !this.firewallRuleResource) {
-        throw new McpError(
-          ErrorCode.InternalError,
-          'OPNsense client not initialized. Use configure tool first.'
-        );
-      }
+      await this.ensureInitialized();
 
       const uri = request.params.uri;
 
       switch (uri) {
         case 'opnsense://vlans': {
-          const vlans = await this.vlanResource.list();
+          const vlans = await this.vlanResource!.list();
           return {
             contents: [{
               uri,
@@ -961,7 +985,7 @@ class OPNSenseMCPServer {
         }
 
         case 'opnsense://firewall/rules': {
-          const rules = await this.firewallRuleResource.list();
+          const rules = await this.firewallRuleResource!.list();
           return {
             contents: [{
               uri,
@@ -972,7 +996,7 @@ class OPNSenseMCPServer {
         }
 
         case 'opnsense://interfaces': {
-          const interfaces = await this.vlanResource.getAvailableInterfaces();
+          const interfaces = await this.vlanResource!.getAvailableInterfaces();
           return {
             contents: [{
               uri,
@@ -983,7 +1007,7 @@ class OPNSenseMCPServer {
         }
 
         case 'opnsense://status': {
-          const status = await this.client.testConnection();
+          const status = await this.client!.testConnection();
           return {
             contents: [{
               uri,
@@ -1000,7 +1024,7 @@ class OPNSenseMCPServer {
               'DHCP resource not initialized'
             );
           }
-          const leases = await this.dhcpResource.listLeases();
+          const leases = await this.dhcpResource!.listLeases();
           return {
             contents: [{
               uri,
@@ -1017,7 +1041,7 @@ class OPNSenseMCPServer {
               'DNS blocklist resource not initialized'
             );
           }
-          const blocklist = await this.dnsBlocklistResource.list();
+          const blocklist = await this.dnsBlocklistResource!.list();
           return {
             contents: [{
               uri,
@@ -1034,7 +1058,7 @@ class OPNSenseMCPServer {
               'HAProxy resource not initialized'
             );
           }
-          const backends = await this.haproxyResource.listBackends();
+          const backends = await this.haproxyResource!.listBackends();
           return {
             contents: [{
               uri,
@@ -1051,7 +1075,7 @@ class OPNSenseMCPServer {
               'HAProxy resource not initialized'
             );
           }
-          const frontends = await this.haproxyResource.listFrontends();
+          const frontends = await this.haproxyResource!.listFrontends();
           return {
             contents: [{
               uri,
@@ -1068,7 +1092,7 @@ class OPNSenseMCPServer {
               'HAProxy resource not initialized'
             );
           }
-          const stats = await this.haproxyResource.getStats();
+          const stats = await this.haproxyResource!.getStats();
           return {
             contents: [{
               uri,
@@ -1085,7 +1109,7 @@ class OPNSenseMCPServer {
               'Macro recorder not initialized'
             );
           }
-          const macros = await this.macroRecorder.listMacros();
+          const macros = await this.macroRecorder!.listMacros();
           return {
             contents: [{
               uri,
@@ -1152,7 +1176,7 @@ class OPNSenseMCPServer {
                     enableCache: true
                   });
                 } catch (error) {
-                  console.error('Cache not available');
+                  logger.debug('Cache not available');
                 }
               }
               
@@ -1174,13 +1198,8 @@ class OPNSenseMCPServer {
         }
 
         case 'test_connection': {
-          if (!this.client) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
-          const status = await this.client.testConnection();
+          await this.ensureInitialized();
+          const status = await this.client!.testConnection();
           return {
             content: [{
               type: 'text',
@@ -1190,13 +1209,8 @@ class OPNSenseMCPServer {
         }
 
         case 'list_vlans': {
-          if (!this.vlanResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
-          const vlans = await this.vlanResource.list();
+          await this.ensureInitialized();
+          const vlans = await this.vlanResource!.list();
           return {
             content: [{
               type: 'text',
@@ -1206,19 +1220,14 @@ class OPNSenseMCPServer {
         }
 
         case 'get_vlan': {
-          if (!this.vlanResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           if (!args || !args.tag) {
             throw new McpError(
               ErrorCode.InvalidRequest,
               'tag parameter is required'
             );
           }
-          const vlan = await this.vlanResource.findByTag(args.tag as string);
+          const vlan = await this.vlanResource!.findByTag(args.tag as string);
           if (!vlan) {
             throw new McpError(
               ErrorCode.InvalidRequest,
@@ -1234,12 +1243,7 @@ class OPNSenseMCPServer {
         }
 
         case 'create_vlan': {
-          if (!this.vlanResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.interface || !args.tag) {
             throw new McpError(
@@ -1249,7 +1253,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.vlanResource.create({
+            const result = await this.vlanResource!.create({
               if: args.interface as string,
               tag: args.tag as string,
               descr: args.description as string || '',
@@ -1271,12 +1275,7 @@ class OPNSenseMCPServer {
         }
 
         case 'delete_vlan': {
-          if (!this.vlanResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.tag) {
             throw new McpError(
@@ -1286,7 +1285,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            await this.vlanResource.deleteByTag(args.tag as string);
+            await this.vlanResource!.deleteByTag(args.tag as string);
             return {
               content: [{
                 type: 'text',
@@ -1302,12 +1301,7 @@ class OPNSenseMCPServer {
         }
 
         case 'update_vlan': {
-          if (!this.vlanResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.tag || !args.description) {
             throw new McpError(
@@ -1317,12 +1311,12 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const vlan = await this.vlanResource.findByTag(args.tag as string);
+            const vlan = await this.vlanResource!.findByTag(args.tag as string);
             if (!vlan || !vlan.uuid) {
               throw new Error(`VLAN ${args.tag} not found`);
             }
             
-            await this.vlanResource.update(vlan.uuid, {
+            await this.vlanResource!.update(vlan.uuid, {
               descr: args.description as string
             });
             
@@ -1341,13 +1335,8 @@ class OPNSenseMCPServer {
         }
 
         case 'get_interfaces': {
-          if (!this.vlanResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
-          const interfaces = await this.vlanResource.getAvailableInterfaces();
+          await this.ensureInitialized();
+          const interfaces = await this.vlanResource!.getAvailableInterfaces();
           return {
             content: [{
               type: 'text',
@@ -1358,13 +1347,8 @@ class OPNSenseMCPServer {
 
         // Firewall Rule Management
         case 'list_firewall_rules': {
-          if (!this.firewallRuleResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
-          const rules = await this.firewallRuleResource.list();
+          await this.ensureInitialized();
+          const rules = await this.firewallRuleResource!.list();
           return {
             content: [{
               type: 'text',
@@ -1374,19 +1358,14 @@ class OPNSenseMCPServer {
         }
 
         case 'get_firewall_rule': {
-          if (!this.firewallRuleResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           if (!args || !args.uuid) {
             throw new McpError(
               ErrorCode.InvalidRequest,
               'uuid parameter is required'
             );
           }
-          const rule = await this.firewallRuleResource.get(args.uuid as string);
+          const rule = await this.firewallRuleResource!.get(args.uuid as string);
           if (!rule) {
             throw new McpError(
               ErrorCode.InvalidRequest,
@@ -1402,12 +1381,7 @@ class OPNSenseMCPServer {
         }
 
         case 'create_firewall_rule': {
-          if (!this.firewallRuleResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.action || !args.interface || !args.direction || 
               !args.protocol || !args.source || !args.destination) {
@@ -1418,7 +1392,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.firewallRuleResource.create({
+            const result = await this.firewallRuleResource!.create({
               enabled: args.enabled !== false ? '1' : '0',
               action: args.action as string,
               interface: args.interface as string,
@@ -1447,12 +1421,7 @@ class OPNSenseMCPServer {
         }
 
         case 'create_firewall_preset': {
-          if (!this.firewallRuleResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.preset || !args.interface) {
             throw new McpError(
@@ -1462,7 +1431,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const presetRule = this.firewallRuleResource.createPreset(
+            const presetRule = this.firewallRuleResource!.createPreset(
               args.preset as string,
               {
                 source: args.source,
@@ -1471,7 +1440,7 @@ class OPNSenseMCPServer {
               }
             );
             
-            const result = await this.firewallRuleResource.create({
+            const result = await this.firewallRuleResource!.create({
               ...presetRule,
               interface: args.interface as string
             } as any);
@@ -1491,12 +1460,7 @@ class OPNSenseMCPServer {
         }
 
         case 'update_firewall_rule': {
-          if (!this.firewallRuleResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.uuid) {
             throw new McpError(
@@ -1527,7 +1491,7 @@ class OPNSenseMCPServer {
               updates.destination_port = args.destinationPort;
             }
             
-            await this.firewallRuleResource.update(args.uuid as string, updates);
+            await this.firewallRuleResource!.update(args.uuid as string, updates);
             
             return {
               content: [{
@@ -1544,12 +1508,7 @@ class OPNSenseMCPServer {
         }
 
         case 'delete_firewall_rule': {
-          if (!this.firewallRuleResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.uuid) {
             throw new McpError(
@@ -1559,7 +1518,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            await this.firewallRuleResource.delete(args.uuid as string);
+            await this.firewallRuleResource!.delete(args.uuid as string);
             return {
               content: [{
                 type: 'text',
@@ -1575,12 +1534,7 @@ class OPNSenseMCPServer {
         }
 
         case 'toggle_firewall_rule': {
-          if (!this.firewallRuleResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.uuid) {
             throw new McpError(
@@ -1590,7 +1544,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            await this.firewallRuleResource.toggle(args.uuid as string);
+            await this.firewallRuleResource!.toggle(args.uuid as string);
             return {
               content: [{
                 type: 'text',
@@ -1606,12 +1560,7 @@ class OPNSenseMCPServer {
         }
 
         case 'find_firewall_rules': {
-          if (!this.firewallRuleResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.description) {
             throw new McpError(
@@ -1621,7 +1570,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const rules = await this.firewallRuleResource.findByDescription(args.description as string);
+            const rules = await this.firewallRuleResource!.findByDescription(args.description as string);
             return {
               content: [{
                 type: 'text',
@@ -1638,10 +1587,11 @@ class OPNSenseMCPServer {
 
         // Backup Management
         case 'create_backup': {
+          await this.ensureInitialized();
           if (!this.backupManager) {
             throw new McpError(
               ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
+              'Backup manager not enabled.'
             );
           }
           
@@ -1664,10 +1614,11 @@ class OPNSenseMCPServer {
         }
 
         case 'list_backups': {
+          await this.ensureInitialized();
           if (!this.backupManager) {
             throw new McpError(
               ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
+              'Backup manager not enabled.'
             );
           }
           
@@ -1681,10 +1632,11 @@ class OPNSenseMCPServer {
         }
 
         case 'restore_backup': {
+          await this.ensureInitialized();
           if (!this.backupManager) {
             throw new McpError(
               ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
+              'Backup manager not enabled.'
             );
           }
           
@@ -1715,15 +1667,10 @@ class OPNSenseMCPServer {
 
         // DHCP Lease Management
         case 'list_dhcp_leases': {
-          if (!this.dhcpResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const leases = await this.dhcpResource.listLeases();
+            const leases = await this.dhcpResource!.listLeases();
             
             // Filter by interface if specified
             const filtered = args?.interface 
@@ -1757,12 +1704,7 @@ class OPNSenseMCPServer {
         }
 
         case 'find_device_by_name': {
-          if (!this.dhcpResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.pattern) {
             throw new McpError(
@@ -1772,7 +1714,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const results = await this.dhcpResource.findByHostname(args.pattern as string);
+            const results = await this.dhcpResource!.findByHostname(args.pattern as string);
             
             if (results.length === 0) {
               return {
@@ -1802,12 +1744,7 @@ class OPNSenseMCPServer {
         }
 
         case 'find_device_by_mac': {
-          if (!this.dhcpResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.mac) {
             throw new McpError(
@@ -1817,7 +1754,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const results = await this.dhcpResource.findByMac(args.mac as string);
+            const results = await this.dhcpResource!.findByMac(args.mac as string);
             
             if (results.length === 0) {
               return {
@@ -1847,15 +1784,10 @@ class OPNSenseMCPServer {
         }
 
         case 'get_guest_devices': {
-          if (!this.dhcpResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const guestDevices = await this.dhcpResource.getGuestLeases();
+            const guestDevices = await this.dhcpResource!.getGuestLeases();
             
             if (guestDevices.length === 0) {
               return {
@@ -1886,15 +1818,10 @@ class OPNSenseMCPServer {
         }
 
         case 'get_devices_by_interface': {
-          if (!this.dhcpResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const byInterface = await this.dhcpResource.getLeasesByInterface();
+            const byInterface = await this.dhcpResource!.getLeasesByInterface();
             
             let output = 'Devices by Interface:\n\n';
             
@@ -1931,15 +1858,10 @@ class OPNSenseMCPServer {
 
         // DNS Blocklist Management
         case 'list_dns_blocklist': {
-          if (!this.dnsBlocklistResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const blocklist = await this.dnsBlocklistResource.list();
+            const blocklist = await this.dnsBlocklistResource!.list();
             return {
               content: [{
                 type: 'text',
@@ -1955,12 +1877,7 @@ class OPNSenseMCPServer {
         }
 
         case 'block_domain': {
-          if (!this.dnsBlocklistResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.domain) {
             throw new McpError(
@@ -1970,7 +1887,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.dnsBlocklistResource.blockDomain(
+            const result = await this.dnsBlocklistResource!.blockDomain(
               args.domain as string,
               args.description as string
             );
@@ -1990,12 +1907,7 @@ class OPNSenseMCPServer {
         }
 
         case 'unblock_domain': {
-          if (!this.dnsBlocklistResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.domain) {
             throw new McpError(
@@ -2005,7 +1917,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            await this.dnsBlocklistResource.unblockDomain(args.domain as string);
+            await this.dnsBlocklistResource!.unblockDomain(args.domain as string);
             return {
               content: [{
                 type: 'text',
@@ -2021,12 +1933,7 @@ class OPNSenseMCPServer {
         }
 
         case 'block_multiple_domains': {
-          if (!this.dnsBlocklistResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.domains || !Array.isArray(args.domains)) {
             throw new McpError(
@@ -2036,7 +1943,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.dnsBlocklistResource.blockMultipleDomains(
+            const result = await this.dnsBlocklistResource!.blockMultipleDomains(
               args.domains as string[],
               args.description as string
             );
@@ -2057,12 +1964,7 @@ class OPNSenseMCPServer {
         }
 
         case 'apply_blocklist_category': {
-          if (!this.dnsBlocklistResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.category) {
             throw new McpError(
@@ -2072,7 +1974,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.dnsBlocklistResource.applyBlocklistCategory(
+            const result = await this.dnsBlocklistResource!.applyBlocklistCategory(
               args.category as 'adult' | 'malware' | 'ads' | 'social'
             );
             
@@ -2093,12 +1995,7 @@ class OPNSenseMCPServer {
         }
 
         case 'search_dns_blocklist': {
-          if (!this.dnsBlocklistResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.pattern) {
             throw new McpError(
@@ -2108,7 +2005,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const results = await this.dnsBlocklistResource.searchBlocklist(args.pattern as string);
+            const results = await this.dnsBlocklistResource!.searchBlocklist(args.pattern as string);
             
             if (results.length === 0) {
               return {
@@ -2138,12 +2035,7 @@ class OPNSenseMCPServer {
         }
 
         case 'toggle_blocklist_entry': {
-          if (!this.dnsBlocklistResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.uuid) {
             throw new McpError(
@@ -2153,7 +2045,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            await this.dnsBlocklistResource.toggleBlocklistEntry(args.uuid as string);
+            await this.dnsBlocklistResource!.toggleBlocklistEntry(args.uuid as string);
             return {
               content: [{
                 type: 'text',
@@ -2170,12 +2062,7 @@ class OPNSenseMCPServer {
 
         // HAProxy Service Control
         case 'haproxy_service_control': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.action) {
             throw new McpError(
@@ -2186,7 +2073,7 @@ class OPNSenseMCPServer {
           
           try {
             if (args.action === 'status') {
-              const status = await this.haproxyResource.getServiceStatus();
+              const status = await this.haproxyResource!.getServiceStatus();
               return {
                 content: [{
                   type: 'text',
@@ -2194,7 +2081,7 @@ class OPNSenseMCPServer {
                 }]
               };
             } else {
-              const result = await this.haproxyResource.controlService(args.action as any);
+              const result = await this.haproxyResource!.controlService(args.action as any);
               return {
                 content: [{
                   type: 'text',
@@ -2212,12 +2099,7 @@ class OPNSenseMCPServer {
 
         // HAProxy Backend Management
         case 'haproxy_backend_create': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.name || !args.mode || !args.balance) {
             throw new McpError(
@@ -2227,7 +2109,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.haproxyResource.createBackend({
+            const result = await this.haproxyResource!.createBackend({
               name: args.name as string,
               mode: args.mode as 'http' | 'tcp',
               balance: args.balance as any,
@@ -2250,15 +2132,10 @@ class OPNSenseMCPServer {
         }
 
         case 'haproxy_backend_list': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const backends = await this.haproxyResource.listBackends();
+            const backends = await this.haproxyResource!.listBackends();
             return {
               content: [{
                 type: 'text',
@@ -2274,12 +2151,7 @@ class OPNSenseMCPServer {
         }
 
         case 'haproxy_backend_delete': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.uuid) {
             throw new McpError(
@@ -2289,7 +2161,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            await this.haproxyResource.deleteBackend(args.uuid as string);
+            await this.haproxyResource!.deleteBackend(args.uuid as string);
             return {
               content: [{
                 type: 'text',
@@ -2306,12 +2178,7 @@ class OPNSenseMCPServer {
 
         // HAProxy Frontend Management
         case 'haproxy_frontend_create': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.name || !args.bind || !args.mode || !args.backend) {
             throw new McpError(
@@ -2321,7 +2188,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.haproxyResource.createFrontend({
+            const result = await this.haproxyResource!.createFrontend({
               name: args.name as string,
               bind: args.bind as string,
               mode: args.mode as 'http' | 'tcp',
@@ -2349,15 +2216,10 @@ class OPNSenseMCPServer {
         }
 
         case 'haproxy_frontend_list': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const frontends = await this.haproxyResource.listFrontends();
+            const frontends = await this.haproxyResource!.listFrontends();
             return {
               content: [{
                 type: 'text',
@@ -2373,12 +2235,7 @@ class OPNSenseMCPServer {
         }
 
         case 'haproxy_frontend_delete': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.uuid) {
             throw new McpError(
@@ -2388,7 +2245,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            await this.haproxyResource.deleteFrontend(args.uuid as string);
+            await this.haproxyResource!.deleteFrontend(args.uuid as string);
             return {
               content: [{
                 type: 'text',
@@ -2405,15 +2262,10 @@ class OPNSenseMCPServer {
 
         // HAProxy Certificate Management
         case 'haproxy_certificate_list': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const certificates = await this.haproxyResource.listCertificates();
+            const certificates = await this.haproxyResource!.listCertificates();
             return {
               content: [{
                 type: 'text',
@@ -2429,12 +2281,7 @@ class OPNSenseMCPServer {
         }
 
         case 'haproxy_certificate_create': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.name || !args.type) {
             throw new McpError(
@@ -2444,7 +2291,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.haproxyResource.createCertificate({
+            const result = await this.haproxyResource!.createCertificate({
               name: args.name as string,
               type: args.type as any,
               cn: args.cn as string,
@@ -2470,12 +2317,7 @@ class OPNSenseMCPServer {
 
         // HAProxy ACL Management
         case 'haproxy_acl_create': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.frontend || !args.name || !args.expression) {
             throw new McpError(
@@ -2485,7 +2327,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.haproxyResource.addACLToFrontend(
+            const result = await this.haproxyResource!.addACLToFrontend(
               args.frontend as string,
               {
                 name: args.name as string,
@@ -2509,12 +2351,7 @@ class OPNSenseMCPServer {
 
         // HAProxy Action Management
         case 'haproxy_action_create': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.frontend || !args.type) {
             throw new McpError(
@@ -2524,7 +2361,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const result = await this.haproxyResource.addActionToFrontend(
+            const result = await this.haproxyResource!.addActionToFrontend(
               args.frontend as string,
               {
                 type: args.type as any,
@@ -2550,15 +2387,10 @@ class OPNSenseMCPServer {
 
         // HAProxy Stats
         case 'haproxy_stats': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const stats = await this.haproxyResource.getStats();
+            const stats = await this.haproxyResource!.getStats();
             return {
               content: [{
                 type: 'text',
@@ -2574,12 +2406,7 @@ class OPNSenseMCPServer {
         }
 
         case 'haproxy_backend_health': {
-          if (!this.haproxyResource) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Not configured. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.backend) {
             throw new McpError(
@@ -2589,7 +2416,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const health = await this.haproxyResource.getBackendHealth(args.backend as string);
+            const health = await this.haproxyResource!.getBackendHealth(args.backend as string);
             return {
               content: [{
                 type: 'text',
@@ -2606,12 +2433,7 @@ class OPNSenseMCPServer {
 
         // Macro Recording Tools
         case 'macro_start_recording': {
-          if (!this.macroRecorder) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Macro recorder not initialized. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.name || !args.description) {
             throw new McpError(
@@ -2621,7 +2443,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            this.macroRecorder.startRecording(args.name as string, args.description as string);
+            this.macroRecorder!.startRecording(args.name as string, args.description as string);
             return {
               content: [{
                 type: 'text',
@@ -2637,20 +2459,15 @@ class OPNSenseMCPServer {
         }
 
         case 'macro_stop_recording': {
-          if (!this.macroRecorder) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Macro recorder not initialized. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const recording = this.macroRecorder.stopRecording();
+            const recording = this.macroRecorder!.stopRecording();
             if (!recording) {
               throw new Error('No recording in progress');
             }
             
-            await this.macroRecorder.saveMacro(recording);
+            await this.macroRecorder!.saveMacro(recording);
             
             return {
               content: [{
@@ -2667,15 +2484,10 @@ class OPNSenseMCPServer {
         }
 
         case 'macro_list': {
-          if (!this.macroRecorder) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Macro recorder not initialized. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           try {
-            const macros = await this.macroRecorder.listMacros();
+            const macros = await this.macroRecorder!.listMacros();
             return {
               content: [{
                 type: 'text',
@@ -2698,12 +2510,7 @@ class OPNSenseMCPServer {
         }
 
         case 'macro_play': {
-          if (!this.macroRecorder) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Macro recorder not initialized. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.id) {
             throw new McpError(
@@ -2713,7 +2520,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const results = await this.macroRecorder.playMacro(args.id as string, {
+            const results = await this.macroRecorder!.playMacro(args.id as string, {
               parameters: args.parameters as Record<string, any>,
               dryRun: args.dryRun as boolean
             });
@@ -2742,12 +2549,7 @@ class OPNSenseMCPServer {
         }
 
         case 'macro_delete': {
-          if (!this.macroRecorder) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Macro recorder not initialized. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.id) {
             throw new McpError(
@@ -2757,7 +2559,7 @@ class OPNSenseMCPServer {
           }
           
           try {
-            await this.macroRecorder.deleteMacro(args.id as string);
+            await this.macroRecorder!.deleteMacro(args.id as string);
             return {
               content: [{
                 type: 'text',
@@ -2773,12 +2575,7 @@ class OPNSenseMCPServer {
         }
 
         case 'macro_analyze': {
-          if (!this.macroRecorder) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Macro recorder not initialized. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.id) {
             throw new McpError(
@@ -2788,12 +2585,12 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const macro = await this.macroRecorder.loadMacro(args.id as string);
+            const macro = await this.macroRecorder!.loadMacro(args.id as string);
             if (!macro) {
               throw new Error(`Macro ${args.id} not found`);
             }
             
-            const analysis = this.macroRecorder.analyzeMacro(macro);
+            const analysis = this.macroRecorder!.analyzeMacro(macro);
             
             return {
               content: [{
@@ -2810,12 +2607,7 @@ class OPNSenseMCPServer {
         }
 
         case 'macro_generate_tool': {
-          if (!this.macroRecorder) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Macro recorder not initialized. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.id) {
             throw new McpError(
@@ -2825,12 +2617,12 @@ class OPNSenseMCPServer {
           }
           
           try {
-            const macro = await this.macroRecorder.loadMacro(args.id as string);
+            const macro = await this.macroRecorder!.loadMacro(args.id as string);
             if (!macro) {
               throw new Error(`Macro ${args.id} not found`);
             }
             
-            const tool = this.macroRecorder.generateTool(macro);
+            const tool = this.macroRecorder!.generateTool(macro);
             
             if (args.save) {
               // Save to a file
@@ -2868,12 +2660,7 @@ class OPNSenseMCPServer {
         }
 
         case 'macro_export': {
-          if (!this.macroRecorder) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Macro recorder not initialized. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.path) {
             throw new McpError(
@@ -2901,12 +2688,7 @@ class OPNSenseMCPServer {
         }
 
         case 'macro_import': {
-          if (!this.macroRecorder) {
-            throw new McpError(
-              ErrorCode.InternalError,
-              'Macro recorder not initialized. Use configure tool first.'
-            );
-          }
+          await this.ensureInitialized();
           
           if (!args || !args.path) {
             throw new McpError(
@@ -2950,7 +2732,7 @@ class OPNSenseMCPServer {
       // Try to initialize with environment variables
       await this.initialize();
     } catch (error) {
-      console.error('Auto-initialization failed. Use configure tool to set up connection.');
+      logger.warn('Auto-initialization failed. Use configure tool to set up connection.');
     }
 
     // Get transport configuration
@@ -2963,21 +2745,21 @@ class OPNSenseMCPServer {
     if (transportType === 'stdio') {
       // For STDIO, connect directly
       await this.server.connect(transportOrServer as Transport);
-      console.error('OPNsense MCP server running on stdio');
+      logger.info('OPNsense MCP server running on stdio');
     } else if (transportType === 'sse') {
       // For SSE, set up connection handler
       const sseServer = transportOrServer as SSETransportServer;
       sseServer.onConnection(async (transport) => {
         // Connect each new SSE client
         await this.server.connect(transport);
-        console.error('New SSE client connected');
+        logger.info('New SSE client connected');
       });
-      console.error(`OPNsense MCP server running on SSE (port: ${transportOptions.port || 3000})`);
-      console.error('Waiting for SSE client connections...');
+      logger.info(`OPNsense MCP server running on SSE (port: ${transportOptions.port || 3000})`);
+      logger.info('Waiting for SSE client connections...');
     }
   }
 }
 
 // Start the server
 const server = new OPNSenseMCPServer();
-server.start().catch(console.error);
+server.start().catch(error => logger.error('Server startup failed:', error));
