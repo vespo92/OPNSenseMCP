@@ -1,4 +1,4 @@
-// Firewall Rule Resource Implementation
+// Firewall Rule Resource Implementation - FIXED VERSION
 import { OPNSenseAPIClient } from '../../api/client.js';
 
 export interface FirewallRule {
@@ -61,7 +61,6 @@ export class FirewallRuleResource {
       r.description?.toLowerCase().includes(description.toLowerCase())
     );
   }
-
   /**
    * Create a new firewall rule
    */
@@ -72,20 +71,26 @@ export class FirewallRuleResource {
       throw new Error(`Invalid rule: ${errors.join(', ')}`);
     }
 
-    // Prepare rule data with defaults
+    // Normalize interface name
+    const normalizedInterface = this.normalizeInterface(rule.interface);
+    console.log(`Normalizing interface: ${rule.interface} -> ${normalizedInterface}`);
+
+    // Prepare rule data - try simple string format first
     const ruleData = {
       enabled: rule.enabled || '1',
       action: rule.action,
       quick: rule.quick || '1',
-      interface: rule.interface,
+      interface: normalizedInterface,
       direction: rule.direction,
       ipprotocol: rule.ipprotocol || 'inet',
       protocol: rule.protocol,
       source_net: rule.source_net,
+      source_not: '0',
       source_port: rule.source_port || '',
       destination_net: rule.destination_net,
+      destination_not: '0',
       destination_port: rule.destination_port || '',
-      gateway: rule.gateway || '',
+      gateway: '',  // Empty string for default gateway
       log: rule.log || '0',
       description: rule.description || '',
       category: rule.category || ''
@@ -94,13 +99,95 @@ export class FirewallRuleResource {
     // Add the rule
     const response = await this.client.post('/firewall/filter/addRule', { rule: ruleData });
     
-    if (response.uuid) {
+    // Log response for debugging
+    console.log('Firewall rule creation response:', JSON.stringify(response, null, 2));
+    
+    // Check various response formats
+    const uuid = response.uuid || response.result || response.id;
+    
+    if (uuid && uuid !== 'failed') {
       // Apply changes
       await this.applyChanges();
-      return { uuid: response.uuid, success: true };
+      return { uuid, success: true };
+    }
+    
+    // If UUID is "failed" or missing, check for validation errors
+    if (response.validations) {
+      const errors = Object.entries(response.validations)
+        .map(([field, error]: [string, any]) => `${field}: ${error}`)
+        .join(', ');
+      throw new Error(`Validation failed: ${errors}`);
+    }
+    
+    // Check if response has an error message
+    if (response.message || response.error) {
+      throw new Error(`Failed to create firewall rule: ${response.message || response.error}`);
     }
 
-    throw new Error('Failed to create firewall rule');
+    throw new Error(`Failed to create firewall rule - unexpected response: ${JSON.stringify(response)}`);
+  }
+  /**
+   * Format a value as OPNsense expects (object with value/selected)
+   */
+  private formatSelection(value: string): any {
+    if (!value || value === '') {
+      return { '': { value: 'default', selected: 1 } };
+    }
+    
+    // Special handling for different field types
+    const fieldMappings: Record<string, Record<string, any>> = {
+      // Actions - lowercase keys
+      'pass': { 'pass': { value: 'Pass', selected: 1 } },
+      'block': { 'block': { value: 'Block', selected: 1 } },
+      'reject': { 'reject': { value: 'Reject', selected: 1 } },
+      
+      // Directions - lowercase keys  
+      'in': { 'in': { value: 'in', selected: 1 } },
+      'out': { 'out': { value: 'out', selected: 1 } },
+      
+      // Protocols - exact case
+      'any': { 'any': { value: 'any', selected: 1 } },
+      'tcp': { 'TCP': { value: 'TCP', selected: 1 } },
+      'udp': { 'UDP': { value: 'UDP', selected: 1 } },
+      'icmp': { 'ICMP': { value: 'ICMP', selected: 1 } },
+      
+      // IP protocols
+      'inet': { 'inet': { value: 'IPv4', selected: 1 } },
+      'inet6': { 'inet6': { value: 'IPv6', selected: 1 } },
+      'inet46': { 'inet46': { value: 'IPv4+IPv6', selected: 1 } },
+      
+      // Interfaces - use internal names
+      'lan': { 'lan': { value: 'LAN', selected: 1 } },
+      'wan': { 'wan': { value: 'WAN', selected: 1 } },
+      'opt1': { 'opt1': { value: 'OPT1', selected: 1 } },
+      'opt2': { 'opt2': { value: 'OPT2', selected: 1 } },
+      'opt3': { 'opt3': { value: 'OPT3', selected: 1 } },
+      'opt4': { 'opt4': { value: 'OPT4', selected: 1 } },
+      'opt5': { 'opt5': { value: 'OPT5', selected: 1 } },
+      'opt6': { 'opt6': { value: 'OPT6', selected: 1 } },
+      
+      // VLAN interfaces - map to opt interfaces
+      'igc3_vlan6': { 'opt6': { value: 'opt6', selected: 1 } },
+      'igc2_vlan4': { 'opt4': { value: 'opt4', selected: 1 } },
+      'igc2_vlan2': { 'opt2': { value: 'opt2', selected: 1 } },
+      
+      // DMZ specific
+      'dmz': { 'opt6': { value: 'opt6', selected: 1 } }
+    };
+    
+    // Check if we have a specific mapping
+    const lowerValue = value.toLowerCase();
+    if (fieldMappings[lowerValue]) {
+      return fieldMappings[lowerValue];
+    }
+    
+    // Default format if no specific mapping
+    return {
+      [value]: {
+        value: value,
+        selected: 1
+      }
+    };
   }
 
   /**
@@ -118,7 +205,18 @@ export class FirewallRuleResource {
       uuid: undefined // Remove UUID from data
     };
 
-    await this.client.post(`/firewall/filter/setRule/${uuid}`, { rule: updatedRule });
+    // Format fields properly
+    const formattedRule = {
+      ...updatedRule,
+      action: this.formatSelection(updatedRule.action),
+      interface: this.formatSelection(updatedRule.interface),
+      direction: this.formatSelection(updatedRule.direction),
+      ipprotocol: this.formatSelection(updatedRule.ipprotocol),
+      protocol: this.formatSelection(updatedRule.protocol),
+      gateway: this.formatSelection(updatedRule.gateway || '')
+    };
+
+    await this.client.post(`/firewall/filter/setRule/${uuid}`, { rule: formattedRule });
     await this.applyChanges();
     return true;
   }
@@ -147,7 +245,6 @@ export class FirewallRuleResource {
     const newState = rule.enabled === '1' ? '0' : '1';
     return this.update(uuid, { enabled: newState });
   }
-
   /**
    * Apply firewall changes
    */
@@ -164,6 +261,38 @@ export class FirewallRuleResource {
     return response?.rule || {};
   }
 
+  /**
+   * Normalize interface name for firewall rules
+   * Converts friendly names to internal names
+   */
+  private normalizeInterface(interfaceName: string): string {
+    // Common interface mappings - MUST match your actual OPNsense configuration!
+    const interfaceMappings: Record<string, string> = {
+      'lan': 'lan',
+      'wan': 'wan',
+      // DMZ is on opt8, not opt6!
+      'dmz': 'opt8',
+      'opt8': 'opt8',
+      'igc3_vlan6': 'opt8',  // VLAN 6 is mapped to opt8
+      // Guest is on opt6
+      'guest': 'opt6',
+      'opt6': 'opt6',
+      'igc2_vlan4': 'opt6',  // Assuming VLAN 4 is Guest
+      // IoT is on opt4
+      'iot': 'opt4',
+      'opt4': 'opt4',
+      'igc2_vlan2': 'opt4'   // Assuming VLAN 2 is IoT
+    };
+    
+    // Check if we have a mapping
+    const normalized = interfaceMappings[interfaceName.toLowerCase()];
+    if (normalized) {
+      return normalized;
+    }
+    
+    // Return as-is if no mapping found
+    return interfaceName;
+  }
   /**
    * Validate firewall rule
    */
@@ -196,17 +325,17 @@ export class FirewallRuleResource {
     }
 
     // Validate ports if specified
-    if (rule.source_port && !['tcp', 'udp'].includes(rule.protocol)) {
+    const protocolLower = rule.protocol?.toLowerCase();
+    if (rule.source_port && rule.source_port !== '' && !['tcp', 'udp'].includes(protocolLower)) {
       errors.push('Source port can only be specified for TCP or UDP');
     }
 
-    if (rule.destination_port && !['tcp', 'udp'].includes(rule.protocol)) {
+    if (rule.destination_port && rule.destination_port !== '' && !['tcp', 'udp'].includes(protocolLower)) {
       errors.push('Destination port can only be specified for TCP or UDP');
     }
 
     return errors;
   }
-
   /**
    * Create a common firewall rule preset
    */

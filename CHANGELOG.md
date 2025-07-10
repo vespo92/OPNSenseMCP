@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2025-01-10
+
+### Fixed
+- **Firewall Rule Creation** - Fixed API format issues for creating firewall rules
+  - Corrected interface name mapping (VLAN numbers != opt numbers)
+  - Fixed validation to handle case-insensitive protocol names
+  - Simplified API payload format (removed complex object formatting)
+  - Added proper interface normalization (e.g., DMZ VLAN6 → opt8)
+  - Successfully tested with MicroK8s cluster setup
+
+### Changed
+- Updated `FirewallRuleResource` to handle OPNsense API requirements correctly
+- Improved interface mapping documentation
+
+### Technical Details
+- Fixed issue where rules were created on wrong interface (opt6 instead of opt8 for DMZ)
+- Rules created via API appear in Firewall → Automation → Filter section
+- Verified working with OPNsense v25.1.5_5
+
 ## [0.7.0] - 2025-01-08
 
 ### Added

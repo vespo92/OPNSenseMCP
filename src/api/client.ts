@@ -11,7 +11,7 @@ export class OPNSenseAPIClient {
 
   constructor(config: any) {
     this.config = config;
-    this.debugMode = config.debugMode || false;
+    this.debugMode = config.debugMode || process.env.MCP_DEBUG === 'true' || false;
     
     // Create axios instance
     this.axios = axios.create({

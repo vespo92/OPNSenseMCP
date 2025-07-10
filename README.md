@@ -17,6 +17,7 @@ A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infra
 ## 🚀 Features
 
 - **Complete OPNsense API Integration** - Manage VLANs, firewall rules, services, and more
+- **Firewall Rule Management** - Create, update, delete, and manage firewall rules via API
 - **ARP Table Management** - View and search ARP entries, find devices by IP/MAC/hostname
 - **Infrastructure as Code** - Deploy and manage network infrastructure declaratively
 - **State Management** - Track resource state with rollback capabilities
