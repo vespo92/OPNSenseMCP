@@ -1,5 +1,6 @@
 // Firewall Rule Resource Implementation
 import { OPNSenseAPIClient } from '../../api/client.js';
+import { InterfaceMapper } from '../../utils/interface-mapper.js';
 
 export interface FirewallRule {
   uuid?: string;
@@ -23,9 +24,12 @@ export interface FirewallRule {
 
 export class FirewallRuleResource {
   private client: OPNSenseAPIClient;
+  private interfaceMapper: InterfaceMapper;
+  private interfacesLoaded: boolean = false;
 
   constructor(client: OPNSenseAPIClient) {
     this.client = client;
+    this.interfaceMapper = new InterfaceMapper();
   }
 
   /**
@@ -63,32 +67,58 @@ export class FirewallRuleResource {
   }
 
   /**
+   * Load interface mappings from API
+   */
+  private async ensureInterfacesLoaded(): Promise<void> {
+    if (this.interfacesLoaded) return;
+    
+    try {
+      // Get available options including interfaces
+      const options = await this.client.get('/firewall/filter/getRule');
+      if (options?.rule?.interface?.values) {
+        this.interfaceMapper = new InterfaceMapper(options.rule.interface.values);
+        this.interfacesLoaded = true;
+      }
+    } catch (error) {
+      console.warn('Failed to load interface mappings, using defaults');
+    }
+  }
+
+  /**
    * Create a new firewall rule
    */
   async create(rule: FirewallRule): Promise<{ uuid: string; success: boolean }> {
+    // Ensure interface mappings are loaded
+    await this.ensureInterfacesLoaded();
+    
+    // Map interface and protocol to OPNsense format
+    const mappedRule = { ...rule };
+    mappedRule.interface = this.interfaceMapper.mapInterface(rule.interface);
+    mappedRule.protocol = InterfaceMapper.mapProtocol(rule.protocol);
+    
     // Validate rule
-    const errors = this.validateRule(rule);
+    const errors = this.validateRule(mappedRule);
     if (errors.length > 0) {
       throw new Error(`Invalid rule: ${errors.join(', ')}`);
     }
 
     // Prepare rule data with defaults
     const ruleData = {
-      enabled: rule.enabled || '1',
-      action: rule.action,
-      quick: rule.quick || '1',
-      interface: rule.interface,
-      direction: rule.direction,
-      ipprotocol: rule.ipprotocol || 'inet',
-      protocol: rule.protocol,
-      source_net: rule.source_net,
-      source_port: rule.source_port || '',
-      destination_net: rule.destination_net,
-      destination_port: rule.destination_port || '',
-      gateway: rule.gateway || '',
-      log: rule.log || '0',
-      description: rule.description || '',
-      category: rule.category || ''
+      enabled: mappedRule.enabled || '1',
+      action: mappedRule.action,
+      quick: mappedRule.quick || '1',
+      interface: mappedRule.interface,
+      direction: mappedRule.direction,
+      ipprotocol: mappedRule.ipprotocol || 'inet',
+      protocol: mappedRule.protocol,
+      source_net: mappedRule.source_net,
+      source_port: mappedRule.source_port || '',
+      destination_net: mappedRule.destination_net,
+      destination_port: mappedRule.destination_port || '',
+      gateway: mappedRule.gateway || '',
+      log: mappedRule.log || '0',
+      description: mappedRule.description || '',
+      category: mappedRule.category || ''
     };
 
     // Add the rule
