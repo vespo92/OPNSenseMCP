@@ -39,6 +39,9 @@ coverage/
 .nyc_output/
 test-sse.js
 
+# Internal working documents
+.internal/
+
 # Temporary files
 *.tmp
 *.temp
