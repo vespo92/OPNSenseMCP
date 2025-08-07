@@ -63,7 +63,7 @@
     "@types/jsonpath": "^0.2.4",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.11.0",
-    "drizzle-kit": "^0.20.0",
+    "drizzle-kit": "^0.31.4",
     "eslint": "^9.28.0",
     "jest": "^30.0.0",
     "prettier": "^3.5.3",

@@ -4,8 +4,8 @@
  */
 
 import { z } from 'zod';
-import { IaCResource } from '../base';
-import { resourceRegistry } from '../registry';
+import { IaCResource } from '../base.js';
+import { resourceRegistry } from '../registry.js';
 
 // VLAN properties schema
 export const VlanPropertiesSchema = z.object({
