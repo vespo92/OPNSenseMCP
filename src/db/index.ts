@@ -4,9 +4,8 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pkg from 'pg';
 const { Pool } = pkg;
 import * as schema from './schema.js';
-import { config } from 'dotenv';
 
-config();
+// Environment variables are provided by Claude Desktop/Code
 
 // Database configuration interface
 export interface DatabaseConfig {

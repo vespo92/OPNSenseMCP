@@ -6,20 +6,17 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/VinSpo/opnsense-mcp.git"
+    "url": "git+https://github.com/vespo92/OPNSenseMCP.git"
   },
   "bugs": {
-    "url": "https://github.com/VinSpo/opnsense-mcp/issues"
+    "url": "https://github.com/vespo92/OPNSenseMCP/issues"
   },
-  "homepage": "https://github.com/VinSpo/opnsense-mcp#readme",
+  "homepage": "https://github.com/vespo92/OPNSenseMCP#readme",
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
-    "start:stdio": "node dist/index.js --transport stdio",
-    "start:sse": "node dist/index.js --transport sse --port 3000",
     "dev": "tsx src/index.ts",
-    "dev:stdio": "tsx src/index.ts --transport stdio",
-    "dev:sse": "tsx src/index.ts --transport sse --port 3000",
     "test": "tsx src/test-resources.ts",
     "test:api": "node test-simple.js",
     "test:vlan": "node test-vlan-comprehensive.js",
@@ -42,11 +39,18 @@
   ],
   "author": "VinSpo",
   "license": "MIT",
+  "bin": {
+    "opnsense-mcp-server": "dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.5.0",
     "@types/uuid": "^10.0.0",
     "axios": "^1.6.0",
-    "dotenv": "^16.3.1",
     "drizzle-orm": "^0.29.0",
     "ioredis": "^5.6.1",
     "jsonpath": "^1.1.1",

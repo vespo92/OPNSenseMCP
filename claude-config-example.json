@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "opnsense": {
+      "command": "npx",
+      "args": ["opnsense-mcp-server"],
+      "env": {
+        "OPNSENSE_HOST": "https://192.168.1.1",
+        "OPNSENSE_API_KEY": "{{keychain:opnsense-api-key}}",
+        "OPNSENSE_API_SECRET": "{{keychain:opnsense-api-secret}}",
+        "OPNSENSE_VERIFY_SSL": "true",
+        "LOG_LEVEL": "info",
+        "CACHE_ENABLED": "true",
+        "CACHE_TTL": "300"
+      }
+    }
+  }
+}

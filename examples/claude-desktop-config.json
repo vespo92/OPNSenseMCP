@@ -2,7 +2,7 @@
   "mcpServers": {
     "opnsense": {
       "command": "node",
-      "args": ["C:\\Users\\VinSpo\\Desktop\\OPNSenseMCP\\dist\\index.js"],
+      "args": ["opnsense-mcp-server"],
       "env": {
         "OPNSENSE_HOST": "your-opnsense-host.example.com",
         "OPNSENSE_API_KEY": "your-api-key",

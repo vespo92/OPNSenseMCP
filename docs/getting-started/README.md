@@ -58,7 +58,7 @@ If you're experienced and just need the commands:
 
 ```bash
 # Clone and build
-git clone https://github.com/VinSpo/opnsense-mcp
+git clone https://github.com/vespo92/OPNSenseMCP
 cd opnsense-mcp
 npm install
 npm run build
@@ -114,8 +114,8 @@ Once set up, you can ask Claude to:
 1. Check [Troubleshooting Guide](../troubleshooting/common-issues.md)
 2. Review your [Configuration](configuration.md)
 3. Check the logs: `npm start` in debug mode
-4. Search [GitHub Issues](https://github.com/VinSpo/opnsense-mcp/issues)
-5. Ask in [Discussions](https://github.com/VinSpo/opnsense-mcp/discussions)
+4. Search [GitHub Issues](https://github.com/vespo92/OPNSenseMCP/issues)
+5. Ask in [Discussions](https://github.com/vespo92/OPNSenseMCP/discussions)
 
 ### Common First-Time Issues
 

@@ -47,7 +47,7 @@ Before you begin, ensure you have:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/VinSpo/opnsense-mcp
+git clone https://github.com/vespo92/OPNSenseMCP
 cd opnsense-mcp
 ```
 
@@ -201,5 +201,5 @@ node scripts/test/test-firewall.js
 ### Getting Help
 
 - Check [Troubleshooting Guide](../troubleshooting/)
-- Open an [issue on GitHub](https://github.com/VinSpo/opnsense-mcp/issues)
-- Join the [discussions](https://github.com/VinSpo/opnsense-mcp/discussions)
+- Open an [issue on GitHub](https://github.com/vespo92/OPNSenseMCP/issues)
+- Join the [discussions](https://github.com/vespo92/OPNSenseMCP/discussions)

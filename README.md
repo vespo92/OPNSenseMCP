@@ -1,6 +1,7 @@
 # OPNSense MCP Server
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/VinSpo/opnsense-mcp/releases)
+[![Version](https://img.shields.io/npm/v/opnsense-mcp-server)](https://www.npmjs.com/package/opnsense-mcp-server)
+[![Downloads](https://img.shields.io/npm/dt/opnsense-mcp-server)](https://www.npmjs.com/package/opnsense-mcp-server)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-orange)](https://modelcontextprotocol.io)
 
@@ -8,7 +9,7 @@
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@vespo92/OPNSenseMCP/badge" alt="OPNSense Server MCP server" />
 </a>
 
-Manage your OPNsense firewall through natural language with Claude, using the Model Context Protocol (MCP).
+A Model Context Protocol (MCP) server for managing OPNsense firewalls through Claude Desktop or Claude Code.
 
 ## What is this?
 
@@ -35,44 +36,179 @@ OPNSense MCP Server enables you to control your OPNsense firewall using conversa
 ### Prerequisites
 - Node.js 18+
 - OPNsense firewall with API access enabled
-- Claude Desktop (for desktop integration)
+- Claude Desktop or Claude Code
 
 ### Installation
 
+#### Via npm (Recommended)
 ```bash
-# Clone and install
-git clone https://github.com/VinSpo/opnsense-mcp
-cd opnsense-mcp
-npm install
-npm run build
+# Use directly with npx - no installation needed
+npx opnsense-mcp-server
 
-# Configure credentials
-cp .env.example .env
-# Edit .env with your OPNsense API credentials
+# Or install globally
+npm install -g opnsense-mcp-server
 ```
 
-### Run with Claude Desktop
+#### Via GitHub (Latest Development)
+```bash
+# Use latest from GitHub
+npx github:vespo92/OPNSenseMCP
+```
 
-Add to your Claude Desktop configuration:
+#### For Development
+```bash
+git clone https://github.com/vespo92/OPNSenseMCP
+cd OPNSenseMCP
+npm install
+npm run build
+```
+
+## 📋 Configuration
+
+### Claude Desktop
+
+Add to your Claude Desktop configuration file:
+- **MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.config/claude/claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "opnsense": {
-      "command": "node",
-      "args": ["dist/index.js"],
-      "cwd": "/path/to/opnsense-mcp",
+      "command": "npx",
+      "args": ["opnsense-mcp-server"],
       "env": {
-        "OPNSENSE_HOST": "192.168.1.1",
-        "OPNSENSE_API_KEY": "your_key",
-        "OPNSENSE_API_SECRET": "your_secret"
+        "OPNSENSE_HOST": "https://192.168.1.1",
+        "OPNSENSE_API_KEY": "your-api-key",
+        "OPNSENSE_API_SECRET": "your-api-secret",
+        "OPNSENSE_VERIFY_SSL": "true"
       }
     }
   }
 }
 ```
 
-Then restart Claude Desktop and start chatting!
+### Claude Code
+
+Add to `.claude/config.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "opnsense": {
+      "command": "npx",
+      "args": ["opnsense-mcp-server"],
+      "env": {
+        "OPNSENSE_HOST": "https://192.168.1.1",
+        "OPNSENSE_API_KEY": "your-api-key",
+        "OPNSENSE_API_SECRET": "your-api-secret",
+        "OPNSENSE_VERIFY_SSL": "true"
+      }
+    }
+  }
+}
+```
+
+### Using System Keychain (Recommended for Security)
+
+Instead of hardcoding credentials:
+
+```json
+{
+  "mcpServers": {
+    "opnsense": {
+      "command": "npx",
+      "args": ["opnsense-mcp-server"],
+      "env": {
+        "OPNSENSE_HOST": "https://192.168.1.1",
+        "OPNSENSE_API_KEY": "{{keychain:opnsense-api-key}}",
+        "OPNSENSE_API_SECRET": "{{keychain:opnsense-api-secret}}",
+        "OPNSENSE_VERIFY_SSL": "true"
+      }
+    }
+  }
+}
+```
+
+Then store credentials in your system keychain:
+- **MacOS**: Use Keychain Access app
+- **Windows**: Use Credential Manager
+- **Linux**: Use Secret Service (gnome-keyring or KWallet)
+
+### Environment Variables
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `OPNSENSE_HOST` | OPNsense URL (include https://) | Yes | - |
+| `OPNSENSE_API_KEY` | API key from OPNsense | Yes | - |
+| `OPNSENSE_API_SECRET` | API secret from OPNsense | Yes | - |
+| `OPNSENSE_VERIFY_SSL` | Verify SSL certificates | No | `true` |
+| `LOG_LEVEL` | Logging level | No | `info` |
+| `CACHE_ENABLED` | Enable response caching | No | `true` |
+| `CACHE_TTL` | Cache time-to-live in seconds | No | `300` |
+
+<details>
+<summary>Advanced Configuration (Optional)</summary>
+
+```json
+{
+  "mcpServers": {
+    "opnsense": {
+      "command": "npx",
+      "args": ["opnsense-mcp-server"],
+      "env": {
+        "OPNSENSE_HOST": "https://192.168.1.1",
+        "OPNSENSE_API_KEY": "{{keychain:opnsense-api-key}}",
+        "OPNSENSE_API_SECRET": "{{keychain:opnsense-api-secret}}",
+        
+        // Optional: Redis cache configuration
+        // "REDIS_HOST": "localhost",
+        // "REDIS_PORT": "6379",
+        // "REDIS_PASSWORD": "{{keychain:redis-password}}",
+        // "REDIS_DB": "0",
+        
+        // Optional: PostgreSQL for state persistence  
+        // "POSTGRES_HOST": "localhost",
+        // "POSTGRES_PORT": "5432",
+        // "POSTGRES_DB": "opnsense_mcp",
+        // "POSTGRES_USER": "mcp_user",
+        // "POSTGRES_PASSWORD": "{{keychain:postgres-password}}",
+        
+        // Optional: State encryption
+        // "STATE_ENCRYPTION_KEY": "{{keychain:state-encryption-key}}",
+        
+        // Optional: Performance tuning
+        // "CACHE_COMPRESSION_ENABLED": "true",
+        // "CACHE_COMPRESSION_THRESHOLD": "1024",
+        // "MAX_CONCURRENT_REQUESTS": "10"
+      }
+    }
+  }
+}
+```
+</details>
+
+## 🔑 OPNsense API Setup
+
+1. **Enable API in OPNsense:**
+   - Navigate to: System → Settings → Administration
+   - Check: "Enable API"
+   - Save
+
+2. **Create API credentials:**
+   - Navigate to: System → Access → Users
+   - Edit user or create new
+   - Under "API Keys", click "+" to generate key/secret
+   - Save credentials securely
+
+3. **Required privileges:**
+   - System: API access
+   - Firewall: Rules: Edit
+   - Interfaces: VLANs: Edit
+   - Services: All
+
+Then restart Claude Desktop/Code and start chatting!
 
 ## 📚 Documentation
 
@@ -137,8 +273,8 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 - [Documentation](docs/)
 - [Examples](examples/)
-- [Issues](https://github.com/VinSpo/opnsense-mcp/issues)
-- [Discussions](https://github.com/VinSpo/opnsense-mcp/discussions)
+- [Issues](https://github.com/vespo92/OPNSenseMCP/issues)
+- [Discussions](https://github.com/vespo92/OPNSenseMCP/discussions)
 - [Model Context Protocol](https://modelcontextprotocol.io)
 
 ---

@@ -372,8 +372,8 @@ If these solutions don't resolve your issue:
    - Claude Desktop logs
 
 3. **Get help:**
-   - [GitHub Issues](https://github.com/VinSpo/opnsense-mcp/issues)
-   - [Discussions](https://github.com/VinSpo/opnsense-mcp/discussions)
+   - [GitHub Issues](https://github.com/vespo92/OPNSenseMCP/issues)
+   - [Discussions](https://github.com/vespo92/OPNSenseMCP/discussions)
    - Include error messages and logs
 
 ## Related Documentation

@@ -1,12 +1,11 @@
 // Database Migration Runner
-import { config } from 'dotenv';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pkg from 'pg';
 const { Pool } = pkg;
 import * as schema from './schema.js';
 
-config();
+// Environment variables are provided by Claude Desktop/Code or npm scripts
 
 async function runMigrations() {
   console.log('🚀 Starting database migrations...');

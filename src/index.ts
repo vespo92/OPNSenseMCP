@@ -12,11 +12,10 @@ import {
   ErrorCode
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import dotenv from 'dotenv';
 import { logger } from './utils/logger.js';
 
-// Load environment variables
-dotenv.config();
+// Environment variables are provided by Claude Desktop/Code
+// No need for dotenv - configuration comes from MCP client
 
 // Import transport management
 import { TransportManager } from './transports/TransportManager.js';

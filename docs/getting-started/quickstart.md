@@ -220,4 +220,4 @@ Once comfortable, explore:
 
 ---
 
-**Need help?** Check the [full documentation](../) or [open an issue](https://github.com/VinSpo/opnsense-mcp/issues).
+**Need help?** Check the [full documentation](../) or [open an issue](https://github.com/vespo92/OPNSenseMCP/issues).

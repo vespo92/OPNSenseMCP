@@ -82,14 +82,14 @@ Find working examples in the [examples/](../examples/) directory:
 
 ### Documentation Issues
 If you find errors or missing information:
-1. Check the [latest documentation](https://github.com/VinSpo/opnsense-mcp/tree/main/docs)
-2. [Open an issue](https://github.com/VinSpo/opnsense-mcp/issues/new)
+1. Check the [latest documentation](https://github.com/vespo92/OPNSenseMCP/tree/main/docs)
+2. [Open an issue](https://github.com/vespo92/OPNSenseMCP/issues/new)
 
 ### Technical Support
 For technical questions:
 1. Check [Troubleshooting](troubleshooting/)
-2. Search [existing issues](https://github.com/VinSpo/opnsense-mcp/issues)
-3. Ask in [Discussions](https://github.com/VinSpo/opnsense-mcp/discussions)
+2. Search [existing issues](https://github.com/vespo92/OPNSenseMCP/issues)
+3. Ask in [Discussions](https://github.com/vespo92/OPNSenseMCP/discussions)
 
 ## 📝 Contributing
 

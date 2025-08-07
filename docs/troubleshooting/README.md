@@ -134,9 +134,9 @@ LOG_LEVEL=debug npm start
 
 ### Where to Get Help
 
-- **GitHub Issues:** [Report bugs](https://github.com/VinSpo/opnsense-mcp/issues)
-- **Discussions:** [Ask questions](https://github.com/VinSpo/opnsense-mcp/discussions)
-- **Documentation:** [Latest docs](https://github.com/VinSpo/opnsense-mcp/tree/main/docs)
+- **GitHub Issues:** [Report bugs](https://github.com/vespo92/OPNSenseMCP/issues)
+- **Discussions:** [Ask questions](https://github.com/vespo92/OPNSenseMCP/discussions)
+- **Documentation:** [Latest docs](https://github.com/vespo92/OPNSenseMCP/tree/main/docs)
 
 ### Reporting Issues
 
