@@ -225,13 +225,17 @@ export class FirewallRuleResource {
       errors.push('Destination network is required');
     }
 
+    // Normalize protocol for validation (handle both cases and TCP/UDP)
+    const normalizedProtocol = rule.protocol.toLowerCase();
+    const isPortAllowedProtocol = ['tcp', 'udp', 'tcp/udp'].includes(normalizedProtocol);
+
     // Validate ports if specified
-    if (rule.source_port && !['tcp', 'udp'].includes(rule.protocol)) {
-      errors.push('Source port can only be specified for TCP or UDP');
+    if (rule.source_port && !isPortAllowedProtocol) {
+      errors.push('Source port can only be specified for TCP, UDP, or TCP/UDP');
     }
 
-    if (rule.destination_port && !['tcp', 'udp'].includes(rule.protocol)) {
-      errors.push('Destination port can only be specified for TCP or UDP');
+    if (rule.destination_port && !isPortAllowedProtocol) {
+      errors.push('Destination port can only be specified for TCP, UDP, or TCP/UDP');
     }
 
     return errors;

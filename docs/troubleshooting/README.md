@@ -1,172 +1,185 @@
 # Troubleshooting Guide
 
-This guide covers common issues and their solutions when using the OPNSense MCP Server.
+Find solutions to common problems with OPNSense MCP Server.
 
-## 🔌 Connection Issues
+## Quick Navigation
 
-### API Connection Failed
-**Symptoms:** 
-- "Connection refused" errors
-- "ECONNREFUSED" in logs
+- [Common Issues](common-issues.md) - Most frequent problems and solutions
+- Connection Problems - Network and API connection issues
+- Authentication - Credential and permission problems  
+- FAQ - Frequently asked questions
 
-**Solutions:**
-1. Verify OPNsense API is enabled:
-   - Navigate to System → Settings → Administration → API
-   - Ensure "Enable API" is checked
-   
-2. Check firewall rules:
-   ```bash
-   # Test connectivity
-   curl -k https://your-opnsense-ip/api/core/system/status
-   ```
+## Problem Categories
 
-3. Verify SSL settings in `.env`:
-   ```env
-   OPNSENSE_VERIFY_SSL=false  # For self-signed certificates
-   ```
+### 🔌 Connection & Setup
+- Cannot connect to OPNsense
+- API not responding
+- SSL certificate errors
+- Network unreachable
 
-### Authentication Errors
-**Symptoms:**
-- "401 Unauthorized" responses
-- "Invalid API credentials"
+**→ See [Common Issues](common-issues.md#connection-issues)**
 
-**Solutions:**
-1. Regenerate API credentials in OPNsense
-2. Ensure credentials are properly formatted in `.env`
-3. Check user permissions in OPNsense
+### 🔐 Authentication
+- Invalid credentials
+- Permission denied
+- API key not working
+- User privilege issues
 
-## 🏗️ Build Issues
+**→ See [Common Issues](common-issues.md#authentication-failed)**
 
-### TypeScript Compilation Errors
-**Symptoms:**
-- `tsc` command fails
-- Type errors in console
+### 🌐 Network Features
+- VLANs not working
+- Firewall rules not applying
+- DHCP issues
+- DNS blocking problems
 
-**Solutions:**
-```bash
-# Clean install dependencies
-rm -rf node_modules package-lock.json
-npm install
+**→ See [Common Issues](common-issues.md)**
 
-# Check TypeScript version
-npm list typescript
+### 🛠️ Build & Installation
+- TypeScript errors
+- Module not found
+- Build failures
+- Version conflicts
 
-# Force rebuild
-npm run build -- --force
-```
+**→ See [Common Issues](common-issues.md#build-and-installation-issues)**
 
-### Module Resolution Issues
-**Symptoms:**
-- "Cannot find module" errors
-- Import path problems
+### 💬 Claude Desktop
+- Server not appearing
+- Commands not working
+- Connection lost
+- Configuration problems
 
-**Solutions:**
-1. Ensure using Node.js 18+
-2. Check `"type": "module"` in package.json
-3. Use `.js` extensions in imports
+**→ See [Common Issues](common-issues.md#claude-desktop-issues)**
 
-## 🌐 Network Configuration
+## Quick Fixes
 
-### VLAN Creation Failures
-**Symptoms:**
-- "Interface already in use"
-- "Invalid VLAN tag"
-
-**Solutions:**
-1. List existing VLANs to check for conflicts
-2. Verify interface is not assigned elsewhere
-3. Use VLAN tags between 1-4094
-
-### Firewall Rules Not Applied
-**Symptoms:**
-- Rules created but traffic not affected
-- Rules appear disabled
-
-**Solutions:**
-1. Check rule order (OPNsense processes top-down)
-2. Verify interfaces are correctly specified
-3. Apply configuration changes in OPNsense
-4. Check for conflicting rules
-
-## 📊 Cache and Database
-
-### Redis Connection Issues
-**Symptoms:**
-- "Redis connection failed"
-- Slow performance
-
-**Solutions:**
-```bash
-# Test Redis connection
-redis-cli ping
-
-# Check Redis is running
-systemctl status redis
-
-# Disable cache if not needed
-ENABLE_CACHE=false
-```
-
-### PostgreSQL Issues
-**Symptoms:**
-- "Database connection failed"
-- Migration errors
-
-**Solutions:**
-```bash
-# Run migrations
-npm run db:migrate
-
-# Check database exists
-psql -U postgres -c "SELECT datname FROM pg_database;"
-
-# Reset database
-npm run db:push
-```
-
-## 🔍 DHCP Lease Issues
-
-### Devices Not Found
-**Symptoms:**
-- "No devices found" when querying
-- Empty DHCP lease list
-
-**Solutions:**
-1. Verify DHCP service is running in OPNsense
-2. Check interface has DHCP enabled
-3. Wait for lease renewal (devices may need to reconnect)
-4. Use MAC address search instead of hostname
-
-## 🐛 Debug Mode
-
-Enable debug logging for more information:
-
+### Enable Debug Mode
 ```env
 # In .env file
-MCP_DEBUG=true
-MCP_LOG_LEVEL=debug
+LOG_LEVEL=debug
+DEBUG=opnsense:*
 ```
 
-Check logs for detailed error messages:
+### Test Connection
 ```bash
-# Run in development mode for live logs
-npm run dev
+# Quick connection test
+npm start
+
+# Should see:
+# ✅ Connected to OPNsense at https://192.168.1.1
 ```
 
-## 🆘 Getting Help
+### Reset Configuration
+```bash
+# Clean reinstall
+rm -rf node_modules package-lock.json
+npm install
+npm run build
+```
 
-If you're still experiencing issues:
+### Clear Cache
+```bash
+# If using Redis cache
+redis-cli FLUSHALL
 
-1. **Check existing issues:** [GitHub Issues](https://github.com/VinSpo/opnsense-mcp/issues)
-2. **Enable debug mode** and collect logs
-3. **Create a new issue** with:
-   - Error messages
-   - Your configuration (without secrets)
-   - Steps to reproduce
+# If using file cache
+rm -rf .cache/
+```
+
+## Diagnostic Commands
+
+### Check OPNsense API
+```bash
+# Test API directly
+curl -k -u "api_key:api_secret" \
+  https://192.168.1.1/api/core/system/status
+```
+
+### Verify Network
+```bash
+# Ping OPNsense
+ping 192.168.1.1
+
+# Check port
+telnet 192.168.1.1 443
+```
+
+### Test MCP Server
+```bash
+# Run in debug mode
+LOG_LEVEL=debug npm start
+```
+
+## Getting Help
+
+### Before Opening an Issue
+
+1. **Check existing documentation:**
+   - Read relevant troubleshooting guides
+   - Search closed issues
+   - Review examples
+
+2. **Gather information:**
+   - Error messages (full text)
+   - Log output (debug mode)
+   - Configuration (without secrets)
    - OPNsense version
+   - Node.js version
 
-## 📖 Additional Resources
+3. **Try basic fixes:**
+   - Restart services
+   - Clear cache
+   - Rebuild project
+   - Verify connectivity
 
-- [OPNsense API Documentation](https://docs.opnsense.org/development/api.html)
-- [MCP Protocol Specification](https://modelcontextprotocol.io/docs)
-- [Project Discord/Discussions](https://github.com/VinSpo/opnsense-mcp/discussions)
+### Where to Get Help
+
+- **GitHub Issues:** [Report bugs](https://github.com/VinSpo/opnsense-mcp/issues)
+- **Discussions:** [Ask questions](https://github.com/VinSpo/opnsense-mcp/discussions)
+- **Documentation:** [Latest docs](https://github.com/VinSpo/opnsense-mcp/tree/main/docs)
+
+### Reporting Issues
+
+Include:
+- Clear problem description
+- Steps to reproduce
+- Expected vs actual behavior
+- Error messages
+- Environment details
+
+## Emergency Recovery
+
+### Can't Access OPNsense GUI
+
+1. **Use console access:**
+   - Physical or serial console
+   - Reset from console menu
+
+2. **Restore from backup:**
+   ```
+   "Restore configuration from latest backup"
+   ```
+
+3. **Factory reset:**
+   - Last resort option
+   - Will lose all configuration
+
+### Locked Out of API
+
+1. **Disable API temporarily:**
+   - Console access required
+   - Re-enable after fixing
+
+2. **Create new API user:**
+   - Use admin account
+   - Generate new credentials
+
+3. **Check anti-lockout rule:**
+   - Must allow management access
+   - From at least one source
+
+## Related Documentation
+
+- [Getting Started](../getting-started/)
+- [Feature Guides](../guides/)
+- [API Reference](../api-reference/)

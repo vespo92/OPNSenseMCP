@@ -263,27 +263,34 @@ export class NetworkQueryMCP {
         processedLeases++;
       }
       
-      // 2. Sync network interfaces - TODO: implement getInterfaces in API client
-      // const interfaces = await this.opnsenseClient.getInterfaces();
-      // for (const [name, info] of Object.entries(interfaces)) {
-      //   await this.db.insert(networkInterfaces)
-      //     .values({
-      //       interfaceName: name,
-      //       description: info.description || name,
-      //       ipAddress: info.ipaddr,
-      //       subnet: info.subnet,
-      //       vlanId: info.vlan ? parseInt(info.vlan) : null
-      //     })
-      //     .onConflictDoUpdate({
-      //       target: networkInterfaces.interfaceName,
-      //       set: {
-      //         description: info.description || name,
-      //         ipAddress: info.ipaddr,
-      //         subnet: info.subnet,
-      //         updatedAt: new Date()
-      //       }
-      //     });
-      // }
+      // 2. Sync network interfaces
+      const interfaces = await this.opnsenseClient.getInterfaces();
+      let processedInterfaces = 0;
+      
+      for (const [name, info] of Object.entries(interfaces)) {
+        // Skip if not an object with interface info
+        if (typeof info !== 'object' || !info) continue;
+        
+        const interfaceInfo = info as any;
+        await this.db.insert(networkInterfaces)
+          .values({
+            interfaceName: name,
+            description: interfaceInfo.description || name,
+            ipAddress: interfaceInfo.ipaddr || null,
+            subnet: interfaceInfo.subnet || null,
+            vlanId: interfaceInfo.vlan ? parseInt(interfaceInfo.vlan) : null
+          })
+          .onConflictDoUpdate({
+            target: networkInterfaces.interfaceName,
+            set: {
+              description: interfaceInfo.description || name,
+              ipAddress: interfaceInfo.ipaddr || null,
+              subnet: interfaceInfo.subnet || null,
+              updatedAt: new Date()
+            }
+          });
+        processedInterfaces++;
+      }
       
       // 3. Update device summary view
       await this.queryProcessor.updateDeviceSummaryView();
@@ -291,7 +298,7 @@ export class NetworkQueryMCP {
       return {
         content: {
           type: 'text',
-          text: `Successfully synced network data:\n- Processed ${processedLeases} DHCP leases\n- Refreshed device summary view`
+          text: `Successfully synced network data:\n- Processed ${processedLeases} DHCP leases\n- Synced ${processedInterfaces} network interfaces\n- Refreshed device summary view`
         }
       };
     } catch (error) {

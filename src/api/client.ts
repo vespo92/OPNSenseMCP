@@ -1,19 +1,41 @@
-// Fixed OPNsense API Client that handles the Content-Type header quirk
-import axios from 'axios';
+// Consolidated OPNsense API Client with enhanced error handling and full functionality
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import https from 'https';
 import { APICall } from '../macro/types.js';
 
+/**
+ * Custom error class for OPNsense API errors
+ */
+export class OPNSenseAPIError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public apiResponse?: any
+  ) {
+    super(message);
+    this.name = 'OPNSenseAPIError';
+  }
+}
+
+/**
+ * OPNsense API Client with comprehensive functionality and error handling
+ */
 export class OPNSenseAPIClient {
-  private config: any;
-  private axios: any;
+  private axios: AxiosInstance;
   private debugMode: boolean;
   private recorder?: (call: Omit<APICall, 'id' | 'timestamp'>) => void;
 
-  constructor(config: any) {
-    this.config = config;
+  constructor(private config: {
+    host: string;
+    apiKey: string;
+    apiSecret: string;
+    verifySsl?: boolean;
+    debugMode?: boolean;
+    timeout?: number;
+  }) {
     this.debugMode = config.debugMode || false;
     
-    // Create axios instance
+    // Create axios instance with proper configuration
     this.axios = axios.create({
       baseURL: `${this.config.host}/api`,
       auth: {
@@ -24,34 +46,80 @@ export class OPNSenseAPIClient {
         rejectUnauthorized: this.config.verifySsl !== false
       }),
       timeout: this.config.timeout || 30000,
-      // Don't set default headers - we'll add them per request
+      // Don't set default headers - we'll add them per request type
       validateStatus: () => true // Handle all status codes
     });
 
     // Add request interceptor for debugging
-    this.axios.interceptors.request.use((config: any) => {
-      if (this.debugMode) {
-        console.log('[API Request]', {
-          method: config.method?.toUpperCase(),
-          url: config.url,
-          headers: config.headers,
-          data: config.data
-        });
+    this.axios.interceptors.request.use(
+      (config) => {
+        if (this.debugMode) {
+          console.log('[API Request]', {
+            method: config.method?.toUpperCase(),
+            url: config.url,
+            headers: config.headers,
+            data: config.data
+          });
+        }
+        return config;
+      },
+      (error) => {
+        if (this.debugMode) {
+          console.error('[API Request Error]', error);
+        }
+        return Promise.reject(error);
       }
-      return config;
-    });
+    );
 
-    // Add response interceptor
-    this.axios.interceptors.response.use((response: any) => {
-      if (this.debugMode) {
-        console.log('[API Response]', {
-          status: response.status,
-          statusText: response.statusText,
-          data: response.data
-        });
+    // Add response interceptor for debugging and error handling
+    this.axios.interceptors.response.use(
+      (response) => {
+        if (this.debugMode) {
+          console.log('[API Response]', {
+            status: response.status,
+            statusText: response.statusText,
+            data: response.data
+          });
+        }
+        return response;
+      },
+      (error: AxiosError) => {
+        if (this.debugMode) {
+          console.error('[API Response Error]', {
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            data: error.response?.data
+          });
+        }
+        return Promise.reject(error);
       }
-      return response;
-    });
+    );
+  }
+
+  /**
+   * Extract error message from various API response formats
+   */
+  private extractErrorMessage(data: any): string | null {
+    if (typeof data === 'string') {
+      return data;
+    }
+    if (data?.message) {
+      return data.message;
+    }
+    if (data?.errorMessage) {
+      return data.errorMessage;
+    }
+    if (data?.validations) {
+      if (typeof data.validations === 'string') {
+        return data.validations;
+      }
+      if (typeof data.validations === 'object') {
+        return Object.entries(data.validations)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(', ');
+      }
+    }
+    return null;
   }
 
   /**
@@ -69,9 +137,46 @@ export class OPNSenseAPIClient {
   }
 
   /**
+   * Record an API call if a recorder is set
+   */
+  private recordCall(
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+    path: string,
+    params?: Record<string, any>,
+    payload?: any,
+    response?: any,
+    duration?: number,
+    error?: { code: string; message: string }
+  ): void {
+    if (!this.recorder) return;
+
+    const call: Omit<APICall, 'id' | 'timestamp'> = {
+      method,
+      path,
+      params,
+      payload,
+      duration
+    };
+
+    if (response) {
+      call.response = {
+        status: response.status,
+        data: response.data,
+        headers: response.headers
+      };
+    }
+
+    if (error) {
+      call.error = error;
+    }
+
+    this.recorder(call);
+  }
+
+  /**
    * GET request - NO Content-Type header for OPNsense compatibility
    */
-  async get(path: string): Promise<any> {
+  async get<T = any>(path: string): Promise<T> {
     const startTime = Date.now();
     const response = await this.axios.get(path, {
       headers: {
@@ -87,7 +192,17 @@ export class OPNSenseAPIClient {
         code: 'NOT_FOUND',
         message: `Endpoint not found: ${path}`
       });
-      throw new Error(`Endpoint not found: ${path}`);
+      throw new OPNSenseAPIError(`Endpoint not found: ${path}`, 404);
+    }
+
+    // Handle API errors returned with 200 status
+    if (response.data && response.data.result === 'failed') {
+      const errorMessage = this.extractErrorMessage(response.data) || 'API operation failed';
+      this.recordCall('GET', path, undefined, undefined, response, duration, {
+        code: 'API_FAILED',
+        message: errorMessage
+      });
+      throw new OPNSenseAPIError(errorMessage, response.status, response.data);
     }
 
     if (response.status >= 200 && response.status < 300) {
@@ -95,17 +210,18 @@ export class OPNSenseAPIClient {
       return response.data;
     }
 
+    const errorMessage = this.extractErrorMessage(response.data) || `API error: ${response.status} ${response.statusText}`;
     this.recordCall('GET', path, undefined, undefined, response, duration, {
       code: 'API_ERROR',
-      message: `API error: ${response.status} ${response.statusText}`
+      message: errorMessage
     });
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
+    throw new OPNSenseAPIError(errorMessage, response.status, response.data);
   }
 
   /**
    * POST request - WITH Content-Type header
    */
-  async post(path: string, data: any = {}): Promise<any> {
+  async post<T = any>(path: string, data: any = {}): Promise<T> {
     const startTime = Date.now();
     const response = await this.axios.post(path, data, {
       headers: {
@@ -121,7 +237,17 @@ export class OPNSenseAPIClient {
         code: 'NOT_FOUND',
         message: `Endpoint not found: ${path}`
       });
-      throw new Error(`Endpoint not found: ${path}`);
+      throw new OPNSenseAPIError(`Endpoint not found: ${path}`, 404);
+    }
+
+    // Handle API errors returned with 200 status
+    if (response.data && response.data.result === 'failed') {
+      const errorMessage = this.extractErrorMessage(response.data) || 'API operation failed';
+      this.recordCall('POST', path, undefined, data, response, duration, {
+        code: 'API_FAILED',
+        message: errorMessage
+      });
+      throw new OPNSenseAPIError(errorMessage, response.status, response.data);
     }
 
     if (response.status >= 200 && response.status < 300) {
@@ -129,12 +255,84 @@ export class OPNSenseAPIClient {
       return response.data;
     }
 
+    const errorMessage = this.extractErrorMessage(response.data) || `API error: ${response.status} ${response.statusText}`;
     this.recordCall('POST', path, undefined, data, response, duration, {
       code: 'API_ERROR',
-      message: `API error: ${response.status} ${response.statusText}`
+      message: errorMessage
     });
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
+    throw new OPNSenseAPIError(errorMessage, response.status, response.data);
   }
+
+  /**
+   * PUT request - WITH Content-Type header
+   */
+  async put<T = any>(path: string, data: any = {}): Promise<T> {
+    const startTime = Date.now();
+    const response = await this.axios.put(path, data, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const duration = Date.now() - startTime;
+
+    if (response.status === 404) {
+      this.recordCall('PUT', path, undefined, data, response, duration, {
+        code: 'NOT_FOUND',
+        message: `Endpoint not found: ${path}`
+      });
+      throw new OPNSenseAPIError(`Endpoint not found: ${path}`, 404);
+    }
+
+    if (response.status >= 200 && response.status < 300) {
+      this.recordCall('PUT', path, undefined, data, response, duration);
+      return response.data;
+    }
+
+    const errorMessage = this.extractErrorMessage(response.data) || `API error: ${response.status} ${response.statusText}`;
+    this.recordCall('PUT', path, undefined, data, response, duration, {
+      code: 'API_ERROR',
+      message: errorMessage
+    });
+    throw new OPNSenseAPIError(errorMessage, response.status, response.data);
+  }
+
+  /**
+   * DELETE request
+   */
+  async delete<T = any>(path: string): Promise<T> {
+    const startTime = Date.now();
+    const response = await this.axios.delete(path, {
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    const duration = Date.now() - startTime;
+
+    if (response.status === 404) {
+      this.recordCall('DELETE', path, undefined, undefined, response, duration, {
+        code: 'NOT_FOUND',
+        message: `Endpoint not found: ${path}`
+      });
+      throw new OPNSenseAPIError(`Endpoint not found: ${path}`, 404);
+    }
+
+    if (response.status >= 200 && response.status < 300) {
+      this.recordCall('DELETE', path, undefined, undefined, response, duration);
+      return response.data;
+    }
+
+    const errorMessage = this.extractErrorMessage(response.data) || `API error: ${response.status} ${response.statusText}`;
+    this.recordCall('DELETE', path, undefined, undefined, response, duration, {
+      code: 'API_ERROR',
+      message: errorMessage
+    });
+    throw new OPNSenseAPIError(errorMessage, response.status, response.data);
+  }
+
+  // ===== VLAN METHODS =====
 
   /**
    * Search for VLANs using the working endpoint
@@ -184,25 +382,6 @@ export class OPNSenseAPIClient {
    */
   async applyVlanChanges(): Promise<any> {
     return this.post('/interfaces/vlan_settings/reconfigure');
-  }
-
-  /**
-   * Test connection
-   */
-  async testConnection(): Promise<any> {
-    try {
-      const result = await this.get('/core/firmware/info');
-      return { 
-        success: true, 
-        version: result.product_version,
-        product: result.product_name 
-      };
-    } catch (error: any) {
-      return { 
-        success: false, 
-        error: error.message 
-      };
-    }
   }
 
   // ===== FIREWALL RULE METHODS =====
@@ -440,73 +619,6 @@ export class OPNSenseAPIClient {
     return this.post(`/unbound/settings/delAcl/${uuid}`);
   }
 
-  /**
-   * PUT request - WITH Content-Type header
-   */
-  async put(path: string, data: any = {}): Promise<any> {
-    const startTime = Date.now();
-    const response = await this.axios.put(path, data, {
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
-    });
-
-    const duration = Date.now() - startTime;
-
-    if (response.status === 404) {
-      this.recordCall('PUT', path, undefined, data, response, duration, {
-        code: 'NOT_FOUND',
-        message: `Endpoint not found: ${path}`
-      });
-      throw new Error(`Endpoint not found: ${path}`);
-    }
-
-    if (response.status >= 200 && response.status < 300) {
-      this.recordCall('PUT', path, undefined, data, response, duration);
-      return response.data;
-    }
-
-    this.recordCall('PUT', path, undefined, data, response, duration, {
-      code: 'API_ERROR',
-      message: `API error: ${response.status} ${response.statusText}`
-    });
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
-  }
-
-  /**
-   * DELETE request
-   */
-  async delete(path: string): Promise<any> {
-    const startTime = Date.now();
-    const response = await this.axios.delete(path, {
-      headers: {
-        'Accept': 'application/json'
-      }
-    });
-
-    const duration = Date.now() - startTime;
-
-    if (response.status === 404) {
-      this.recordCall('DELETE', path, undefined, undefined, response, duration, {
-        code: 'NOT_FOUND',
-        message: `Endpoint not found: ${path}`
-      });
-      throw new Error(`Endpoint not found: ${path}`);
-    }
-
-    if (response.status >= 200 && response.status < 300) {
-      this.recordCall('DELETE', path, undefined, undefined, response, duration);
-      return response.data;
-    }
-
-    this.recordCall('DELETE', path, undefined, undefined, response, duration, {
-      code: 'API_ERROR',
-      message: `API error: ${response.status} ${response.statusText}`
-    });
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
-  }
-
   // ===== ARP TABLE METHODS =====
 
   /**
@@ -514,6 +626,13 @@ export class OPNSenseAPIClient {
    */
   async getArpTable(): Promise<any> {
     return this.get('/diagnostics/interface/getArp');
+  }
+
+  /**
+   * Get network interfaces
+   */
+  async getInterfaces(): Promise<any> {
+    return this.get('/interfaces/overview/list');
   }
 
   /**
@@ -543,42 +662,83 @@ export class OPNSenseAPIClient {
     return this.post('/diagnostics/interface/setArp', data);
   }
 
+  // ===== COMMON UTILITY METHODS =====
+
   /**
-   * Record an API call if a recorder is set
+   * Test connection
    */
-  private recordCall(
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-    path: string,
-    params?: Record<string, any>,
-    payload?: any,
-    response?: any,
-    duration?: number,
-    error?: { code: string; message: string }
-  ): void {
-    if (!this.recorder) return;
-
-    const call: Omit<APICall, 'id' | 'timestamp'> = {
-      method,
-      path,
-      params,
-      payload,
-      duration
-    };
-
-    if (response) {
-      call.response = {
-        status: response.status,
-        data: response.data,
-        headers: response.headers
+  async testConnection(): Promise<{ success: boolean; version?: string; product?: string; error?: string }> {
+    try {
+      const result = await this.get<any>('/core/firmware/info');
+      return { 
+        success: true, 
+        version: result.product_version,
+        product: result.product_name 
+      };
+    } catch (error: any) {
+      return { 
+        success: false, 
+        error: error.message 
       };
     }
-
-    if (error) {
-      call.error = error;
-    }
-
-    this.recorder(call);
   }
+
+  /**
+   * Get service status
+   */
+  async getServiceStatus(serviceName: string): Promise<{ status: 'running' | 'stopped'; pid?: number }> {
+    return this.post('/core/service/status', { name: serviceName });
+  }
+
+  /**
+   * Control service (start/stop/restart)
+   */
+  async controlService(serviceName: string, action: 'start' | 'stop' | 'restart'): Promise<{ response: string }> {
+    return this.post('/core/service/' + action, { name: serviceName });
+  }
+}
+
+// Type definitions for common API patterns
+export interface SearchParams {
+  current?: number;
+  rowCount?: number;
+  sort?: Record<string, string>;
+  searchPhrase?: string;
+}
+
+export interface SearchResult<T> {
+  total: number;
+  rowCount: number;
+  current: number;
+  rows: T[];
+}
+
+export interface AddItemResult {
+  result: string;
+  uuid?: string;
+  validations?: Record<string, string>;
+}
+
+export interface SetItemResult {
+  result: string;
+  validations?: Record<string, string>;
+}
+
+export interface DeleteResult {
+  result: string;
+  message?: string;
+}
+
+export interface ApplyResult {
+  status: string;
+}
+
+export interface ReconfigureResult {
+  status: string;
+}
+
+export interface ToggleResult {
+  result: string;
 }
 
 // Export for both TypeScript and JavaScript usage

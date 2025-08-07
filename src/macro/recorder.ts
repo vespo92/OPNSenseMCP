@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import * as jsonpath from 'jsonpath';
 import { 
   APICall, 
   MacroRecording, 
@@ -235,19 +236,49 @@ export class MacroRecorder implements IMacroRecorder {
     parameters: MacroParameter[], 
     values: Record<string, any>
   ): APICall {
-    let callStr = JSON.stringify(call);
+    // Deep clone the call object
+    const substitutedCall = JSON.parse(JSON.stringify(call));
     
-    for (const param of parameters) {
-      const value = values[param.name] ?? param.defaultValue;
-      if (value !== undefined) {
-        // Simple string replacement for now
-        // TODO: Use proper JSONPath for more robust substitution
-        const placeholder = `{{${param.name}}}`;
-        callStr = callStr.replace(new RegExp(placeholder, 'g'), JSON.stringify(value));
+    // Create a context object that includes all values plus any response data
+    const context = {
+      ...values,
+      $: values  // Allow $ as root context for JSONPath expressions
+    };
+    
+    // Convert call to string for pattern matching
+    const callStr = JSON.stringify(substitutedCall);
+    
+    // Find all template expressions in the call
+    const templateRegex = /\{\{([^}]+)\}\}/g;
+    let modifiedStr = callStr;
+    let match;
+    
+    while ((match = templateRegex.exec(callStr)) !== null) {
+      const expression = match[1].trim();
+      let value;
+      
+      if (expression.startsWith('$')) {
+        // JSONPath expression
+        try {
+          const results = jsonpath.query(context, expression);
+          value = results.length > 0 ? results[0] : match[0]; // Keep original if no match
+        } catch (error) {
+          console.warn(`Invalid JSONPath expression: ${expression}`, error);
+          value = match[0]; // Keep original on error
+        }
+      } else {
+        // Simple variable substitution
+        const param = parameters.find(p => p.name === expression);
+        value = values[expression] ?? param?.defaultValue;
+      }
+      
+      if (value !== undefined && value !== match[0]) {
+        // Replace the template with the value
+        modifiedStr = modifiedStr.replace(match[0], JSON.stringify(value));
       }
     }
     
-    return JSON.parse(callStr);
+    return JSON.parse(modifiedStr);
   }
   
   // Advanced features

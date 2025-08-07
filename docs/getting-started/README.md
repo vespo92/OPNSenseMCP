@@ -1,139 +1,158 @@
-# Getting Started with OPNSense MCP
+# Getting Started
 
-This guide will help you get the OPNSense MCP server up and running with Claude Desktop.
+Welcome to OPNSense MCP Server! This section will help you get up and running quickly.
 
-## Prerequisites
+## 📚 Documentation Overview
 
-Before you begin, ensure you have:
+### [Installation Guide](installation.md)
+Complete setup instructions including:
+- Prerequisites and requirements
+- OPNsense API configuration
+- Step-by-step installation
+- Platform-specific instructions
+- Post-installation verification
 
-- ✅ Node.js 18 or higher installed
-- ✅ Access to an OPNsense firewall
-- ✅ Admin credentials for OPNsense
-- ✅ Claude Desktop installed (for AI integration)
+**Start here if:** You haven't installed the server yet.
 
-## Step 1: Enable OPNsense API
+### [Quick Start Guide](quickstart.md)
+Get running in 5 minutes:
+- Fast setup for Claude Desktop
+- Your first commands
+- Common tasks and examples
+- Tips for best results
 
-1. Log into your OPNsense web interface
-2. Navigate to **System → Settings → Administration**
-3. Scroll to **API** section
-4. Check **Enable API**
-5. Click **Save**
+**Start here if:** You've installed the server and want to start using it immediately.
 
-## Step 2: Create API Credentials
+### [Configuration Guide](configuration.md)
+Detailed configuration options:
+- Environment variables
+- Claude Desktop setup
+- SSE mode configuration
+- Cache setup
+- Performance tuning
+- Security settings
 
-1. Go to **System → Access → Users**
-2. Click **Add** to create a new user (or edit existing)
-3. Set username (e.g., `mcp_api`)
-4. Under **API keys**, click **+** to generate
-5. Save the key and secret (you'll need these!)
+**Start here if:** You need to customize the server for your environment.
 
-## Step 3: Install OPNSense MCP
+## 🚀 Typical Setup Flow
+
+1. **Install OPNSense MCP Server**
+   - Follow the [Installation Guide](installation.md)
+   - Takes about 10-15 minutes
+
+2. **Configure Claude Desktop**
+   - See [Quick Start Guide](quickstart.md#step-2-configure-claude-desktop)
+   - Takes 2-3 minutes
+
+3. **Test Basic Functions**
+   - Try the examples in [Quick Start](quickstart.md#step-4-test-it-out)
+   - Verify everything works
+
+4. **Explore Features**
+   - Check out [Feature Guides](../guides/)
+   - Learn advanced capabilities
+
+## 💡 Quick Setup (TL;DR)
+
+If you're experienced and just need the commands:
 
 ```bash
-# Clone the repository
-git clone https://github.com/VinSpo/opnsense-mcp.git
+# Clone and build
+git clone https://github.com/VinSpo/opnsense-mcp
 cd opnsense-mcp
-
-# Install dependencies
 npm install
-
-# Build the project
 npm run build
+
+# Configure
+cp .env.example .env
+# Edit .env with your OPNsense credentials
+
+# Test
+npm start
+
+# Add to Claude Desktop config and restart Claude
 ```
 
-## Step 4: Configure Environment
+## 🔧 Prerequisites Checklist
 
-1. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
+Before starting, ensure you have:
 
-2. Edit `.env` with your settings:
-   ```env
-   # Required settings
-   OPNSENSE_HOST=https://192.168.1.1
-   OPNSENSE_API_KEY=your_api_key_here
-   OPNSENSE_API_SECRET=your_api_secret_here
-   OPNSENSE_VERIFY_SSL=false  # Set to true if using valid SSL
+- [ ] Node.js 18+ installed
+- [ ] OPNsense firewall accessible
+- [ ] Admin access to OPNsense
+- [ ] API enabled in OPNsense
+- [ ] Claude Desktop installed (optional)
 
-   # Optional - Infrastructure as Code
-   IAC_ENABLED=true
-   ```
+## 📖 What Can You Do?
 
-## Step 5: Test Connection
+Once set up, you can ask Claude to:
 
-Run a quick test to ensure everything works:
+### Network Management
+- "Create a guest network on VLAN 50"
+- "Show me all configured VLANs"
+- "Set up a DMZ network"
 
-```bash
-# Test the connection
-npm run test:api
+### Device Discovery
+- "Find all Apple devices"
+- "Show devices that connected today"
+- "Is Kyle's laptop online?"
 
-# You should see:
-# ✓ Connected to OPNsense
-# ✓ API authentication successful
-```
+### Security
+- "Block social media websites"
+- "Create firewall rule to block port 445"
+- "Show me all current firewall rules"
 
-## Step 6: Configure Claude Desktop
+### Infrastructure
+- "Deploy my standard office network setup"
+- "Backup the current configuration"
+- "Set up HAProxy for load balancing"
 
-1. Find your Claude Desktop config file:
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Linux: `~/.config/claude/claude_desktop_config.json`
+## 🆘 Getting Help
 
-2. Add the OPNSense MCP server:
-   ```json
-   {
-     "mcpServers": {
-       "opnsense": {
-         "command": "node",
-         "args": ["dist/index.js"],
-         "cwd": "C:\\Users\\YourName\\path\\to\\opnsense-mcp",
-         "env": {
-           "OPNSENSE_HOST": "https://192.168.1.1",
-           "OPNSENSE_API_KEY": "your_key",
-           "OPNSENSE_API_SECRET": "your_secret",
-           "OPNSENSE_VERIFY_SSL": "false"
-         }
-       }
-     }
-   }
-   ```
+### If Something Goes Wrong
 
-3. Restart Claude Desktop
+1. Check [Troubleshooting Guide](../troubleshooting/common-issues.md)
+2. Review your [Configuration](configuration.md)
+3. Check the logs: `npm start` in debug mode
+4. Search [GitHub Issues](https://github.com/VinSpo/opnsense-mcp/issues)
+5. Ask in [Discussions](https://github.com/VinSpo/opnsense-mcp/discussions)
 
-## Step 7: Verify Installation
+### Common First-Time Issues
 
-In Claude Desktop, try these commands:
+**Can't connect to OPNsense**
+- Is the API enabled?
+- Are credentials correct?
+- Is SSL verification configured properly?
 
-- "Show me the network interfaces"
-- "List all VLANs"
-- "What devices are on my network?"
+**Claude doesn't see the server**
+- Did you restart Claude Desktop?
+- Is the path in config absolute?
+- Check for JSON syntax errors
 
-## 🎉 Success!
+**Commands don't work**
+- Is the server running?
+- Check user permissions in OPNsense
+- Review error messages in logs
 
-You're now ready to manage your OPNsense firewall with AI assistance!
+## 📚 Next Steps
 
-## Next Steps
+After getting started:
 
-- Read about [Infrastructure as Code](../IaC-ARCHITECTURE.md)
-- Explore [usage examples](../../examples/)
-- Learn about [DNS blocking](../dns/DNS-QUICKSTART.md)
+1. **Learn Core Features**
+   - [VLAN Management](../guides/vlan-management.md)
+   - [Firewall Rules](../guides/firewall-rules.md)
+   - [DNS Blocking](../guides/dns-blocking.md)
 
-## Common Setup Issues
+2. **Explore Advanced Features**
+   - [Infrastructure as Code](../iac/overview.md)
+   - [HAProxy Configuration](../guides/haproxy.md)
+   - [Backup & Restore](../guides/backup-restore.md)
 
-### "Connection Refused"
-- Ensure OPNsense API is enabled
-- Check firewall isn't blocking API port (usually 443)
-- Verify the host URL includes https://
+3. **Check Examples**
+   - [Basic Examples](../../examples/basic/)
+   - [Advanced Patterns](../../examples/patterns/)
+   - [IaC Templates](../iac/examples/)
 
-### "Authentication Failed"
-- API keys must be base64 encoded in OPNsense
-- Ensure no spaces in credentials
-- User needs appropriate permissions
+---
 
-### "Module Not Found"
-- Run `npm run build` before starting
-- Ensure Node.js 18+ is installed
-- Check all dependencies with `npm list`
-
-Need help? Check our [Troubleshooting Guide](../troubleshooting/README.md) or [open an issue](https://github.com/VinSpo/opnsense-mcp/issues).
+**Ready to start?** → [Installation Guide](installation.md)

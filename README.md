@@ -1,120 +1,61 @@
 # OPNSense MCP Server
 
-A Model Context Protocol (MCP) server for managing OPNsense firewalls with Infrastructure as Code (IaC) capabilities.
-
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/VinSpo/opnsense-mcp/releases)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-orange)](https://modelcontextprotocol.io)
 
 <a href="https://glama.ai/mcp/servers/@vespo92/OPNSenseMCP">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/@vespo92/OPNSenseMCP/badge" alt="OPNSense Server MCP server" />
 </a>
 
-## Features
-=======
-![Version](https://img.shields.io/badge/version-0.7.0-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![MCP](https://img.shields.io/badge/MCP-Compatible-orange)
+Manage your OPNsense firewall through natural language with Claude, using the Model Context Protocol (MCP).
 
+## What is this?
 
-## 🚀 Features
+OPNSense MCP Server enables you to control your OPNsense firewall using conversational AI. Instead of navigating complex firewall interfaces, simply tell Claude what you want to do.
 
-- **Complete OPNsense API Integration** - Manage VLANs, firewall rules, services, and more
-- **ARP Table Management** - View and search ARP entries, find devices by IP/MAC/hostname
-- **Infrastructure as Code** - Deploy and manage network infrastructure declaratively
-- **State Management** - Track resource state with rollback capabilities
-- **Caching Support** - Redis and PostgreSQL integration for performance
-- **DNS Blocking** - Built-in DNS blocklist management
-- **HAProxy Support** - Full HAProxy configuration and management
-- **Backup & Restore** - Configuration backup management
-- **Dual Transport Support** - STDIO for Claude Desktop, SSE for agents/containers
+**Example interactions:**
+- "Create a guest network on VLAN 50"
+- "Block social media sites on the network"
+- "Find all devices connected in the last hour"
+- "Set up port forwarding for my Minecraft server"
 
-## 📋 Prerequisites
+## ✨ Key Features
 
-- Node.js 18+ 
+- **Network Management** - VLANs, interfaces, firewall rules
+- **Device Discovery** - ARP tables, DHCP leases, network scanning
+- **DNS Filtering** - Block unwanted domains and categories
+- **HAProxy** - Load balancing and reverse proxy configuration
+- **Infrastructure as Code** - Declarative network deployments
+- **Backup & Restore** - Configuration management
+- **Dual Transport** - Works with Claude Desktop and as HTTP server
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+
 - OPNsense firewall with API access enabled
-- (Optional) Redis for caching
-- (Optional) PostgreSQL for persistent cache
+- Claude Desktop (for desktop integration)
 
-## 🛠️ Installation
+### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/vespo92/OPNSenseMCP
+# Clone and install
+git clone https://github.com/VinSpo/opnsense-mcp
 cd opnsense-mcp
-
-# Install dependencies
 npm install
-
-# Build the project
 npm run build
 
-# Copy and configure environment
+# Configure credentials
 cp .env.example .env
-# Edit .env with your OPNsense credentials
+# Edit .env with your OPNsense API credentials
 ```
 
-## 🚀 Transport Modes
+### Run with Claude Desktop
 
-The server supports two transport modes:
+Add to your Claude Desktop configuration:
 
-### STDIO Mode (Default)
-For direct integration with Claude Desktop:
-```bash
-npm start                  # or npm run start:stdio
-```
-
-### SSE Mode
-For HTTP-based integration with agents and containers:
-```bash
-npm run start:sse          # Starts on port 3000
-npm run start:sse -- --port 8080  # Custom port
-```
-
-**SSE Endpoints:**
-- `GET /sse` - SSE connection endpoint
-- `POST /messages` - Message handling
-- `GET /health` - Health check
-
-See [SSE Deployment Guide](docs/SSE-DEPLOYMENT.md) for container deployment.
-
-## ⚙️ Configuration
-
-The server supports multiple configuration methods:
-
-### Environment Variables (Auto-configuration)
-The server automatically attempts to connect using environment variables on startup. Create a `.env` file:
-
-```env
-# Required
-OPNSENSE_HOST=https://192.168.1.1  # or just 192.168.1.1:55443
-OPNSENSE_API_KEY=your_api_key
-OPNSENSE_API_SECRET=your_api_secret
-
-# Optional
-IAC_ENABLED=true
-ENABLE_CACHE=false
-REDIS_HOST=localhost
-POSTGRES_HOST=localhost
-```
-
-### Manual Configuration
-If environment variables are not set or connection fails, use the `configure` tool:
-```javascript
-// Configure connection manually
-await configure({
-  host: "https://192.168.1.1",
-  apiKey: "your_api_key",
-  apiSecret: "your_api_secret",
-  verifySsl: true
-});
-```
-
-## 🚦 Quick Start
-
-```bash
-# Start the MCP server
-npm start
-
-# Or use with Claude Desktop
-# Add to claude_desktop_config.json:
+```json
 {
   "mcpServers": {
     "opnsense": {
@@ -122,177 +63,84 @@ npm start
       "args": ["dist/index.js"],
       "cwd": "/path/to/opnsense-mcp",
       "env": {
-        "OPNSENSE_HOST": "https://192.168.1.1:55443",
-        "OPNSENSE_API_KEY": "your_api_key",
-        "OPNSENSE_API_SECRET": "your_api_secret",
-        "OPNSENSE_VERIFY_SSL": "true"
+        "OPNSENSE_HOST": "192.168.1.1",
+        "OPNSENSE_API_KEY": "your_key",
+        "OPNSENSE_API_SECRET": "your_secret"
       }
     }
   }
 }
 ```
+
+Then restart Claude Desktop and start chatting!
 
 ## 📚 Documentation
 
-- [Getting Started Guide](docs/getting-started/README.md)
-- [API Reference](docs/api/README.md)
-- [IaC Architecture](docs/IaC-ARCHITECTURE.md)
-- [Troubleshooting](docs/troubleshooting/README.md)
+- **[Getting Started Guide](docs/getting-started/)** - Installation and setup
+- **[Feature Guides](docs/guides/)** - Learn specific features
+- **[IaC Documentation](docs/iac/)** - Infrastructure as Code
+- **[API Reference](docs/api-reference/)** - Complete tool reference
+- **[Troubleshooting](docs/troubleshooting/)** - Common issues and solutions
 
-### Infrastructure as Code Example
+## 💡 Example Use Cases
 
-Deploy network infrastructure declaratively:
-
-```json
-{
-  "name": "home-network",
-  "resources": [{
-    "type": "opnsense:network:vlan",
-    "id": "guest-vlan",
-    "name": "Guest Network",
-    "properties": {
-      "interface": "igc3",
-      "tag": 10,
-      "description": "Isolated guest network"
-    }
-  }]
-}
+### Create a Secure Guest Network
+```
+"Create a guest network on VLAN 20 with internet access only"
 ```
 
-## 📖 Usage Examples
-
-### Managing VLANs
-```javascript
-// Create a new VLAN for IoT devices
-const vlan = {
-  type: "opnsense:network:vlan",
-  properties: {
-    interface: "igc3",
-    tag: 20,
-    description: "IoT Network - Isolated"
-  }
-};
+### Find Devices
+```  
+"Show me all devices from Apple on my network"
 ```
 
-### Firewall Rules
-```javascript
-// Block all traffic from guest network to main LAN
-const rule = {
-  type: "opnsense:firewall:rule",
-  properties: {
-    action: "block",
-    interface: "guest_vlan",
-    source: "guest_vlan_subnet",
-    destination: "lan_subnet",
-    description: "Block guest to LAN"
-  }
-};
+### Block Unwanted Content
+```
+"Block gambling and adult content sites"
 ```
 
-### DNS Blocking
-```javascript
-// Block social media sites
-const blocklist = {
-  type: "opnsense:dns:blocklist",
-  properties: {
-    domains: ["facebook.com", "twitter.com", "tiktok.com"],
-    description: "Social media block",
-    enabled: true
-  }
-};
+### Set Up Services
+```
+"Configure HAProxy to load balance my web servers"
 ```
 
-### Complete Network Setup Example
-```javascript
-// Deploy a complete guest network with isolation
-const guestNetwork = {
-  name: "guest-network-setup",
-  resources: [
-    {
-      type: "opnsense:network:vlan",
-      id: "guest-vlan",
-      properties: {
-        interface: "igc3",
-        tag: 10,
-        description: "Guest WiFi Network"
-      }
-    },
-    {
-      type: "opnsense:firewall:rule",
-      id: "guest-internet",
-      properties: {
-        action: "pass",
-        interface: "guest_vlan",
-        source: "guest_vlan_subnet",
-        destination: "any",
-        description: "Allow guest internet"
-      }
-    },
-    {
-      type: "opnsense:firewall:rule",
-      id: "block-guest-lan",
-      properties: {
-        action: "block",
-        interface: "guest_vlan",
-        source: "guest_vlan_subnet",
-        destination: "lan_subnet",
-        description: "Isolate guest from LAN"
-      }
-    }
-  ]
-};
+More examples in the [examples/](examples/) directory.
+
+## 🛠️ Advanced Usage
+
+### Server Mode (for agents and automation)
+```bash
+npm run start:sse  # HTTP server on port 3000
 ```
 
-### Using with Claude Desktop
-Once configured in Claude Desktop, you can ask Claude to:
-- "Create a new VLAN for my smart home devices"
-- "Show me all devices on my guest network"
-- "Block pornhub.com on my network"
-- "Set up a Minecraft server VLAN with proper firewall rules"
-- "Find Kyle's laptop on the network"
-- "Create a backup of my firewall configuration"
+### Infrastructure as Code
+Deploy entire network configurations declaratively. See [IaC documentation](docs/iac/).
 
-## 🔧 Troubleshooting
-
-### Common Issues
-
-**Connection refused errors**
-- Ensure OPNsense API is enabled (System > Settings > Administration > API)
-- Check firewall rules allow API access from your host
-- Verify SSL settings match your configuration
-
-**Authentication failures**
-- API key and secret must be base64 encoded in OPNsense
-- Ensure no trailing spaces in credentials
-- Check user has appropriate permissions
-
-**VLAN creation fails**
-- Verify the physical interface exists and is not in use
-- Check VLAN tag is within valid range (1-4094)
-- Ensure interface supports VLAN tagging
-
-**Build errors**
-- Run `npm ci` for clean dependency installation
-- Ensure Node.js 18+ is installed
-- Check TypeScript version matches requirements
-
-For more detailed troubleshooting, see our [Troubleshooting Guide](docs/troubleshooting/README.md).
-
-## 🗺️ Roadmap
-- [ ] Unified IaC orchestrator
-- [ ] Web UI for deployment management
-- [ ] Multi-firewall support
+### Custom Patterns
+Build reusable network templates. See [pattern examples](examples/patterns/).
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Development Setup
+```bash
+npm install
+npm run dev  # Development mode with hot reload
+```
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
-## 🙏 Acknowledgments
+## 🔗 Links
 
-- Built for the MCP (Model Context Protocol) ecosystem
-- Inspired by Pulumi and SST infrastructure patterns
-- Part of a larger vision for home infrastructure automation
+- [Documentation](docs/)
+- [Examples](examples/)
+- [Issues](https://github.com/VinSpo/opnsense-mcp/issues)
+- [Discussions](https://github.com/VinSpo/opnsense-mcp/discussions)
+- [Model Context Protocol](https://modelcontextprotocol.io)
+
+---
+
+Built with ❤️ for the MCP ecosystem

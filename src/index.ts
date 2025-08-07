@@ -35,6 +35,16 @@ import { HAProxyResource } from './resources/services/haproxy/index.js';
 import { MacroRecorder } from './macro/index.js';
 import { ArpTableResource } from './resources/network/arp.js';
 
+// Import IaC components
+import { resourceRegistry } from './resources/registry.js';
+import { DeploymentPlanner } from './deployment/planner.js';
+import { ExecutionEngine } from './execution/engine.js';
+import { ResourceStateStore } from './state/store.js';
+
+// Import IaC resource definitions to register them
+import './resources/network/vlan-iac.js';
+import './resources/firewall/rule-iac.js';
+
 // Configuration schema
 const ConfigSchema = z.object({
   host: z.string().url(),
@@ -55,13 +65,21 @@ class OPNSenseMCPServer {
   private haproxyResource: HAProxyResource | null = null;
   private macroRecorder: MacroRecorder | null = null;
   private arpResource: ArpTableResource | null = null;
+  
+  // IaC components
+  private planner: DeploymentPlanner | null = null;
+  private engine: ExecutionEngine | null = null;
+  private stateStore: ResourceStateStore | null = null;
+  private iacEnabled: boolean;
 
   constructor() {
+    this.iacEnabled = process.env.IAC_ENABLED !== 'false';
+    
     this.server = new Server(
       {
         name: 'opnsense-mcp',
         version: '0.7.0',
-        description: 'OPNsense firewall management via MCP with ARP table, DNS filtering and HAProxy support'
+        description: 'OPNsense firewall management via MCP with IaC, ARP table, DNS filtering and HAProxy support'
       },
       {
         capabilities: {
@@ -146,6 +164,15 @@ class OPNSenseMCPServer {
         } catch (error) {
           logger.warn('Cache manager disabled:', error instanceof Error ? error.message : 'Unknown error');
         }
+      }
+      
+      // Initialize IaC components if enabled
+      if (this.iacEnabled) {
+        logger.info('Initializing IaC components...');
+        this.stateStore = new ResourceStateStore();
+        this.planner = new DeploymentPlanner();
+        this.engine = new ExecutionEngine(this.client);
+        logger.info('IaC components initialized');
       }
 
       return true;
@@ -987,7 +1014,95 @@ class OPNSenseMCPServer {
             },
             required: ['path']
           }
-        }
+        },
+        
+        // IaC Tools (only if enabled)
+        ...(this.iacEnabled ? [
+          {
+            name: 'iac_plan_deployment',
+            description: 'Plan infrastructure deployment changes',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                name: { 
+                  type: 'string',
+                  description: 'Deployment name'
+                },
+                resources: { 
+                  type: 'array',
+                  description: 'Resources to deploy',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      type: { type: 'string' },
+                      id: { type: 'string' },
+                      name: { type: 'string' },
+                      properties: { type: 'object' }
+                    },
+                    required: ['type', 'id', 'name', 'properties']
+                  }
+                },
+                dryRun: { 
+                  type: 'boolean',
+                  default: true,
+                  description: 'Preview changes without applying'
+                }
+              },
+              required: ['name', 'resources']
+            }
+          },
+          {
+            name: 'iac_apply_deployment',
+            description: 'Apply a deployment plan',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                planId: { 
+                  type: 'string',
+                  description: 'Plan ID from plan_deployment'
+                },
+                autoApprove: { 
+                  type: 'boolean',
+                  default: false,
+                  description: 'Skip confirmation'
+                }
+              },
+              required: ['planId']
+            }
+          },
+          {
+            name: 'iac_destroy_deployment',
+            description: 'Destroy deployed resources',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                deploymentId: { 
+                  type: 'string',
+                  description: 'Deployment to destroy'
+                },
+                force: { 
+                  type: 'boolean',
+                  default: false,
+                  description: 'Force destruction'
+                }
+              },
+              required: ['deploymentId']
+            }
+          },
+          {
+            name: 'iac_list_resource_types',
+            description: 'List available resource types',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                category: {
+                  type: 'string',
+                  description: 'Filter by category (network, firewall, services)'
+                }
+              }
+            }
+          }
+        ] : [])
       ]
     }));
 
@@ -1059,7 +1174,29 @@ class OPNSenseMCPServer {
           name: 'ARP Table',
           description: 'ARP table entries showing IP to MAC mappings',
           mimeType: 'application/json'
-        }
+        },
+        
+        // IaC Resources (only if enabled)
+        ...(this.iacEnabled ? [
+          {
+            uri: 'opnsense://iac/resources',
+            name: 'IaC Resource Types',
+            description: 'Available infrastructure resource types',
+            mimeType: 'application/json'
+          },
+          {
+            uri: 'opnsense://iac/deployments',
+            name: 'Deployments',
+            description: 'Current infrastructure deployments',
+            mimeType: 'application/json'
+          },
+          {
+            uri: 'opnsense://iac/state',
+            name: 'Resource State',
+            description: 'Current state of managed resources',
+            mimeType: 'application/json'
+          }
+        ] : [])
       ]
     }));
 
@@ -1068,6 +1205,17 @@ class OPNSenseMCPServer {
       await this.ensureInitialized();
 
       const uri = request.params.uri;
+      
+      // Handle IaC resources
+      if (uri.startsWith('opnsense://iac/')) {
+        if (!this.iacEnabled) {
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            'IaC features are disabled. Set IAC_ENABLED=true to enable.'
+          );
+        }
+        return this.handleIaCResourceRead(uri);
+      }
 
       switch (uri) {
         case 'opnsense://vlans': {
@@ -1244,6 +1392,17 @@ class OPNSenseMCPServer {
     // Handle tool calls
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
+      
+      // Route IaC tools
+      if (name.startsWith('iac_')) {
+        if (!this.iacEnabled) {
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            'IaC features are disabled. Set IAC_ENABLED=true to enable.'
+          );
+        }
+        return this.handleIaCTool(name, args);
+      }
 
       switch (name) {
         case 'configure': {
@@ -1293,6 +1452,13 @@ class OPNSenseMCPServer {
                 } catch (error) {
                   logger.debug('Cache not available');
                 }
+              }
+              
+              // Re-initialize IaC components if enabled
+              if (this.iacEnabled) {
+                this.stateStore = new ResourceStateStore();
+                this.planner = new DeploymentPlanner();
+                this.engine = new ExecutionEngine(this.client);
               }
               
               return {
@@ -3102,6 +3268,263 @@ class OPNSenseMCPServer {
       logger.info(`OPNsense MCP server running on SSE (port: ${transportOptions.port || 3000})`);
       logger.info('Waiting for SSE client connections...');
     }
+  }
+  
+  // IaC Handler Methods
+  private async handleIaCResourceRead(uri: string) {
+    if (!this.iacEnabled) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        'IaC features are disabled'
+      );
+    }
+
+    switch (uri) {
+      case 'opnsense://iac/resources': {
+        const types = resourceRegistry.listResourceTypes();
+        return {
+          contents: [{
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              types,
+              definitions: resourceRegistry.exportDefinitions()
+            }, null, 2)
+          }]
+        };
+      }
+      
+      case 'opnsense://iac/deployments': {
+        if (!this.stateStore) {
+          throw new McpError(ErrorCode.InternalError, 'State store not initialized');
+        }
+        const deployments = await this.stateStore.listDeployments();
+        return {
+          contents: [{
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(deployments, null, 2)
+          }]
+        };
+      }
+      
+      case 'opnsense://iac/state': {
+        if (!this.stateStore) {
+          throw new McpError(ErrorCode.InternalError, 'State store not initialized');
+        }
+        const state = await this.stateStore.getCurrentState();
+        return {
+          contents: [{
+            uri,
+            mimeType: 'application/json',
+            text: JSON.stringify(state, null, 2)
+          }]
+        };
+      }
+      
+      default:
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Unknown IaC resource: ${uri}`
+        );
+    }
+  }
+  
+  private async handleIaCTool(name: string, args: any) {
+    if (!this.planner || !this.engine || !this.stateStore) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        'IaC components not initialized'
+      );
+    }
+
+    switch (name) {
+      case 'iac_plan_deployment':
+        return this.planDeployment(args);
+      
+      case 'iac_apply_deployment':
+        return this.applyDeployment(args);
+      
+      case 'iac_destroy_deployment':
+        return this.destroyDeployment(args);
+      
+      case 'iac_list_resource_types':
+        return this.listResourceTypes(args);
+      
+      default:
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Unknown IaC tool: ${name}`
+        );
+    }
+  }
+  
+  private async planDeployment(args: any) {
+    // Create resource instances
+    const resources = args.resources.map((r: any) => 
+      resourceRegistry.createResource(r.type, r.id, r.name, r.properties)
+    );
+
+    // Get current state
+    const currentState = await this.stateStore!.getDeploymentState(args.name);
+    const currentResourcesArray = currentState?.resources 
+      ? Object.values(currentState.resources)
+      : [];
+
+    // Create plan
+    const plan = await this.planner!.planDeployment(
+      args.name,
+      resources,
+      currentResourcesArray
+    );
+
+    // Store plan for later execution
+    await this.stateStore!.storePlan(plan);
+
+    return {
+      content: [{
+        type: 'text',
+        text: this.formatPlan(plan)
+      }]
+    };
+  }
+
+  private async applyDeployment(args: any) {
+    // Retrieve plan
+    const plan = await this.stateStore!.getPlan(args.planId);
+    if (!plan) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `Plan not found: ${args.planId}`
+      );
+    }
+
+    // Execute plan
+    const result = await this.engine!.execute(plan, {
+      dryRun: false,
+      parallel: true,
+      maxConcurrency: 5
+    });
+
+    // Update state
+    if (result.success) {
+      await this.stateStore!.updateDeploymentState(plan.name, result);
+    }
+
+    return {
+      content: [{
+        type: 'text',
+        text: this.formatExecutionResult(result)
+      }]
+    };
+  }
+
+  private async destroyDeployment(args: any) {
+    const deployment = await this.stateStore!.getDeploymentState(args.deploymentId);
+    if (!deployment) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `Deployment not found: ${args.deploymentId}`
+      );
+    }
+
+    // Create destruction plan
+    const resourcesArray = Object.values(deployment.resources);
+    const plan = await this.planner!.planDestruction(
+      args.deploymentId,
+      resourcesArray
+    );
+
+    // Execute destruction
+    const result = await this.engine!.execute(plan, {
+      dryRun: false,
+      force: args.force
+    });
+
+    // Clean up state if successful
+    if (result.success) {
+      await this.stateStore!.deleteDeployment(args.deploymentId);
+    }
+
+    return {
+      content: [{
+        type: 'text',
+        text: `Deployment ${args.deploymentId} destroyed successfully`
+      }]
+    };
+  }
+
+  private async listResourceTypes(args: any) {
+    const types = resourceRegistry.listResourceTypes();
+    const filtered = args.category 
+      ? types.filter(t => t.startsWith(args.category))
+      : types;
+    
+    return {
+      content: [{
+        type: 'text',
+        text: filtered.join('\n')
+      }]
+    };
+  }
+  
+  private formatPlan(plan: any): string {
+    let output = `Deployment Plan: ${plan.name}\n`;
+    output += `Plan ID: ${plan.id}\n\n`;
+    
+    output += `Summary:\n`;
+    output += `  + Create: ${plan.summary.create}\n`;
+    output += `  ~ Update: ${plan.summary.update}\n`;
+    output += `  - Delete: ${plan.summary.delete}\n`;
+    output += `  [REPLACE] Replace: ${plan.summary.replace}\n\n`;
+    
+    output += `Execution Waves:\n`;
+    plan.executionWaves.forEach((wave: any) => {
+      output += `\nWave ${wave.wave} (${wave.estimatedTime}s):\n`;
+      wave.changes.forEach((change: any) => {
+        const symbolMap: Record<string, string> = {
+          create: '+',
+          update: '~',
+          delete: '-',
+          replace: '[R]'
+        };
+        const symbol = symbolMap[change.type as keyof typeof symbolMap] || '?';
+        output += `  ${symbol} ${change.resource.type} "${change.resource.name}"\n`;
+      });
+    });
+    
+    if (plan.risks && plan.risks.length > 0) {
+      output += `\nRisks:\n`;
+      plan.risks.forEach((risk: any) => {
+        output += `  [${risk.severity.toUpperCase()}] ${risk.description}\n`;
+      });
+    }
+    
+    return output;
+  }
+
+  private formatExecutionResult(result: any): string {
+    let output = `Execution ${result.success ? 'Successful' : 'Failed'}\n`;
+    output += `Duration: ${(result.duration / 1000).toFixed(2)}s\n\n`;
+    
+    output += `Changes Applied:\n`;
+    result.executedChanges.forEach((change: any) => {
+      const status = change.status === 'success' ? '[OK]' : '[FAIL]';
+      output += `  ${status} ${change.type} ${change.resourceId}\n`;
+    });
+    
+    if (result.failedChanges?.length > 0) {
+      output += `\nFailed Changes:\n`;
+      result.failedChanges.forEach((failure: any) => {
+        output += `  [FAIL] ${failure.resourceId}: ${failure.error}\n`;
+      });
+    }
+    
+    if (result.rollbackPerformed) {
+      output += `\n[WARNING] Rollback was performed due to failures\n`;
+    }
+    
+    return output;
   }
 }
 

@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import path from 'path';
+import * as crypto from 'crypto';
 import { IaCResource as Resource, ResourceState } from '../resources/base.js';
 
 /**
@@ -85,14 +86,79 @@ export class ResourceStateStore {
   }
 
   /**
+   * Get encryption key from environment or options
+   */
+  private getEncryptionKey(): Buffer {
+    const key = this.options.encryption.key || process.env.STATE_ENCRYPTION_KEY;
+    if (!key) {
+      throw new Error('Encryption key not provided. Set STATE_ENCRYPTION_KEY environment variable or provide key in options.');
+    }
+    
+    // Ensure key is 32 bytes for AES-256
+    const hash = crypto.createHash('sha256');
+    hash.update(key);
+    return hash.digest();
+  }
+
+  /**
+   * Encrypt data using AES-256-GCM
+   */
+  private encrypt(data: string): string {
+    if (!this.options.encryption?.enabled) return data;
+    
+    const algorithm = 'aes-256-gcm';
+    const key = this.getEncryptionKey();
+    const iv = crypto.randomBytes(16);
+    
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
+    
+    let encrypted = cipher.update(data, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    const authTag = cipher.getAuthTag();
+    
+    // Combine IV, authTag, and encrypted data
+    return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+  }
+
+  /**
+   * Decrypt data using AES-256-GCM
+   */
+  private decrypt(encryptedData: string): string {
+    if (!this.options.encryption?.enabled) return encryptedData;
+    
+    const algorithm = 'aes-256-gcm';
+    const key = this.getEncryptionKey();
+    
+    // Split the encrypted data
+    const parts = encryptedData.split(':');
+    if (parts.length !== 3) {
+      throw new Error('Invalid encrypted data format');
+    }
+    
+    const [ivHex, authTagHex, encrypted] = parts;
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+    
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
+    decipher.setAuthTag(authTag);
+    
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
+  }
+
+  /**
    * Load deployment state from disk
    */
   async loadDeployment(deploymentId: string): Promise<DeploymentState | null> {
     try {
       const filePath = this.getStateFilePath(deploymentId);
-      const data = await fs.readFile(filePath, 'utf-8');
+      const encryptedData = await fs.readFile(filePath, 'utf-8');
       
-      // TODO: Add decryption if encryption is enabled
+      // Decrypt if encryption is enabled
+      const data = this.decrypt(encryptedData);
       
       const state = JSON.parse(data) as DeploymentState;
       this.state.set(deploymentId, state);
@@ -115,9 +181,12 @@ export class ResourceStateStore {
     deployment.updatedAt = new Date().toISOString();
     deployment.version++;
     
-    // TODO: Add encryption if enabled
+    // Convert to JSON
+    const jsonData = JSON.stringify(deployment, null, 2);
     
-    const data = JSON.stringify(deployment, null, 2);
+    // Encrypt if enabled
+    const data = this.encrypt(jsonData);
+    
     await fs.writeFile(filePath, data, 'utf-8');
     
     // Update in-memory cache

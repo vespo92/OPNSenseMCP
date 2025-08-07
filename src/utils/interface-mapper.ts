@@ -18,6 +18,7 @@ export const DEFAULT_INTERFACE_MAPPINGS: InterfaceMapping = {
 export const PROTOCOL_MAPPINGS: { [key: string]: string } = {
   'tcp': 'TCP',
   'udp': 'UDP',
+  'tcp/udp': 'TCP/UDP',
   'icmp': 'ICMP',
   'esp': 'ESP',
   'ah': 'AH',

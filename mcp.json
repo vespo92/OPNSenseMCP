@@ -1,0 +1,10 @@
+{
+  "name": "opnsense",
+  "version": "0.7.0",
+  "description": "Model Context Protocol server for OPNSense firewall management with ARP table, DNS filtering and HAProxy support via Claude Desktop",
+  "command": "node",
+  "args": ["dist/index.js"],
+  "transport": {
+    "type": "stdio"
+  }
+}

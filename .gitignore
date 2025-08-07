@@ -33,6 +33,8 @@ yarn-error.log*
 lerna-debug.log*
 
 # Testing
+tests/
+test/
 coverage/
 .nyc_output/
 test-sse.js
@@ -73,3 +75,10 @@ __pycache__/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Files containing API keys
+create-dmz-rules.ts
+create-rpc-rules.ts
+debug-api.ts
+test-firewall-api.ts
+test-mcp-fix.ts

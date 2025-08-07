@@ -1,6 +1,8 @@
 // Enhanced MCP Cache Manager with Drizzle ORM
 import { OPNSenseAPIClient } from '../api/client.js';
 import Redis from 'ioredis';
+import * as zlib from 'zlib';
+import { promisify } from 'util';
 import { eq, desc, sql, and, gte } from 'drizzle-orm';
 import { 
   getDb, 
@@ -15,6 +17,10 @@ import {
   QueryPattern,
   CacheInvalidationRule
 } from '../db/index.js';
+
+// Promisify zlib functions for async/await
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
 
 export interface EnhancedCacheConfig {
   redis?: {
@@ -31,6 +37,7 @@ export interface EnhancedCacheConfig {
     maxTTL?: number;
     minTTL?: number;
     compressionThreshold?: number;
+    compressionLevel?: number;
     enableCompression?: boolean;
     enableSmartInvalidation?: boolean;
     enablePatternAnalysis?: boolean;
@@ -186,7 +193,7 @@ export class EnhancedCacheManager {
       if (this.redis) {
         const cached = await this.redis.get(key);
         if (cached) {
-          const data = this.deserialize<T>(cached);
+          const data = await this.deserialize<T>(cached);
           const executionTime = Date.now() - startTime;
           
           // Update cache statistics
@@ -248,9 +255,10 @@ export class EnhancedCacheManager {
     // Process results and identify misses
     const misses: typeof requests = [];
     
-    cached.forEach((value, index) => {
+    for (let index = 0; index < cached.length; index++) {
+      const value = cached[index];
       if (value) {
-        const data = this.deserialize<T>(value);
+        const data = await this.deserialize<T>(value);
         results.set(requests[index].key, {
           data,
           metadata: {
@@ -262,7 +270,7 @@ export class EnhancedCacheManager {
       } else {
         misses.push(requests[index]);
       }
-    });
+    }
 
     // Fetch misses in parallel with concurrency control
     const chunks = this.chunk(misses, this.config.performance?.maxConcurrency || 10);
@@ -274,9 +282,9 @@ export class EnhancedCacheManager {
         
         // Cache the result
         const ttl = await this.calculateSmartTTL(keyInfo, req.ttl);
-        const serialized = this.serialize(data);
+        const serialized = await this.serialize(data);
         
-        await this.redis!.setex(req.key, ttl, serialized);
+        await this.redis!.setex(req.key, ttl, serialized.toString());
         
         results.set(req.key, {
           data,
@@ -448,8 +456,8 @@ export class EnhancedCacheManager {
       
       // Cache the result
       if (this.redis) {
-        const serialized = this.serialize(data);
-        await this.redis.setex(keyInfo.raw, ttl, serialized);
+        const serialized = await this.serialize(data);
+        await this.redis.setex(keyInfo.raw, ttl, serialized.toString());
       }
       
       // Update statistics
@@ -622,22 +630,38 @@ export class EnhancedCacheManager {
     }
   }
 
-  private serialize(data: any): string {
+  private async serialize(data: any): Promise<Buffer> {
     const json = JSON.stringify(data);
     
-    // Optionally compress if enabled and data is large enough
+    // Compress if enabled and data is large enough
     if (this.config.cache?.enableCompression && 
         json.length > (this.config.cache?.compressionThreshold || 1024)) {
-      // TODO: Implement compression (e.g., using zlib)
-      return json;
+      const compressed = await gzip(json, {
+        level: this.config.cache.compressionLevel || 6
+      });
+      
+      // Add a marker to indicate this is compressed data
+      const marker = Buffer.from('GZIP:');
+      return Buffer.concat([marker, compressed]);
     }
     
-    return json;
+    return Buffer.from(json);
   }
 
-  private deserialize<T>(data: string): T {
-    // TODO: Handle decompression if implemented
-    return JSON.parse(data);
+  private async deserialize<T>(buffer: Buffer | string): Promise<T> {
+    // Convert string to buffer if needed
+    const data = typeof buffer === 'string' ? Buffer.from(buffer) : buffer;
+    
+    // Check for compression marker
+    if (data.length > 5 && data.slice(0, 5).toString() === 'GZIP:') {
+      // Data is compressed, decompress it
+      const compressed = data.slice(5);
+      const decompressed = await gunzip(compressed);
+      return JSON.parse(decompressed.toString());
+    }
+    
+    // Data is not compressed
+    return JSON.parse(data.toString());
   }
 
   private chunk<T>(array: T[], size: number): T[][] {
