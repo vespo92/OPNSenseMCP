@@ -77,7 +77,7 @@ Add to your Claude Desktop configuration file:
   "mcpServers": {
     "opnsense": {
       "command": "npx",
-      "args": ["opnsense-mcp-server"],
+      "args": ["--yes", "opnsense-mcp-server@latest"],
       "env": {
         "OPNSENSE_HOST": "https://192.168.1.1",
         "OPNSENSE_API_KEY": "your-api-key",
@@ -99,7 +99,7 @@ Add to `.claude/config.json` in your project root:
   "mcpServers": {
     "opnsense": {
       "command": "npx",
-      "args": ["-y", "opnsense-mcp-server"],
+      "args": ["--yes", "opnsense-mcp-server@latest"],
       "env": {
         "OPNSENSE_HOST": "https://192.168.1.1",
         "OPNSENSE_API_KEY": "your-api-key",
@@ -291,7 +291,7 @@ npm run dev  # Development mode with hot reload
 If the MCP server fails to connect:
 
 1. **Check the command path**: 
-   - For NPX: Add `-y` flag to bypass prompts: `["npx", "-y", "opnsense-mcp-server"]`
+   - For NPX: Use `["npx", "--yes", "opnsense-mcp-server@latest"]` to ensure latest version
    - For local: Ensure path is correct: `node_modules/opnsense-mcp-server/dist/index.js`
 
 2. **Verify environment variables**:

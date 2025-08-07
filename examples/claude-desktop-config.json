@@ -2,7 +2,7 @@
   "mcpServers": {
     "opnsense": {
       "command": "npx",
-      "args": ["-y", "opnsense-mcp-server"],
+      "args": ["--yes", "opnsense-mcp-server@latest"],
       "env": {
         "OPNSENSE_HOST": "https://your-opnsense-host.example.com",
         "OPNSENSE_API_KEY": "your-api-key",
