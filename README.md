@@ -93,12 +93,31 @@ Add to your Claude Desktop configuration file:
 
 Add to `.claude/config.json` in your project root:
 
+**Option 1: Using NPX (Recommended)**
 ```json
 {
   "mcpServers": {
     "opnsense": {
       "command": "npx",
-      "args": ["opnsense-mcp-server"],
+      "args": ["-y", "opnsense-mcp-server"],
+      "env": {
+        "OPNSENSE_HOST": "https://192.168.1.1",
+        "OPNSENSE_API_KEY": "your-api-key",
+        "OPNSENSE_API_SECRET": "your-api-secret",
+        "OPNSENSE_VERIFY_SSL": "true"
+      }
+    }
+  }
+}
+```
+
+**Option 2: Local Installation**
+```json
+{
+  "mcpServers": {
+    "opnsense": {
+      "command": "node",
+      "args": ["node_modules/opnsense-mcp-server/dist/index.js"],
       "env": {
         "OPNSENSE_HOST": "https://192.168.1.1",
         "OPNSENSE_API_KEY": "your-api-key",
@@ -264,6 +283,38 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 npm install
 npm run dev  # Development mode with hot reload
 ```
+
+## 🔧 Troubleshooting
+
+### Claude Code/Desktop Not Connecting
+
+If the MCP server fails to connect:
+
+1. **Check the command path**: 
+   - For NPX: Add `-y` flag to bypass prompts: `["npx", "-y", "opnsense-mcp-server"]`
+   - For local: Ensure path is correct: `node_modules/opnsense-mcp-server/dist/index.js`
+
+2. **Verify environment variables**:
+   - Host must include protocol: `https://192.168.1.1` not just `192.168.1.1`
+   - API credentials must match exactly (no extra spaces)
+
+3. **Test standalone first**:
+   ```bash
+   npx opnsense-mcp-server
+   # Or if installed locally:
+   node node_modules/opnsense-mcp-server/dist/index.js
+   ```
+
+4. **Check Claude logs**:
+   - MacOS: `~/Library/Logs/Claude/`
+   - Windows: `%APPDATA%\Claude\logs\`
+   - Linux: `~/.config/claude/logs/`
+
+### Common Issues
+
+- **"command not found"**: Install globally with `npm i -g opnsense-mcp-server` or use npx
+- **"EACCES permission denied"**: The package may need executable permissions
+- **"Cannot connect to OPNsense"**: Check firewall rules and API settings
 
 ## 📄 License
 

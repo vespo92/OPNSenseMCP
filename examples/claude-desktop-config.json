@@ -1,10 +1,10 @@
 {
   "mcpServers": {
     "opnsense": {
-      "command": "node",
-      "args": ["opnsense-mcp-server"],
+      "command": "npx",
+      "args": ["-y", "opnsense-mcp-server"],
       "env": {
-        "OPNSENSE_HOST": "your-opnsense-host.example.com",
+        "OPNSENSE_HOST": "https://your-opnsense-host.example.com",
         "OPNSENSE_API_KEY": "your-api-key",
         "OPNSENSE_API_SECRET": "your-api-secret",
         "OPNSENSE_VERIFY_SSL": "true"
