@@ -89,8 +89,7 @@ export class SSETransportServer {
       // Create a new transport for this connection
       const transport = new SSEServerTransport("/messages", res);
 
-      // Start the SSE transport (sets up headers and sends initial endpoint info)
-      await transport.start();
+      // Don't call transport.start() here - Server.connect() will do it automatically
 
       // Extract session ID from the transport (this is set by the SDK)
       // We'll need to track this for routing POST messages
@@ -102,6 +101,7 @@ export class SSETransportServer {
       }
 
       // Notify that a new connection is ready
+      // The callback should call Server.connect() which will start the transport
       if (this.onConnectionCallback) {
         await this.onConnectionCallback(transport);
       }
@@ -115,8 +115,11 @@ export class SSETransportServer {
       });
     } catch (error) {
       console.error("Error handling SSE connection:", error);
-      res.writeHead(500);
-      res.end("Internal Server Error");
+      // Don't write headers if SSE has already started
+      if (!res.headersSent) {
+        res.writeHead(500);
+        res.end("Internal Server Error");
+      }
     }
   }
 
