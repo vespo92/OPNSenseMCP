@@ -88,3 +88,6 @@ create-rpc-rules.ts
 debug-api.ts
 test-firewall-api.ts
 test-mcp-fix.ts
+
+# MCP configuration (contains API keys)
+.mcp.json
