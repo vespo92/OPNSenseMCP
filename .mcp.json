@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/vinnieespo/ESPO"]
+    },
+    "eslint": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@eslint/mcp@latest"]
+    },
+    "opnsense": {
+      "command": "npx",
+      "args": ["--yes", "opnsense-mcp-server@latest"],
+      "env": {
+        "OPNSENSE_HOST": "https://opnsense.boonersystems.com:55443",
+        "OPNSENSE_API_KEY": "dEkTmbiGyX9B/KeM0cz95mK4nVp+QKTqNcKERTGZMwXtW4U2ECd1fkBqGgFjFfWAhNYa2rhcBlZyqrN4",
+        "OPNSENSE_API_SECRET": "UCc9aI5D1pgs66zHPe8KI3WZpaP3XQMaoU5FAQdIEbFezxtVf/HuNsH7tLfdLfo43TQILNfCzexj2zsX",
+        "OPNSENSE_VERIFY_SSL": "true"
+      }
+    },
+    "docker": {
+      "command": "uvx",
+      "args": ["mcp-server-docker"],
+      "env": {
+        "DOCKER_HOST": "unix:///var/run/docker.sock"
+      }
+    }
+  }
+}

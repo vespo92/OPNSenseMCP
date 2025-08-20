@@ -441,6 +441,27 @@ export class OPNSenseAPIClient {
     return this.post('/firewall/filter/apply');
   }
 
+  /**
+   * Reconfigure firewall filter
+   */
+  async reconfigureFirewall(): Promise<any> {
+    return this.post('/firewall/filter/reconfigure');
+  }
+
+  /**
+   * Get all firewall filter settings
+   */
+  async getFirewallFilterSettings(): Promise<any> {
+    return this.get('/firewall/filter/get');
+  }
+
+  /**
+   * Save firewall configuration
+   */
+  async saveFirewallConfig(): Promise<any> {
+    return this.post('/firewall/filter/savepoint');
+  }
+
   // ===== BACKUP METHODS =====
 
   /**

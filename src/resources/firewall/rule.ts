@@ -26,6 +26,7 @@ export class FirewallRuleResource {
   private client: OPNSenseAPIClient;
   private interfaceMapper: InterfaceMapper;
   private interfacesLoaded: boolean = false;
+  private rulesCache: Map<string, FirewallRule> = new Map();
 
   constructor(client: OPNSenseAPIClient) {
     this.client = client;
@@ -36,24 +37,117 @@ export class FirewallRuleResource {
    * List all firewall rules
    */
   async list(): Promise<FirewallRule[]> {
-    const response = await this.client.post('/firewall/filter/searchRule', {
-      current: 1,
-      rowCount: 1000,
-      sort: {},
-      searchPhrase: ''
-    });
-    return response.rows || [];
+    try {
+      // First, try to get all rules from the filter configuration
+      // This is more reliable for getting all rules including newly created ones
+      const allRules = await this.getAllRules();
+      
+      if (allRules.length > 0) {
+        // Update cache with fetched rules
+        allRules.forEach(rule => {
+          if (rule.uuid) {
+            this.rulesCache.set(rule.uuid, rule);
+          }
+        });
+        return allRules;
+      }
+      
+      // Fallback to search endpoint if get method returns no rules
+      const response = await this.client.post('/firewall/filter/searchRule', {
+        current: 1,
+        rowCount: -1,  // Get all rows (-1 means no limit in OPNsense)
+        sort: {},
+        searchPhrase: ''
+      });
+      
+      // Debug logging to understand response structure
+      if (process.env.MCP_DEBUG === 'true') {
+        console.log('Firewall searchRule response structure:', {
+          hasRows: !!response?.rows,
+          rowsIsArray: Array.isArray(response?.rows),
+          rowsLength: response?.rows?.length,
+          responseIsArray: Array.isArray(response),
+          responseKeys: response ? Object.keys(response) : []
+        });
+      }
+      
+      // Handle various response formats from OPNsense API
+      if (response?.rows && Array.isArray(response.rows)) {
+        // Update cache
+        response.rows.forEach((rule: FirewallRule) => {
+          if (rule.uuid) {
+            this.rulesCache.set(rule.uuid, rule);
+          }
+        });
+        return response.rows;
+      }
+      
+      // Sometimes the API returns the rules directly as an array
+      if (Array.isArray(response)) {
+        response.forEach((rule: FirewallRule) => {
+          if (rule.uuid) {
+            this.rulesCache.set(rule.uuid, rule);
+          }
+        });
+        return response;
+      }
+    } catch (error) {
+      console.error('Error listing firewall rules:', error);
+      
+      // Return cached rules as last resort
+      if (this.rulesCache.size > 0) {
+        console.log('Returning cached rules due to API error');
+        return Array.from(this.rulesCache.values());
+      }
+    }
+    
+    return [];
   }
 
   /**
    * Get a specific firewall rule by UUID
    */
   async get(uuid: string): Promise<FirewallRule | null> {
-    const response = await this.client.get(`/firewall/filter/getRule/${uuid}`);
-    if (response?.rule) {
-      return { uuid, ...response.rule };
+    try {
+      const response = await this.client.get(`/firewall/filter/getRule/${uuid}`);
+      if (response?.rule) {
+        return { uuid, ...response.rule };
+      }
+    } catch (error) {
+      console.warn(`Could not get rule ${uuid}:`, error);
     }
     return null;
+  }
+
+  /**
+   * Get all firewall rules using the get endpoint
+   * This is an alternative method to list() that fetches the entire filter configuration
+   */
+  async getAllRules(): Promise<FirewallRule[]> {
+    try {
+      const response = await this.client.get('/firewall/filter/get');
+      
+      if (response?.filter?.rules) {
+        const rules = response.filter.rules;
+        
+        // Convert object with UUIDs as keys to array
+        if (typeof rules === 'object' && !Array.isArray(rules)) {
+          return Object.entries(rules).map(([uuid, rule]: [string, any]) => ({
+            uuid,
+            ...rule
+          }));
+        }
+        
+        // If already an array, return it
+        if (Array.isArray(rules)) {
+          return rules;
+        }
+      }
+    } catch (error) {
+      console.warn('Could not fetch all rules via get endpoint:', error);
+    }
+    
+    return [];
   }
 
   /**
@@ -125,12 +219,38 @@ export class FirewallRuleResource {
     const response = await this.client.post('/firewall/filter/addRule', { rule: ruleData });
     
     if (response.uuid) {
-      // Apply changes
+      // Store in cache immediately
+      const createdRule: FirewallRule = {
+        uuid: response.uuid,
+        ...ruleData
+      };
+      this.rulesCache.set(response.uuid, createdRule);
+      
+      // Apply changes and save configuration to persist
       await this.applyChanges();
+      
+      // Force a refresh of the rules to ensure consistency
+      // This helps ensure the rule is properly loaded in OPNsense's internal state
+      try {
+        await this.getAllRules();
+      } catch (refreshError) {
+        console.warn('Could not refresh rules after creation:', refreshError);
+      }
+      
+      // Verify the rule was created successfully
+      const verifyRule = await this.get(response.uuid);
+      if (verifyRule) {
+        // Update cache with verified rule
+        this.rulesCache.set(response.uuid, verifyRule);
+        console.log(`Rule ${response.uuid} created and verified successfully`);
+      } else {
+        console.warn(`Warning: Rule ${response.uuid} was created but could not be verified immediately`);
+      }
+      
       return { uuid: response.uuid, success: true };
     }
 
-    throw new Error('Failed to create firewall rule');
+    throw new Error('Failed to create firewall rule: No UUID returned');
   }
 
   /**
@@ -179,10 +299,40 @@ export class FirewallRuleResource {
   }
 
   /**
-   * Apply firewall changes
+   * Apply firewall changes and save configuration
    */
   async applyChanges(): Promise<any> {
-    return this.client.post('/firewall/filter/apply');
+    try {
+      // First apply the firewall changes
+      const applyResponse = await this.client.post('/firewall/filter/apply');
+      
+      // Add a delay to allow changes to propagate
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Save and reconfigure to ensure persistence
+      // OPNsense requires both apply and reconfigure for full persistence
+      try {
+        // Try to reconfigure the filter service
+        const reconfigureResponse = await this.client.post('/firewall/filter/reconfigure');
+        console.log('Firewall filter reconfigured:', reconfigureResponse);
+      } catch (reconfigError) {
+        // If reconfigure fails, try the savepoint approach
+        try {
+          await this.client.post('/firewall/filter/savepoint');
+          console.log('Firewall configuration saved via savepoint');
+        } catch (savepointError) {
+          console.warn('Could not save firewall configuration:', savepointError);
+        }
+      }
+      
+      // Additional delay for the reconfiguration to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      return applyResponse;
+    } catch (error) {
+      console.error('Failed to apply firewall changes:', error);
+      throw error;
+    }
   }
 
   /**
