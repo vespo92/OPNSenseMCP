@@ -26,6 +26,7 @@ import { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { OPNSenseAPIClient } from './api/client.js';
 import { VlanResource } from './resources/vlan.js';
 import { FirewallRuleResource } from './resources/firewall/rule.js';
+import { NATResource } from './resources/firewall/nat.js';
 import { BackupManager } from './resources/backup/manager.js';
 import { MCPCacheManager } from './cache/manager.js';
 import { DhcpLeaseResource } from './resources/services/dhcp/leases.js';
@@ -33,6 +34,11 @@ import { DnsBlocklistResource } from './resources/services/dns/blocklist.js';
 import { HAProxyResource } from './resources/services/haproxy/index.js';
 import { MacroRecorder } from './macro/index.js';
 import { ArpTableResource } from './resources/network/arp.js';
+import SystemSettingsResource from './resources/system/settings.js';
+import InterfaceConfigResource from './resources/network/interfaces.js';
+import RoutingDiagnosticsResource from './resources/diagnostics/routing.js';
+import CLIExecutorResource from './resources/cli/executor.js';
+import SSHExecutor from './resources/ssh/executor.js';
 
 // Import IaC components
 import { resourceRegistry } from './resources/registry.js';
@@ -57,6 +63,7 @@ class OPNSenseMCPServer {
   private client: OPNSenseAPIClient | null = null;
   private vlanResource: VlanResource | null = null;
   private firewallRuleResource: FirewallRuleResource | null = null;
+  private natResource: NATResource | null = null;
   private backupManager: BackupManager | null = null;
   private cacheManager: MCPCacheManager | null = null;
   private dhcpResource: DhcpLeaseResource | null = null;
@@ -64,6 +71,11 @@ class OPNSenseMCPServer {
   private haproxyResource: HAProxyResource | null = null;
   private macroRecorder: MacroRecorder | null = null;
   private arpResource: ArpTableResource | null = null;
+  private systemSettingsResource: SystemSettingsResource | null = null;
+  private interfaceConfigResource: InterfaceConfigResource | null = null;
+  private routingDiagnosticsResource: RoutingDiagnosticsResource | null = null;
+  private cliExecutor: CLIExecutorResource | null = null;
+  private sshExecutor: SSHExecutor | null = null;
   
   // IaC components
   private planner: DeploymentPlanner | null = null;
@@ -77,8 +89,8 @@ class OPNSenseMCPServer {
     this.server = new Server(
       {
         name: 'opnsense-mcp',
-        version: '0.7.0',
-        description: 'OPNsense firewall management via MCP with IaC, ARP table, DNS filtering and HAProxy support'
+        version: '0.8.0',
+        description: 'OPNsense firewall management via MCP with CLI execution, IaC, ARP table, DNS filtering and HAProxy support'
       },
       {
         capabilities: {
@@ -135,10 +147,18 @@ class OPNSenseMCPServer {
       // Initialize resources
       this.vlanResource = new VlanResource(this.client);
       this.firewallRuleResource = new FirewallRuleResource(this.client);
+      this.natResource = new NATResource(this.client);
       this.dhcpResource = new DhcpLeaseResource(this.client);
       this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
       this.haproxyResource = new HAProxyResource(this.client);
       this.arpResource = new ArpTableResource(this.client);
+      this.systemSettingsResource = new SystemSettingsResource(this.client);
+      this.interfaceConfigResource = new InterfaceConfigResource(this.client);
+      this.routingDiagnosticsResource = new RoutingDiagnosticsResource(this.client);
+      this.cliExecutor = new CLIExecutorResource(this.client);
+      
+      // Initialize SSH executor for direct CLI access
+      this.sshExecutor = new SSHExecutor();
       
       // Initialize backup manager
       if (process.env.BACKUP_ENABLED !== 'false') {
@@ -699,6 +719,247 @@ class OPNSenseMCPServer {
           }
         },
 
+        // System Settings Management
+        {
+          name: 'system_get_settings',
+          description: 'Get system-level firewall and routing settings',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'system_enable_intervlan_routing',
+          description: 'Enable inter-VLAN routing at the system level',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'system_update_firewall_settings',
+          description: 'Update system firewall settings',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              blockprivatenetworks: { type: 'string', description: '0 to allow private networks, 1 to block' },
+              blockbogons: { type: 'string', description: '0 to allow bogons, 1 to block' },
+              allowinterlantraffic: { type: 'string', description: '1 to enable inter-LAN traffic' },
+              bypassstaticroutes: { type: 'string', description: '1 to bypass firewall for static routes' },
+              disablereplyto: { type: 'string', description: '1 to disable reply-to' }
+            }
+          }
+        },
+
+        // Interface Configuration Management
+        {
+          name: 'interface_list_overview',
+          description: 'List all network interfaces with their overview',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'interface_get_config',
+          description: 'Get detailed configuration for a specific interface',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interfaceName: { type: 'string', description: 'Interface name (e.g., lan, wan, opt8)' }
+            },
+            required: ['interfaceName']
+          }
+        },
+        {
+          name: 'interface_enable_intervlan_routing',
+          description: 'Enable inter-VLAN routing on a specific interface',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interfaceName: { type: 'string', description: 'Interface name (e.g., opt8 for DMZ)' }
+            },
+            required: ['interfaceName']
+          }
+        },
+        {
+          name: 'interface_enable_intervlan_all',
+          description: 'Enable inter-VLAN routing on all interfaces',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'interface_configure_dmz',
+          description: 'Configure DMZ interface for inter-VLAN routing',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dmzInterface: { type: 'string', description: 'DMZ interface name', default: 'opt8' }
+            }
+          }
+        },
+        {
+          name: 'interface_update_config',
+          description: 'Update interface configuration',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interfaceName: { type: 'string', description: 'Interface name' },
+              blockpriv: { type: 'string', description: '0 to allow private networks, 1 to block' },
+              blockbogons: { type: 'string', description: '0 to allow bogons, 1 to block' },
+              enable: { type: 'string', description: '1 to enable interface, 0 to disable' },
+              disableftpproxy: { type: 'string', description: '1 to disable FTP proxy' }
+            },
+            required: ['interfaceName']
+          }
+        },
+
+        // Routing Diagnostics and Fixes
+        {
+          name: 'routing_diagnostics',
+          description: 'Run comprehensive inter-VLAN routing diagnostics',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              sourceNetwork: { 
+                type: 'string', 
+                description: 'Source network (e.g., 10.0.6.0/24 for DMZ)' 
+              },
+              destNetwork: { 
+                type: 'string', 
+                description: 'Destination network (e.g., 10.0.0.0/24 for LAN)' 
+              }
+            }
+          }
+        },
+        {
+          name: 'routing_fix_all',
+          description: 'Automatically fix all detected inter-VLAN routing issues',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'routing_fix_dmz',
+          description: 'Quick fix for DMZ to LAN routing (includes NFS rules)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'routing_create_intervlan_rules',
+          description: 'Create firewall rules for inter-VLAN routing',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              sourceNetwork: { 
+                type: 'string', 
+                description: 'Source network (e.g., 10.0.6.0/24)' 
+              },
+              destNetwork: { 
+                type: 'string', 
+                description: 'Destination network (e.g., 10.0.0.0/24)' 
+              },
+              bidirectional: { 
+                type: 'boolean', 
+                description: 'Create rules in both directions',
+                default: true
+              }
+            },
+            required: ['sourceNetwork', 'destNetwork']
+          }
+        },
+
+        // CLI Execution Tools
+        {
+          name: 'cli_execute',
+          description: 'Execute a CLI command on OPNsense for advanced configuration',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              command: { 
+                type: 'string', 
+                description: 'Command to execute (e.g., configctl, pfctl, netstat)' 
+              },
+              args: { 
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Command arguments' 
+              },
+              timeout: { 
+                type: 'number', 
+                description: 'Timeout in milliseconds',
+                default: 30000
+              }
+            },
+            required: ['command']
+          }
+        },
+        {
+          name: 'cli_fix_interface_blocking',
+          description: 'Fix interface blocking settings via CLI (for DMZ routing issues)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interfaceName: { 
+                type: 'string', 
+                description: 'Interface name (e.g., opt8 for DMZ)' 
+              }
+            },
+            required: ['interfaceName']
+          }
+        },
+        {
+          name: 'cli_reload_firewall',
+          description: 'Reload firewall rules via CLI',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'cli_show_routing',
+          description: 'Show routing table via CLI',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'cli_fix_dmz_routing',
+          description: 'Comprehensive DMZ routing fix via CLI',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'cli_check_nfs',
+          description: 'Check NFS connectivity from DMZ',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              truenasIP: { 
+                type: 'string', 
+                description: 'TrueNAS IP address',
+                default: '10.0.0.14'
+              }
+            }
+          }
+        },
+        {
+          name: 'cli_apply_changes',
+          description: 'Apply all configuration changes via CLI',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+
         // HAProxy Backend Management
         {
           name: 'haproxy_backend_create',
@@ -1101,7 +1362,334 @@ class OPNSenseMCPServer {
               }
             }
           }
-        ] : [])
+        ] : []),
+        
+        // SSH Execution Tools
+        {
+          name: 'ssh_execute',
+          description: 'Execute arbitrary command via SSH on OPNsense (full CLI access)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              command: { 
+                type: 'string', 
+                description: 'Command to execute via SSH' 
+              },
+              timeout: { 
+                type: 'number', 
+                description: 'Timeout in milliseconds',
+                default: 30000
+              },
+              sudo: {
+                type: 'boolean',
+                description: 'Execute command with sudo',
+                default: false
+              }
+            },
+            required: ['command']
+          }
+        },
+        {
+          name: 'ssh_fix_interface_blocking',
+          description: 'Fix interface blocking settings via SSH (resolves DMZ routing issues)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interface: { 
+                type: 'string', 
+                description: 'Interface name (e.g., opt8 for DMZ)' 
+              }
+            },
+            required: ['interface']
+          }
+        },
+        {
+          name: 'ssh_fix_dmz_routing',
+          description: 'Apply comprehensive DMZ routing fix via SSH',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'ssh_enable_intervlan_routing',
+          description: 'Enable inter-VLAN routing via SSH',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'ssh_reload_firewall',
+          description: 'Reload firewall rules via SSH',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'ssh_show_routing',
+          description: 'Show routing table via SSH',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'ssh_show_pf_rules',
+          description: 'Show packet filter rules via SSH',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              verbose: {
+                type: 'boolean',
+                description: 'Show verbose output',
+                default: false
+              }
+            }
+          }
+        },
+        {
+          name: 'ssh_backup_config',
+          description: 'Backup OPNsense configuration via SSH',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              backupName: {
+                type: 'string',
+                description: 'Optional backup filename'
+              }
+            }
+          }
+        },
+        {
+          name: 'ssh_restore_config',
+          description: 'Restore OPNsense configuration via SSH',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              backupPath: {
+                type: 'string',
+                description: 'Path to backup file to restore'
+              }
+            },
+            required: ['backupPath']
+          }
+        },
+        {
+          name: 'ssh_check_nfs_connectivity',
+          description: 'Check NFS connectivity from OPNsense',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              targetIP: {
+                type: 'string',
+                description: 'Target NFS server IP',
+                default: '10.0.0.14'
+              }
+            }
+          }
+        },
+        {
+          name: 'ssh_system_status',
+          description: 'Get comprehensive system status via SSH',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+
+        // NAT Management Tools
+        {
+          name: 'nat_list_outbound',
+          description: 'List all outbound NAT rules',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'nat_list_port_forwards',
+          description: 'List all port forward rules',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'nat_get_mode',
+          description: 'Get current NAT mode (automatic, hybrid, manual, disabled)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'nat_set_mode',
+          description: 'Set NAT mode (automatic, hybrid, manual, disabled)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              mode: {
+                type: 'string',
+                enum: ['automatic', 'hybrid', 'manual', 'disabled'],
+                description: 'NAT mode to set'
+              }
+            },
+            required: ['mode']
+          }
+        },
+        {
+          name: 'nat_create_outbound_rule',
+          description: 'Create an outbound NAT rule',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interface: { type: 'string', description: 'Outbound interface (e.g., wan)' },
+              source_net: { type: 'string', description: 'Source network (e.g., 10.0.6.0/24)' },
+              destination_net: { type: 'string', description: 'Destination network (e.g., any)' },
+              target: { type: 'string', description: 'NAT target IP (empty for no NAT)' },
+              nonat: { type: 'string', description: 'Set to "1" for no NAT (exception rule)' },
+              description: { type: 'string', description: 'Rule description' },
+              enabled: { type: 'string', description: '1 to enable, 0 to disable', default: '1' }
+            },
+            required: ['interface', 'source_net', 'destination_net']
+          }
+        },
+        {
+          name: 'nat_delete_outbound_rule',
+          description: 'Delete an outbound NAT rule by description (SSH mode) or UUID (API mode)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'NAT rule UUID (for API mode)' },
+              description: { type: 'string', description: 'NAT rule description (for SSH mode)' }
+            }
+          }
+        },
+        {
+          name: 'nat_create_port_forward',
+          description: 'Create a port forward rule',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              interface: { type: 'string', description: 'Inbound interface (e.g., wan)' },
+              protocol: { type: 'string', enum: ['tcp', 'udp', 'tcp/udp'], description: 'Protocol' },
+              destination_port: { type: 'string', description: 'External port(s)' },
+              target: { type: 'string', description: 'Internal target IP' },
+              local_port: { type: 'string', description: 'Internal port(s)' },
+              description: { type: 'string', description: 'Rule description' },
+              enabled: { type: 'string', description: '1 to enable, 0 to disable', default: '1' }
+            },
+            required: ['interface', 'protocol', 'destination_port', 'target']
+          }
+        },
+        {
+          name: 'nat_delete_port_forward',
+          description: 'Delete a port forward rule',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Port forward UUID to delete' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'nat_fix_dmz',
+          description: 'Fix DMZ NAT issue - adds no-NAT rules for inter-VLAN traffic',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              dmzNetwork: { type: 'string', description: 'DMZ network', default: '10.0.6.0/24' },
+              lanNetwork: { type: 'string', description: 'LAN network', default: '10.0.0.0/24' },
+              otherInternalNetworks: { 
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Other internal networks to exclude from NAT',
+                default: ['10.0.2.0/24', '10.0.4.0/24']
+              }
+            }
+          }
+        },
+        {
+          name: 'nat_quick_fix_dmz',
+          description: 'Quick fix for DMZ NAT issue with minimal configuration',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'nat_cleanup_dmz_fix',
+          description: 'Remove all MCP-created NAT fix rules',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'nat_analyze_config',
+          description: 'Analyze NAT configuration for issues',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'nat_apply_changes',
+          description: 'Apply NAT configuration changes',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'ssh_test_vlan_connectivity',
+          description: 'Test connectivity between VLANs',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              sourceInterface: {
+                type: 'string',
+                description: 'Source interface name'
+              },
+              targetIP: {
+                type: 'string',
+                description: 'Target IP to test connectivity to'
+              }
+            },
+            required: ['sourceInterface', 'targetIP']
+          }
+        },
+        {
+          name: 'ssh_quick_dmz_fix',
+          description: 'Apply quick DMZ fix (streamlined version)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'ssh_batch_execute',
+          description: 'Execute multiple commands in sequence via SSH',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              commands: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Array of commands to execute'
+              },
+              stopOnError: {
+                type: 'boolean',
+                description: 'Stop execution if a command fails',
+                default: false
+              }
+            },
+            required: ['commands']
+          }
+        }
       ]
     }));
 
@@ -1420,6 +2008,7 @@ class OPNSenseMCPServer {
             if (test.success) {
               this.vlanResource = new VlanResource(this.client);
               this.firewallRuleResource = new FirewallRuleResource(this.client);
+              this.natResource = new NATResource(this.client);
               this.dhcpResource = new DhcpLeaseResource(this.client);
               this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
               this.haproxyResource = new HAProxyResource(this.client);
@@ -2607,6 +3196,952 @@ class OPNSenseMCPServer {
           }
         }
 
+        // System Settings Management
+        case 'system_get_settings': {
+          await this.ensureInitialized();
+          
+          try {
+            const settings = await this.systemSettingsResource!.getAllSettings();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(settings, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get system settings: ${error.message}`
+            );
+          }
+        }
+
+        case 'system_enable_intervlan_routing': {
+          await this.ensureInitialized();
+          
+          try {
+            const success = await this.systemSettingsResource!.enableInterVLANRouting();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: success ? 
+                  'Inter-VLAN routing enabled successfully at system level' : 
+                  'Failed to enable inter-VLAN routing at system level'
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to enable inter-VLAN routing: ${error.message}`
+            );
+          }
+        }
+
+        case 'system_update_firewall_settings': {
+          await this.ensureInitialized();
+          
+          try {
+            const settings: any = {};
+            if (args?.blockprivatenetworks !== undefined) settings.blockprivatenetworks = args.blockprivatenetworks;
+            if (args?.blockbogons !== undefined) settings.blockbogons = args.blockbogons;
+            if (args?.allowinterlantraffic !== undefined) settings.allowinterlantraffic = args.allowinterlantraffic;
+            if (args?.bypassstaticroutes !== undefined) settings.bypassstaticroutes = args.bypassstaticroutes;
+            if (args?.disablereplyto !== undefined) settings.disablereplyto = args.disablereplyto;
+            
+            const success = await this.systemSettingsResource!.updateFirewallSettings(settings);
+            
+            return {
+              content: [{
+                type: 'text',
+                text: success ? 
+                  'Firewall settings updated successfully' : 
+                  'Failed to update firewall settings'
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to update firewall settings: ${error.message}`
+            );
+          }
+        }
+
+        // Interface Configuration Management
+        case 'interface_list_overview': {
+          await this.ensureInitialized();
+          
+          try {
+            const interfaces = await this.interfaceConfigResource!.listOverview();
+            
+            const formatted = interfaces.map(iface => 
+              `${iface.name}: ${iface.device} - ${iface.status} (${iface.ipaddr || 'no IP'}/${iface.subnet || ''})`
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Found ${interfaces.length} interface(s):\n\n${formatted.join('\n')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to list interfaces: ${error.message}`
+            );
+          }
+        }
+
+        case 'interface_get_config': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.interfaceName) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'interfaceName parameter is required'
+            );
+          }
+          
+          try {
+            const config = await this.interfaceConfigResource!.getInterfaceConfig(args.interfaceName as string);
+            
+            if (!config) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `Interface ${args.interfaceName} not found`
+                }]
+              };
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(config, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get interface config: ${error.message}`
+            );
+          }
+        }
+
+        case 'interface_enable_intervlan_routing': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.interfaceName) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'interfaceName parameter is required'
+            );
+          }
+          
+          try {
+            const success = await this.interfaceConfigResource!.enableInterVLANRoutingOnInterface(
+              args.interfaceName as string
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: success ? 
+                  `Inter-VLAN routing enabled on interface ${args.interfaceName}` : 
+                  `Failed to enable inter-VLAN routing on interface ${args.interfaceName}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to enable inter-VLAN routing: ${error.message}`
+            );
+          }
+        }
+
+        case 'interface_enable_intervlan_all': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.interfaceConfigResource!.enableInterVLANRoutingOnAllInterfaces();
+            
+            const summary = result.details.map(d => 
+              `${d.interface}: ${d.success ? '✓' : '✗'} ${d.message}`
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Inter-VLAN routing configuration:\n\n${summary.join('\n')}\n\nOverall: ${result.success ? 'Success' : 'Some interfaces failed'}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to enable inter-VLAN routing on all interfaces: ${error.message}`
+            );
+          }
+        }
+
+        case 'interface_configure_dmz': {
+          await this.ensureInitialized();
+          
+          const dmzInterface = args?.dmzInterface || 'opt8';
+          
+          try {
+            const success = await this.interfaceConfigResource!.configureDMZInterface(dmzInterface as string);
+            
+            return {
+              content: [{
+                type: 'text',
+                text: success ? 
+                  `DMZ interface ${dmzInterface} configured for inter-VLAN routing` : 
+                  `Failed to configure DMZ interface ${dmzInterface}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to configure DMZ interface: ${error.message}`
+            );
+          }
+        }
+
+        case 'interface_update_config': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.interfaceName) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'interfaceName parameter is required'
+            );
+          }
+          
+          try {
+            const config: any = {};
+            if (args?.blockpriv !== undefined) config.blockpriv = args.blockpriv;
+            if (args?.blockbogons !== undefined) config.blockbogons = args.blockbogons;
+            if (args?.enable !== undefined) config.enable = args.enable;
+            if (args?.disableftpproxy !== undefined) config.disableftpproxy = args.disableftpproxy;
+            
+            const success = await this.interfaceConfigResource!.updateInterfaceConfig(
+              args.interfaceName as string,
+              config
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: success ? 
+                  `Interface ${args.interfaceName} configuration updated` : 
+                  `Failed to update interface ${args.interfaceName} configuration`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to update interface config: ${error.message}`
+            );
+          }
+        }
+
+        // Routing Diagnostics and Fixes
+        case 'routing_diagnostics': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.routingDiagnosticsResource!.runDiagnostics(
+              args?.sourceNetwork as string,
+              args?.destNetwork as string
+            );
+            
+            let output = `Routing Diagnostics Report\n`;
+            output += `==========================\n\n`;
+            output += `Summary: ${result.summary}\n\n`;
+            
+            if (result.issues.length > 0) {
+              output += `Issues Found:\n`;
+              for (const issue of result.issues) {
+                const icon = issue.severity === 'critical' ? '❌' : 
+                            issue.severity === 'warning' ? '⚠️' : 'ℹ️';
+                output += `${icon} [${issue.component}] ${issue.issue}\n`;
+                if (issue.fixAvailable) {
+                  output += `   Fix available: ${issue.fixCommand}\n`;
+                }
+              }
+              output += `\n`;
+            }
+            
+            if (result.recommendations.length > 0) {
+              output += `Recommendations:\n`;
+              for (const rec of result.recommendations) {
+                output += `• ${rec}\n`;
+              }
+            }
+            
+            if (result.canAutoFix) {
+              output += `\nAuto-fix available: Run 'routing_fix_all' to fix issues automatically`;
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: output
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Routing diagnostics failed: ${error.message}`
+            );
+          }
+        }
+
+        case 'routing_fix_all': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.routingDiagnosticsResource!.fixAllRoutingIssues();
+            
+            let output = `Inter-VLAN Routing Fix Results\n`;
+            output += `===============================\n\n`;
+            output += `Status: ${result.success ? '✅ Success' : '⚠️ Partial Success'}\n\n`;
+            
+            if (result.actions.length > 0) {
+              output += `Actions Taken:\n`;
+              for (const action of result.actions) {
+                output += `• ${action}\n`;
+              }
+            }
+            
+            if (result.success) {
+              output += `\nRouting should now be working. Test with:\n`;
+              output += `• ping 10.0.0.14 (from DMZ)\n`;
+              output += `• showmount -e 10.0.0.14 (for NFS)\n`;
+            }
+            
+            return {
+              content: [{
+                type: 'text',
+                text: output
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Routing fix failed: ${error.message}`
+            );
+          }
+        }
+
+        case 'routing_fix_dmz': {
+          await this.ensureInitialized();
+          
+          try {
+            const success = await this.routingDiagnosticsResource!.fixDMZRouting();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: success ? 
+                  '✅ DMZ routing fixed successfully! Test with: ping 10.0.0.14 from DMZ' :
+                  '⚠️ Some DMZ routing fixes failed. Run routing_diagnostics for details.'
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `DMZ routing fix failed: ${error.message}`
+            );
+          }
+        }
+
+        case 'routing_create_intervlan_rules': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.sourceNetwork || !args.destNetwork) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'sourceNetwork and destNetwork parameters are required'
+            );
+          }
+          
+          try {
+            const success = await this.routingDiagnosticsResource!.createInterVLANRules(
+              args.sourceNetwork as string,
+              args.destNetwork as string,
+              args.bidirectional !== false
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: success ? 
+                  `✅ Inter-VLAN rules created between ${args.sourceNetwork} and ${args.destNetwork}` :
+                  '❌ Failed to create inter-VLAN rules'
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to create inter-VLAN rules: ${error.message}`
+            );
+          }
+        }
+
+        // CLI Execution Tools
+        case 'cli_execute': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.command) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'command parameter is required'
+            );
+          }
+          
+          try {
+            const result = await this.cliExecutor!.execute({
+              command: args.command as string,
+              args: args.args as string[] || [],
+              timeout: args.timeout as number || 30000
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `Command executed successfully:\n${result.output || 'No output'}` :
+                  `Command failed: ${result.error}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to execute CLI command: ${error.message}`
+            );
+          }
+        }
+
+        case 'cli_fix_interface_blocking': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.interfaceName) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'interfaceName parameter is required'
+            );
+          }
+          
+          try {
+            const result = await this.cliExecutor!.disableInterfaceBlocking(
+              args.interfaceName as string
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ Successfully disabled blocking on interface ${args.interfaceName}` :
+                  `❌ Failed to fix interface blocking: ${result.error}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to fix interface blocking: ${error.message}`
+            );
+          }
+        }
+
+        case 'cli_reload_firewall': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.cliExecutor!.reloadFirewall();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  '✅ Firewall rules reloaded successfully' :
+                  `❌ Failed to reload firewall: ${result.error}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to reload firewall: ${error.message}`
+            );
+          }
+        }
+
+        case 'cli_show_routing': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.cliExecutor!.getRoutingTable();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `Routing Table:\n${result.output}` :
+                  `Failed to get routing table: ${result.error}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get routing table: ${error.message}`
+            );
+          }
+        }
+
+        case 'cli_fix_dmz_routing': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.cliExecutor!.runComprehensiveDMZFix();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ DMZ Routing Fix Completed\n\n${result.output}` :
+                  `❌ DMZ Fix Failed\n\n${result.output}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to fix DMZ routing: ${error.message}`
+            );
+          }
+        }
+
+        case 'cli_check_nfs': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.cliExecutor!.checkNFSConnectivity(
+              args?.truenasIP as string || '10.0.0.14'
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `NFS Exports Available:\n${result.output}` :
+                  `Failed to check NFS: ${result.error}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to check NFS connectivity: ${error.message}`
+            );
+          }
+        }
+
+        case 'cli_apply_changes': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.cliExecutor!.applyAllChanges();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ All configuration changes applied successfully\n${result.output}` :
+                  `❌ Failed to apply changes: ${result.error}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to apply changes: ${error.message}`
+            );
+          }
+        }
+
+        // SSH Execution Tools
+        case 'ssh_execute': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.command) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'command parameter is required'
+            );
+          }
+          
+          try {
+            const result = await this.sshExecutor!.execute(
+              args.command as string,
+              {
+                timeout: args.timeout as number,
+                sudo: args.sudo as boolean
+              }
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ SSH Command executed successfully (exit code: ${result.exitCode}):\n${result.stdout}\n${result.stderr ? `\nStderr:\n${result.stderr}` : ''}` :
+                  `❌ SSH Command failed (exit code: ${result.exitCode}):\n${result.stderr || 'No error output'}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to execute SSH command: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_fix_interface_blocking': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.interface) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'interface parameter is required'
+            );
+          }
+          
+          try {
+            const result = await this.sshExecutor!.fixInterfaceBlocking(
+              args.interface as string
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ Successfully fixed interface blocking on ${args.interface} via SSH:\n${result.stdout}` :
+                  `❌ Failed to fix interface blocking: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to fix interface blocking via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_fix_dmz_routing': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.sshExecutor!.fixDMZRouting();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ DMZ Routing Fix Applied Successfully via SSH:\n${result.stdout}` :
+                  `❌ DMZ Routing Fix Failed:\n${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to fix DMZ routing via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_enable_intervlan_routing': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.sshExecutor!.enableInterVLANRouting();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ Inter-VLAN routing enabled successfully via SSH:\n${result.stdout}` :
+                  `❌ Failed to enable inter-VLAN routing:\n${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to enable inter-VLAN routing via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_reload_firewall': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.sshExecutor!.execute('configctl filter reload && pfctl -f /tmp/rules.debug');
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ Firewall reloaded successfully via SSH` :
+                  `❌ Failed to reload firewall: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to reload firewall via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_show_routing': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.sshExecutor!.getRoutingTable();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `Routing Table (via SSH):\n${result.stdout}` :
+                  `Failed to get routing table: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get routing table via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_show_pf_rules': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.sshExecutor!.showPfRules({
+              verbose: args?.verbose as boolean
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `Packet Filter Rules:\n${result.stdout}` :
+                  `Failed to get PF rules: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get PF rules via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_backup_config': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.sshExecutor!.backupConfig(
+              args?.backupName as string
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ Configuration backed up successfully:\n${result.stdout}` :
+                  `❌ Backup failed: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to backup config via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_restore_config': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.backupPath) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'backupPath parameter is required'
+            );
+          }
+          
+          try {
+            const result = await this.sshExecutor!.restoreConfig(
+              args.backupPath as string
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ Configuration restored successfully:\n${result.stdout}` :
+                  `❌ Restore failed: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to restore config via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_check_nfs_connectivity': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.sshExecutor!.checkNFSConnectivity(
+              args?.targetIP as string
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `NFS Connectivity Check:\n${result.stdout}` :
+                  `NFS connectivity check failed: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to check NFS connectivity via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_system_status': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.sshExecutor!.getSystemStatus();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `System Status:\n${result.stdout}` :
+                  `Failed to get system status: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get system status via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_test_vlan_connectivity': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.sourceInterface || !args.targetIP) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'sourceInterface and targetIP parameters are required'
+            );
+          }
+          
+          try {
+            const result = await this.sshExecutor!.testVLANConnectivity(
+              args.sourceInterface as string,
+              args.targetIP as string
+            );
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `VLAN Connectivity Test:\n${result.stdout}` :
+                  `Connectivity test failed: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to test VLAN connectivity via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_quick_dmz_fix': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.sshExecutor!.quickDMZFix();
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ? 
+                  `✅ Quick DMZ fix applied successfully via SSH` :
+                  `❌ Quick DMZ fix failed: ${result.stderr}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to apply quick DMZ fix via SSH: ${error.message}`
+            );
+          }
+        }
+
+        case 'ssh_batch_execute': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.commands || !Array.isArray(args.commands)) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'commands array parameter is required'
+            );
+          }
+          
+          try {
+            const result = await this.sshExecutor!.executeBatch(
+              args.commands as string[],
+              {
+                stopOnError: args.stopOnError as boolean
+              }
+            );
+            
+            const commands = args.commands as string[];
+            const output = result.results.map((r, i) => 
+              `Command ${i + 1}: ${commands[i]}\n` +
+              `Status: ${r.success ? '✅ Success' : '❌ Failed'}\n` +
+              `Exit Code: ${r.exitCode}\n` +
+              `${r.stdout ? `Output:\n${r.stdout}\n` : ''}` +
+              `${r.stderr ? `Error:\n${r.stderr}\n` : ''}`
+            ).join('\n---\n');
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `Batch Execution ${result.success ? 'Completed' : 'Failed'}:\n\n${output}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to execute batch commands via SSH: ${error.message}`
+            );
+          }
+        }
+
         // HAProxy Backend Management
         case 'haproxy_backend_create': {
           await this.ensureInitialized();
@@ -3224,6 +4759,334 @@ class OPNSenseMCPServer {
             throw new McpError(
               ErrorCode.InvalidRequest,
               error.message
+            );
+          }
+        }
+
+        // NAT Management Handlers
+        case 'nat_list_outbound': {
+          await this.ensureInitialized();
+          
+          try {
+            const rules = await this.natResource!.listOutboundRules();
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(rules, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to list outbound NAT rules: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_list_port_forwards': {
+          await this.ensureInitialized();
+          
+          try {
+            const rules = await this.natResource!.listPortForwards();
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(rules, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to list port forward rules: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_get_mode': {
+          await this.ensureInitialized();
+          
+          try {
+            const mode = await this.natResource!.getOutboundMode();
+            return {
+              content: [{
+                type: 'text',
+                text: `Current NAT mode: ${mode}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to get NAT mode: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_set_mode': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.mode) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'mode parameter is required'
+            );
+          }
+          
+          try {
+            const success = await this.natResource!.setOutboundMode(args.mode as any);
+            return {
+              content: [{
+                type: 'text',
+                text: success ? 
+                  `✅ NAT mode set to: ${args.mode}` :
+                  `❌ Failed to set NAT mode to: ${args.mode}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to set NAT mode: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_create_outbound_rule': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.interface || !args.source_net || !args.destination_net) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'interface, source_net, and destination_net parameters are required'
+            );
+          }
+          
+          try {
+            const result = await this.natResource!.createOutboundRule({
+              interface: args.interface as string,
+              source_net: args.source_net as string,
+              destination_net: args.destination_net as string,
+              target: args.target as string,
+              nonat: args.nonat as string,
+              description: args.description as string,
+              enabled: args.enabled as string || '1'
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `✅ Created outbound NAT rule with UUID: ${result.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to create outbound NAT rule: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_delete_outbound_rule': {
+          await this.ensureInitialized();
+          
+          if (!args || (!args.uuid && !args.description)) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'Either uuid (for API mode) or description (for SSH mode) parameter is required'
+            );
+          }
+          
+          try {
+            // Use description for SSH mode, UUID for API mode
+            const identifier = args.description || args.uuid;
+            await this.natResource!.deleteOutboundRule(identifier as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `✅ Deleted outbound NAT rule: ${identifier}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to delete outbound NAT rule: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_create_port_forward': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.interface || !args.protocol || !args.destination_port || !args.target) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'interface, protocol, destination_port, and target parameters are required'
+            );
+          }
+          
+          try {
+            const result = await this.natResource!.createPortForward({
+              interface: args.interface as string,
+              protocol: args.protocol as string,
+              destination_port: args.destination_port as string,
+              target: args.target as string,
+              local_port: args.local_port as string || args.destination_port as string,
+              description: args.description as string,
+              enabled: args.enabled as string || '1'
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: `✅ Created port forward rule with UUID: ${result.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to create port forward: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_delete_port_forward': {
+          await this.ensureInitialized();
+          
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+          
+          try {
+            await this.natResource!.deletePortForward(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `✅ Deleted port forward rule: ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to delete port forward: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_fix_dmz': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.natResource!.fixDMZNAT({
+              dmzNetwork: args?.dmzNetwork as string,
+              lanNetwork: args?.lanNetwork as string,
+              otherInternalNetworks: args?.otherInternalNetworks as string[]
+            });
+            
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ?
+                  `✅ ${result.message}\n\nCreated rules:\n${result.rulesCreated.join('\n')}` :
+                  `❌ ${result.message}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to fix DMZ NAT: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_quick_fix_dmz': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.natResource!.quickFixDMZNAT();
+            return {
+              content: [{
+                type: 'text',
+                text: result.success ?
+                  `✅ ${result.message}` :
+                  `❌ ${result.message}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to apply quick DMZ NAT fix: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_cleanup_dmz_fix': {
+          await this.ensureInitialized();
+          
+          try {
+            const result = await this.natResource!.cleanupDMZNATFix();
+            return {
+              content: [{
+                type: 'text',
+                text: `✅ Cleanup complete. Removed ${result.deletedCount} MCP-created NAT rules.`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to cleanup NAT fix rules: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_analyze_config': {
+          await this.ensureInitialized();
+          
+          try {
+            const analysis = await this.natResource!.analyzeNATConfiguration();
+            return {
+              content: [{
+                type: 'text',
+                text: `NAT Configuration Analysis:
+                
+Mode: ${analysis.mode}
+
+Rules:
+- Outbound: ${analysis.rules.outbound}
+- Port Forwards: ${analysis.rules.portForwards}
+- One-to-One: ${analysis.rules.oneToOne}
+- NPT (IPv6): ${analysis.rules.npt}
+
+Issues:
+${analysis.issues.length > 0 ? analysis.issues.map(i => `- ${i}`).join('\n') : '- No issues detected'}
+
+Recommendations:
+${analysis.recommendations.length > 0 ? analysis.recommendations.map(r => `- ${r}`).join('\n') : '- No recommendations'}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to analyze NAT configuration: ${error.message}`
+            );
+          }
+        }
+
+        case 'nat_apply_changes': {
+          await this.ensureInitialized();
+          
+          try {
+            await this.natResource!.applyNATChanges();
+            return {
+              content: [{
+                type: 'text',
+                text: '✅ NAT configuration changes applied successfully'
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to apply NAT changes: ${error.message}`
             );
           }
         }

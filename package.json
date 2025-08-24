@@ -1,7 +1,7 @@
 {
   "name": "opnsense-mcp-server",
-  "version": "0.7.5",
-  "description": "Model Context Protocol server for OPNSense firewall management with ARP table, DNS filtering and HAProxy support via Claude Desktop",
+  "version": "0.8.2",
+  "description": "Model Context Protocol server for OPNSense firewall management with inter-VLAN routing diagnostics, ARP table, DNS filtering and HAProxy support via Claude Desktop",
   "main": "dist/index.js",
   "type": "module",
   "repository": {
@@ -28,8 +28,25 @@
     "db:studio": "drizzle-kit studio",
     "setup:cache": "node setup-enhanced-cache.js",
     "test:network-query": "node test-network-query.js",
+    "test:cli": "tsx test-cli-executor.ts",
     "test:dhcp": "node test-dhcp-fix.js",
-    "debug:dhcp": "node debug-dhcp-comprehensive.js"
+    "debug:dhcp": "node debug-dhcp-comprehensive.js",
+    "test:firewall": "tsx test-suite/firewall-rules.test.ts",
+    "test:nfs": "tsx test-suite/validate-nfs-connectivity.ts",
+    "test:nfs:create": "tsx test-suite/validate-nfs-connectivity.ts --create",
+    "test:setup": "tsx test-suite/setup-test-env.ts",
+    "debug:firewall": "tsx scripts/debug/debug-persistence.ts",
+    "enable:intervlan": "tsx scripts/fixes/enable-intervlan.ts",
+    "test:intervlan": "tsx scripts/test/test-intervlan.ts",
+    "test:routing": "tsx scripts/test/test-routing.ts",
+    "diagnose:routing": "tsx scripts/test/test-routing.ts",
+    "fix:dmz": "tsx scripts/fixes/fix-dmz-nat.ts",
+    "test:ssh": "tsx scripts/test/test-ssh.ts",
+    "ssh:dmz-fix": "tsx scripts/fixes/ssh-dmz-fix.ts",
+    "test:nat": "tsx scripts/test/test-nat.ts",
+    "nat:analyze": "tsx scripts/test/test-nat.ts",
+    "nat:fix": "tsx scripts/fixes/fix-dmz-nat.ts",
+    "nat:fix-dmz": "tsx scripts/fixes/fix-dmz-nat.ts"
   },
   "keywords": [
     "mcp",
@@ -50,13 +67,17 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.5.0",
     "@types/uuid": "^10.0.0",
+    "@types/xml2js": "^0.4.14",
     "axios": "^1.6.0",
     "dotenv": "^17.2.1",
     "drizzle-orm": "^0.29.0",
     "ioredis": "^5.6.1",
     "jsonpath": "^1.1.1",
     "pg": "^8.16.0",
+    "ssh2": "^1.15.0",
+    "ssh2-promise": "^1.0.3",
     "uuid": "^11.1.0",
+    "xml2js": "^0.6.2",
     "zod": "^3.25.62"
   },
   "devDependencies": {
@@ -64,6 +85,7 @@
     "@types/jsonpath": "^0.2.4",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.11.0",
+    "@types/ssh2": "^1.11.0",
     "drizzle-kit": "^0.31.4",
     "eslint": "^9.28.0",
     "jest": "^30.0.0",

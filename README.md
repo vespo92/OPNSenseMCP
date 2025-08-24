@@ -1,333 +1,267 @@
-# OPNSense MCP Server
+# OPNsense MCP Server
 
-[![Version](https://img.shields.io/npm/v/opnsense-mcp-server)](https://www.npmjs.com/package/opnsense-mcp-server)
-[![Downloads](https://img.shields.io/npm/dt/opnsense-mcp-server)](https://www.npmjs.com/package/opnsense-mcp-server)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-orange)](https://modelcontextprotocol.io)
+[![npm version](https://badge.fury.io/js/opnsense-mcp-server.svg)](https://www.npmjs.com/package/opnsense-mcp-server)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-<a href="https://glama.ai/mcp/servers/@vespo92/OPNSenseMCP">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/@vespo92/OPNSenseMCP/badge" alt="OPNSense Server MCP server" />
-</a>
+A Model Context Protocol (MCP) server for comprehensive OPNsense firewall management. This server enables AI assistants like Claude to directly manage firewall configurations, diagnose network issues, and automate complex networking tasks.
 
-A Model Context Protocol (MCP) server for managing OPNsense firewalls through Claude Desktop or Claude Code.
+## Features
 
-## What is this?
+### 🔥 Firewall Management
+- Complete CRUD operations for firewall rules
+- Proper handling of API-created "automation rules"
+- Inter-VLAN routing configuration
+- Batch rule creation and management
+- Enhanced persistence with multiple fallback methods
 
-OPNSense MCP Server enables you to control your OPNsense firewall using conversational AI. Instead of navigating complex firewall interfaces, simply tell Claude what you want to do.
+### 🌐 NAT Configuration (SSH-based)
+- Outbound NAT rule management
+- NAT mode control (automatic/hybrid/manual/disabled)
+- No-NAT exception rules for inter-VLAN traffic
+- Automated DMZ NAT issue resolution
+- Direct XML configuration manipulation
 
-**Example interactions:**
-- "Create a guest network on VLAN 50"
-- "Block social media sites on the network"
-- "Find all devices connected in the last hour"
-- "Set up port forwarding for my Minecraft server"
+### 🔍 Network Diagnostics
+- Comprehensive routing analysis
+- ARP table inspection with vendor identification
+- Interface configuration management
+- Network connectivity troubleshooting
+- Auto-fix capabilities for common issues
 
-## ✨ Key Features
+### 🖥️ SSH/CLI Execution
+- Direct command execution on OPNsense
+- Configuration file manipulation
+- System-level operations not available via API
+- Service management and restarts
 
-- **Network Management** - VLANs, interfaces, firewall rules
-- **Device Discovery** - ARP tables, DHCP leases, network scanning
-- **DNS Filtering** - Block unwanted domains and categories
-- **HAProxy** - Load balancing and reverse proxy configuration
-- **Infrastructure as Code** - Declarative network deployments
-- **Backup & Restore** - Configuration management
-- **Dual Transport** - Works with Claude Desktop and as HTTP server
+### 📊 Additional Capabilities
+- VLAN management
+- DHCP lease viewing and management
+- DNS blocklist configuration
+- HAProxy load balancer support
+- Configuration backup and restore
+- Infrastructure as Code support
 
-## 🚀 Quick Start
+## Installation
 
 ### Prerequisites
-- Node.js 18+
-- OPNsense firewall with API access enabled
-- Claude Desktop or Claude Code
+- Node.js 18+ and npm
+- OPNsense firewall (v24.7+ recommended)
+- API credentials for OPNsense
+- SSH access (optional, for advanced features)
 
-### Installation
+### Quick Start
 
-#### Via npm (Recommended)
+1. Install the package:
 ```bash
-# Use directly with npx - no installation needed
-npx opnsense-mcp-server
-
-# Or install globally
 npm install -g opnsense-mcp-server
 ```
 
-#### Via GitHub (Latest Development)
+2. Create a `.env` file with your credentials:
 ```bash
-# Use latest from GitHub
-npx github:vespo92/OPNSenseMCP
+# Required
+OPNSENSE_HOST=https://your-opnsense-host:port
+OPNSENSE_API_KEY=your-api-key
+OPNSENSE_API_SECRET=your-api-secret
+OPNSENSE_VERIFY_SSL=false
+
+# Optional - for SSH features
+OPNSENSE_SSH_HOST=your-opnsense-host
+OPNSENSE_SSH_USERNAME=root
+OPNSENSE_SSH_PASSWORD=your-password
+# Or use SSH key
+# OPNSENSE_SSH_KEY_PATH=~/.ssh/id_rsa
 ```
 
-#### For Development
+3. Start the MCP server:
 ```bash
-git clone https://github.com/vespo92/OPNSenseMCP
+opnsense-mcp-server
+```
+
+## Usage with Claude Desktop
+
+Add to your Claude Desktop configuration (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "opnsense": {
+      "command": "npx",
+      "args": ["opnsense-mcp-server"],
+      "env": {
+        "OPNSENSE_HOST": "https://your-opnsense:port",
+        "OPNSENSE_API_KEY": "your-key",
+        "OPNSENSE_API_SECRET": "your-secret",
+        "OPNSENSE_VERIFY_SSL": "false"
+      }
+    }
+  }
+}
+```
+
+## Common Use Cases
+
+### Fix DMZ NAT Issues
+```javascript
+// Automatically fix DMZ to LAN routing
+await mcp.call('nat_fix_dmz', {
+  dmzNetwork: '10.0.6.0/24',
+  lanNetwork: '10.0.0.0/24'
+});
+```
+
+### Create Firewall Rules
+```javascript
+// Allow NFS from DMZ to NAS
+await mcp.call('firewall_create_rule', {
+  action: 'pass',
+  interface: 'opt8',
+  source: '10.0.6.0/24',
+  destination: '10.0.0.14/32',
+  protocol: 'tcp',
+  destination_port: '2049',
+  description: 'Allow NFS from DMZ'
+});
+```
+
+### Diagnose Routing Issues
+```javascript
+// Run comprehensive routing diagnostics
+await mcp.call('routing_diagnostics', {
+  sourceNetwork: '10.0.6.0/24',
+  destNetwork: '10.0.0.0/24'
+});
+```
+
+### Execute CLI Commands
+```javascript
+// Run any OPNsense CLI command
+await mcp.call('system_execute_command', {
+  command: 'pfctl -s state | grep 10.0.6'
+});
+```
+
+## MCP Tools Reference
+
+The server provides 50+ MCP tools organized by category:
+
+### Firewall Tools
+- `firewall_list_rules` - List all firewall rules
+- `firewall_create_rule` - Create a new rule
+- `firewall_update_rule` - Update existing rule
+- `firewall_delete_rule` - Delete a rule
+- `firewall_apply_changes` - Apply pending changes
+
+### NAT Tools
+- `nat_list_outbound` - List outbound NAT rules
+- `nat_set_mode` - Set NAT mode
+- `nat_create_outbound_rule` - Create NAT rule
+- `nat_fix_dmz` - Fix DMZ NAT issues
+- `nat_analyze_config` - Analyze NAT configuration
+
+### Network Tools
+- `arp_list` - List ARP table entries
+- `routing_diagnostics` - Diagnose routing issues
+- `routing_fix_all` - Auto-fix routing problems
+- `interface_list` - List network interfaces
+- `vlan_create` - Create VLAN
+
+### System Tools
+- `system_execute_command` - Execute CLI command
+- `backup_create` - Create configuration backup
+- `service_restart` - Restart a service
+
+For a complete list, see [docs/api/mcp-tools.md](docs/api/mcp-tools.md).
+
+## Documentation
+
+- [Quick Start Guide](docs/guides/quick-start.md)
+- [Configuration Guide](docs/guides/configuration.md)
+- [NAT Management](docs/features/nat.md)
+- [SSH/CLI Execution](docs/features/ssh.md)
+- [Firewall Rules](docs/features/firewall.md)
+- [Troubleshooting](docs/guides/troubleshooting.md)
+
+## Testing
+
+The repository includes comprehensive testing utilities:
+
+```bash
+# Test NAT functionality
+npx tsx scripts/test/test-nat-ssh.ts
+
+# Test firewall rules
+npx tsx scripts/test/test-rules.ts
+
+# Test routing diagnostics
+npx tsx scripts/test/test-routing.ts
+
+# Run all tests
+npm test
+```
+
+## Development
+
+### Building from Source
+```bash
+git clone https://github.com/vespo92/OPNSenseMCP.git
 cd OPNSenseMCP
 npm install
 npm run build
 ```
 
-## 📋 Configuration
-
-### Claude Desktop
-
-Add to your Claude Desktop configuration file:
-- **MacOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "opnsense": {
-      "command": "npx",
-      "args": ["--yes", "opnsense-mcp-server@latest"],
-      "env": {
-        "OPNSENSE_HOST": "https://192.168.1.1",
-        "OPNSENSE_API_KEY": "your-api-key",
-        "OPNSENSE_API_SECRET": "your-api-secret",
-        "OPNSENSE_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
+### Project Structure
+```
+OPNSenseMCP/
+├── src/                 # Source code
+│   ├── api/            # API client
+│   ├── resources/      # Resource implementations
+│   └── index.ts        # MCP server entry
+├── docs/               # Documentation
+├── scripts/            # Utility scripts
+│   ├── test/          # Test scripts
+│   ├── debug/         # Debug utilities
+│   └── fixes/         # Fix scripts
+└── dist/               # Build output
 ```
 
-### Claude Code
+## Troubleshooting
 
-Add to `.claude/config.json` in your project root:
+### API Authentication Failed
+- Verify API key and secret are correct
+- Ensure API access is enabled in OPNsense
+- Check firewall rules allow API access
 
-**Option 1: Using NPX (Recommended)**
-```json
-{
-  "mcpServers": {
-    "opnsense": {
-      "command": "npx",
-      "args": ["--yes", "opnsense-mcp-server@latest"],
-      "env": {
-        "OPNSENSE_HOST": "https://192.168.1.1",
-        "OPNSENSE_API_KEY": "your-api-key",
-        "OPNSENSE_API_SECRET": "your-api-secret",
-        "OPNSENSE_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
+### SSH Connection Failed
+- Verify SSH credentials in `.env`
+- Ensure SSH is enabled on OPNsense
+- Check user has appropriate privileges
 
-**Option 2: Local Installation**
-```json
-{
-  "mcpServers": {
-    "opnsense": {
-      "command": "node",
-      "args": ["node_modules/opnsense-mcp-server/dist/index.js"],
-      "env": {
-        "OPNSENSE_HOST": "https://192.168.1.1",
-        "OPNSENSE_API_KEY": "your-api-key",
-        "OPNSENSE_API_SECRET": "your-api-secret",
-        "OPNSENSE_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
+### NAT Features Not Working
+- NAT management requires SSH access
+- Add SSH credentials to environment variables
+- Test with: `npx tsx scripts/test/test-nat-ssh.ts`
 
-### Using System Keychain (Recommended for Security)
+## Contributing
 
-Instead of hardcoding credentials:
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-```json
-{
-  "mcpServers": {
-    "opnsense": {
-      "command": "npx",
-      "args": ["opnsense-mcp-server"],
-      "env": {
-        "OPNSENSE_HOST": "https://192.168.1.1",
-        "OPNSENSE_API_KEY": "{{keychain:opnsense-api-key}}",
-        "OPNSENSE_API_SECRET": "{{keychain:opnsense-api-secret}}",
-        "OPNSENSE_VERIFY_SSL": "true"
-      }
-    }
-  }
-}
-```
+## License
 
-Then store credentials in your system keychain:
-- **MacOS**: Use Keychain Access app
-- **Windows**: Use Credential Manager
-- **Linux**: Use Secret Service (gnome-keyring or KWallet)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### Environment Variables
+## Support
 
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `OPNSENSE_HOST` | OPNsense URL (include https://) | Yes | - |
-| `OPNSENSE_API_KEY` | API key from OPNsense | Yes | - |
-| `OPNSENSE_API_SECRET` | API secret from OPNsense | Yes | - |
-| `OPNSENSE_VERIFY_SSL` | Verify SSL certificates | No | `true` |
-| `LOG_LEVEL` | Logging level | No | `info` |
-| `CACHE_ENABLED` | Enable response caching | No | `true` |
-| `CACHE_TTL` | Cache time-to-live in seconds | No | `300` |
+- **Issues**: [GitHub Issues](https://github.com/vespo92/OPNSenseMCP/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/vespo92/OPNSenseMCP/discussions)
+- **Documentation**: [Full Documentation](docs/)
 
-<details>
-<summary>Advanced Configuration (Optional)</summary>
+## Acknowledgments
 
-```json
-{
-  "mcpServers": {
-    "opnsense": {
-      "command": "npx",
-      "args": ["opnsense-mcp-server"],
-      "env": {
-        "OPNSENSE_HOST": "https://192.168.1.1",
-        "OPNSENSE_API_KEY": "{{keychain:opnsense-api-key}}",
-        "OPNSENSE_API_SECRET": "{{keychain:opnsense-api-secret}}",
-        
-        // Optional: Redis cache configuration
-        // "REDIS_HOST": "localhost",
-        // "REDIS_PORT": "6379",
-        // "REDIS_PASSWORD": "{{keychain:redis-password}}",
-        // "REDIS_DB": "0",
-        
-        // Optional: PostgreSQL for state persistence  
-        // "POSTGRES_HOST": "localhost",
-        // "POSTGRES_PORT": "5432",
-        // "POSTGRES_DB": "opnsense_mcp",
-        // "POSTGRES_USER": "mcp_user",
-        // "POSTGRES_PASSWORD": "{{keychain:postgres-password}}",
-        
-        // Optional: State encryption
-        // "STATE_ENCRYPTION_KEY": "{{keychain:state-encryption-key}}",
-        
-        // Optional: Performance tuning
-        // "CACHE_COMPRESSION_ENABLED": "true",
-        // "CACHE_COMPRESSION_THRESHOLD": "1024",
-        // "MAX_CONCURRENT_REQUESTS": "10"
-      }
-    }
-  }
-}
-```
-</details>
-
-## 🔑 OPNsense API Setup
-
-1. **Enable API in OPNsense:**
-   - Navigate to: System → Settings → Administration
-   - Check: "Enable API"
-   - Save
-
-2. **Create API credentials:**
-   - Navigate to: System → Access → Users
-   - Edit user or create new
-   - Under "API Keys", click "+" to generate key/secret
-   - Save credentials securely
-
-3. **Required privileges:**
-   - System: API access
-   - Firewall: Rules: Edit
-   - Interfaces: VLANs: Edit
-   - Services: All
-
-Then restart Claude Desktop/Code and start chatting!
-
-## 📚 Documentation
-
-- **[Getting Started Guide](docs/getting-started/)** - Installation and setup
-- **[Feature Guides](docs/guides/)** - Learn specific features
-- **[IaC Documentation](docs/iac/)** - Infrastructure as Code
-- **[API Reference](docs/api-reference/)** - Complete tool reference
-- **[Troubleshooting](docs/troubleshooting/)** - Common issues and solutions
-
-## 💡 Example Use Cases
-
-### Create a Secure Guest Network
-```
-"Create a guest network on VLAN 20 with internet access only"
-```
-
-### Find Devices
-```  
-"Show me all devices from Apple on my network"
-```
-
-### Block Unwanted Content
-```
-"Block gambling and adult content sites"
-```
-
-### Set Up Services
-```
-"Configure HAProxy to load balance my web servers"
-```
-
-More examples in the [examples/](examples/) directory.
-
-## 🛠️ Advanced Usage
-
-### Server Mode (for agents and automation)
-```bash
-npm run start:sse  # HTTP server on port 3000
-```
-
-### Infrastructure as Code
-Deploy entire network configurations declaratively. See [IaC documentation](docs/iac/).
-
-### Custom Patterns
-Build reusable network templates. See [pattern examples](examples/patterns/).
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Setup
-```bash
-npm install
-npm run dev  # Development mode with hot reload
-```
-
-## 🔧 Troubleshooting
-
-### Claude Code/Desktop Not Connecting
-
-If the MCP server fails to connect:
-
-1. **Check the command path**: 
-   - For NPX: Use `["npx", "--yes", "opnsense-mcp-server@latest"]` to ensure latest version
-   - For local: Ensure path is correct: `node_modules/opnsense-mcp-server/dist/index.js`
-
-2. **Verify environment variables**:
-   - Host must include protocol: `https://192.168.1.1` not just `192.168.1.1`
-   - API credentials must match exactly (no extra spaces)
-
-3. **Test standalone first**:
-   ```bash
-   npx opnsense-mcp-server
-   # Or if installed locally:
-   node node_modules/opnsense-mcp-server/dist/index.js
-   ```
-
-4. **Check Claude logs**:
-   - MacOS: `~/Library/Logs/Claude/`
-   - Windows: `%APPDATA%\Claude\logs\`
-   - Linux: `~/.config/claude/logs/`
-
-### Common Issues
-
-- **"command not found"**: Install globally with `npm i -g opnsense-mcp-server` or use npx
-- **"EACCES permission denied"**: The package may need executable permissions
-- **"Cannot connect to OPNsense"**: Check firewall rules and API settings
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## 🔗 Links
-
-- [Documentation](docs/)
-- [Examples](examples/)
-- [Issues](https://github.com/vespo92/OPNSenseMCP/issues)
-- [Discussions](https://github.com/vespo92/OPNSenseMCP/discussions)
-- [Model Context Protocol](https://modelcontextprotocol.io)
+- Built for use with [Anthropic's Claude](https://claude.ai)
+- Implements the [Model Context Protocol](https://modelcontextprotocol.io)
+- Designed for [OPNsense](https://opnsense.org) firewall
 
 ---
 
-Built with ❤️ for the MCP ecosystem
+**Version**: 0.8.2 | **Status**: Production Ready | **Last Updated**: August 2025
