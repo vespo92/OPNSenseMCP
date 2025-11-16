@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "traffic-shaper",
+    "name": "Traffic Shaper Plugin",
+    "version": "1.0.0",
+    "description": "QoS traffic shaping and bandwidth management",
+    "category": "traffic",
+    "author": "OPNsense MCP Team",
+    "enabled": true,
+    "tags": ["traffic", "qos", "bandwidth", "shaping", "priority"],
+    "homepage": "https://github.com/vespo92/OPNSenseMCP",
+    "license": "MIT"
+  },
+  "config": {
+    "enableMonitoring": true,
+    "monitorInterval": 30000
+  },
+  "dependencies": ["core-network"]
+}

@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "id": "core-firewall",
+    "name": "Core Firewall Plugin",
+    "version": "1.0.0",
+    "description": "Comprehensive firewall rule and alias management for OPNsense",
+    "category": "core",
+    "author": "OPNsense MCP Team",
+    "enabled": true,
+    "tags": ["firewall", "security", "rules", "aliases"],
+    "homepage": "https://github.com/vespo92/OPNSenseMCP",
+    "license": "MIT"
+  },
+  "config": {
+    "enableRuleMonitoring": true,
+    "monitorInterval": 60000,
+    "cacheRules": true,
+    "cacheTTL": 300,
+    "maxRulesPerBatch": 50
+  },
+  "dependencies": []
+}

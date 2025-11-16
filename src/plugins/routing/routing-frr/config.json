@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "routing-frr",
+    "name": "FRRouting Plugin",
+    "version": "1.0.0",
+    "description": "Dynamic routing with FRRouting (BGP, OSPF, RIP)",
+    "category": "routing",
+    "author": "OPNsense MCP Team",
+    "enabled": true,
+    "tags": ["routing", "bgp", "ospf", "frr", "dynamic"],
+    "homepage": "https://github.com/vespo92/OPNSenseMCP",
+    "license": "MIT"
+  },
+  "config": {
+    "enableRouteMonitoring": true,
+    "monitorInterval": 60000
+  },
+  "dependencies": ["core-network"]
+}

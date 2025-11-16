@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "id": "security-ids",
+    "name": "IDS/IPS Plugin (Suricata)",
+    "version": "1.0.0",
+    "description": "Intrusion Detection and Prevention System using Suricata",
+    "category": "security",
+    "author": "OPNsense MCP Team",
+    "enabled": true,
+    "tags": ["security", "ids", "ips", "suricata", "alerts"],
+    "homepage": "https://github.com/vespo92/OPNSenseMCP",
+    "license": "MIT"
+  },
+  "config": {
+    "enableAlertMonitoring": true,
+    "monitorInterval": 30000,
+    "alertThreshold": "medium",
+    "autoBlock": false,
+    "maxAlerts": 1000
+  },
+  "dependencies": ["core-firewall"]
+}

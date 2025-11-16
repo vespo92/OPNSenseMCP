@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "proxy-nginx",
+    "name": "Nginx Reverse Proxy Plugin",
+    "version": "1.0.0",
+    "description": "Nginx reverse proxy and web server management",
+    "category": "proxy",
+    "author": "OPNsense MCP Team",
+    "enabled": true,
+    "tags": ["proxy", "nginx", "http", "reverse-proxy"],
+    "homepage": "https://github.com/vespo92/OPNSenseMCP",
+    "license": "MIT"
+  },
+  "config": {
+    "enableMonitoring": true,
+    "monitorInterval": 60000
+  },
+  "dependencies": []
+}

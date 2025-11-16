@@ -1,0 +1,140 @@
+{
+  "$schema": "./opnsense-mcp.schema.json",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 3000,
+    "transport": "sse"
+  },
+  "opnsense": {
+    "host": "${OPNSENSE_HOST}",
+    "apiKey": "${OPNSENSE_API_KEY}",
+    "apiSecret": "${OPNSENSE_API_SECRET}",
+    "verifySsl": false,
+    "timeout": 30000
+  },
+  "ssh": {
+    "enabled": true,
+    "host": "${OPNSENSE_HOST}",
+    "port": 22,
+    "username": "${OPNSENSE_SSH_USER}",
+    "password": "${OPNSENSE_SSH_PASSWORD}",
+    "privateKey": "${OPNSENSE_SSH_KEY_PATH}",
+    "maxConnections": 5,
+    "connectionTimeout": 10000
+  },
+  "plugins": {
+    "autoLoad": true,
+    "directory": "src/plugins",
+    "enabled": [
+      "core-firewall",
+      "core-network",
+      "core-nat",
+      "vpn-openvpn",
+      "monitoring-system",
+      "services-dns",
+      "services-dhcp"
+    ],
+    "disabled": [
+      "experimental-plugin"
+    ],
+    "configs": {
+      "core-firewall": {
+        "enableRuleMonitoring": true,
+        "monitorInterval": 60000,
+        "cacheRules": true,
+        "cacheTTL": 300
+      },
+      "vpn-openvpn": {
+        "enableConnectionMonitoring": true,
+        "monitorInterval": 30000,
+        "trackBandwidth": true,
+        "alertOnDisconnect": true
+      },
+      "monitoring-system": {
+        "metricsInterval": 10000,
+        "alertThresholds": {
+          "cpu": 80,
+          "memory": 90,
+          "disk": 85
+        },
+        "enableAlerts": true
+      }
+    }
+  },
+  "events": {
+    "enabled": true,
+    "retention": "24h",
+    "maxEvents": 10000,
+    "maxListeners": 100,
+    "batchSize": 10,
+    "batchTimeout": 1000
+  },
+  "sse": {
+    "enabled": true,
+    "cors": {
+      "origin": ["http://localhost:3000", "http://localhost:5173"],
+      "credentials": true
+    },
+    "heartbeatInterval": 30000
+  },
+  "cache": {
+    "type": "redis",
+    "redis": {
+      "host": "${REDIS_HOST:-localhost}",
+      "port": "${REDIS_PORT:-6379}",
+      "password": "${REDIS_PASSWORD}",
+      "db": 0
+    },
+    "ttl": 300,
+    "enabled": true
+  },
+  "database": {
+    "type": "postgresql",
+    "host": "${DB_HOST:-localhost}",
+    "port": "${DB_PORT:-5432}",
+    "database": "${DB_NAME:-opnsense_mcp}",
+    "username": "${DB_USER}",
+    "password": "${DB_PASSWORD}",
+    "ssl": false,
+    "poolMin": 2,
+    "poolMax": 10
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "timestamp": true,
+    "file": {
+      "enabled": true,
+      "path": "./logs/opnsense-mcp.log",
+      "maxSize": "10m",
+      "maxFiles": 5
+    },
+    "console": {
+      "enabled": true,
+      "colorize": true
+    }
+  },
+  "healthCheck": {
+    "enabled": true,
+    "interval": 60000,
+    "timeout": 5000
+  },
+  "features": {
+    "iac": {
+      "enabled": true,
+      "stateBackend": "postgresql"
+    },
+    "macros": {
+      "enabled": true,
+      "recordingEnabled": false,
+      "maxMacros": 100
+    },
+    "backup": {
+      "enabled": true,
+      "autoBackup": true,
+      "backupInterval": "24h",
+      "maxBackups": 10,
+      "location": "./backups"
+    }
+  }
+}
