@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "id": "monitoring-system",
+    "name": "System Monitoring Plugin",
+    "version": "1.0.0",
+    "description": "Real-time system resource monitoring and metrics collection",
+    "category": "monitoring",
+    "author": "OPNsense MCP Team",
+    "enabled": true,
+    "tags": ["monitoring", "metrics", "performance", "resources"],
+    "homepage": "https://github.com/vespo92/OPNSenseMCP",
+    "license": "MIT"
+  },
+  "config": {
+    "metricsInterval": 10000,
+    "alertThresholds": {
+      "cpu": 80,
+      "memory": 90,
+      "disk": 85
+    },
+    "enableAlerts": true
+  },
+  "dependencies": []
+}

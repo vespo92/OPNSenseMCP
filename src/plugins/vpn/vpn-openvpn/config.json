@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "id": "vpn-openvpn",
+    "name": "OpenVPN Plugin",
+    "version": "1.0.0",
+    "description": "OpenVPN server and client management with real-time connection monitoring",
+    "category": "vpn",
+    "author": "OPNsense MCP Team",
+    "enabled": true,
+    "tags": ["vpn", "openvpn", "tunnel", "remote-access"],
+    "homepage": "https://github.com/vespo92/OPNSenseMCP",
+    "license": "MIT"
+  },
+  "config": {
+    "enableConnectionMonitoring": true,
+    "monitorInterval": 30000,
+    "trackBandwidth": true,
+    "alertOnDisconnect": true
+  },
+  "dependencies": ["core-firewall"]
+}
