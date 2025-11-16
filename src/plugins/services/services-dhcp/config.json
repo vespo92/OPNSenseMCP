@@ -1,0 +1,19 @@
+{
+  "metadata": {
+    "id": "services-dhcp",
+    "name": "DHCP Service Plugin",
+    "version": "1.0.0",
+    "description": "DHCPv4 and DHCPv6 server management",
+    "category": "services",
+    "author": "OPNsense MCP Team",
+    "enabled": true,
+    "tags": ["dhcp", "dhcpv6", "ip", "lease"],
+    "homepage": "https://github.com/vespo92/OPNSenseMCP",
+    "license": "MIT"
+  },
+  "config": {
+    "enableLeaseMonitoring": true,
+    "monitorInterval": 30000
+  },
+  "dependencies": ["core-network"]
+}

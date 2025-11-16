@@ -1,0 +1,21 @@
+{
+  "metadata": {
+    "id": "security-cert",
+    "name": "Certificate Management Plugin",
+    "version": "1.0.0",
+    "description": "SSL/TLS certificate management with Let's Encrypt support",
+    "category": "security",
+    "author": "OPNsense MCP Team",
+    "enabled": true,
+    "tags": ["security", "certificates", "ssl", "tls", "letsencrypt"],
+    "homepage": "https://github.com/vespo92/OPNSenseMCP",
+    "license": "MIT"
+  },
+  "config": {
+    "enableExpiryMonitoring": true,
+    "monitorInterval": 86400000,
+    "expiryWarningDays": 30,
+    "autoRenew": false
+  },
+  "dependencies": []
+}
