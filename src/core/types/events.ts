@@ -301,3 +301,8 @@ export interface SecurityAlertEventData {
   protocol?: string;
   timestamp: Date;
 }
+
+/**
+ * MCP Event (alias for Event to avoid conflict with global Event type)
+ */
+export type MCPEvent = Event;

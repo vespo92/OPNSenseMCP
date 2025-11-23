@@ -13,7 +13,7 @@ export default class CertificatePlugin extends BasePlugin {
     id: 'security-cert',
     name: 'Certificate Management Plugin',
     version: '1.0.0',
-    description: 'SSL/TLS certificate management with Let's Encrypt support',
+    description: "SSL/TLS certificate management with Let's Encrypt support",
     category: PluginCategory.SECURITY,
     author: 'OPNsense MCP Team',
     enabled: true,

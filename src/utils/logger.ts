@@ -98,3 +98,10 @@ export const error = logger.error.bind(logger);
 export const warn = logger.warn.bind(logger);
 export const info = logger.info.bind(logger);
 export const debug = logger.debug.bind(logger);
+
+/**
+ * Create a new logger instance
+ */
+export function createLogger(config?: Partial<LoggerConfig>): Logger {
+  return new Logger(config);
+}

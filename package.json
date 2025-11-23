@@ -1,9 +1,23 @@
 {
   "name": "opnsense-mcp-server",
-  "version": "0.8.2",
-  "description": "Model Context Protocol server for OPNSense firewall management with inter-VLAN routing diagnostics, ARP table, DNS filtering and HAProxy support via Claude Desktop",
+  "version": "0.9.0",
+  "description": "Model Context Protocol server for OPNSense firewall management with plugin support, inter-VLAN routing diagnostics, ARP table, DNS filtering and HAProxy support via Claude Desktop",
   "main": "dist/index.js",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./sdk": {
+      "types": "./dist/sdk/index.d.ts",
+      "import": "./dist/sdk/index.js"
+    },
+    "./plugin-system": {
+      "types": "./dist/core/plugin-system/index.d.ts",
+      "import": "./dist/core/plugin-system/index.js"
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vespo92/OPNSenseMCP.git"
@@ -13,7 +27,7 @@
   },
   "homepage": "https://github.com/vespo92/OPNSenseMCP#readme",
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js",
+    "build": "tsc && chmod +x dist/index.js && chmod +x dist/cli/plugin-cli.js",
     "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
@@ -46,23 +60,34 @@
     "test:nat": "tsx scripts/test/test-nat.ts",
     "nat:analyze": "tsx scripts/test/test-nat.ts",
     "nat:fix": "tsx scripts/fixes/fix-dmz-nat.ts",
-    "nat:fix-dmz": "tsx scripts/fixes/fix-dmz-nat.ts"
+    "nat:fix-dmz": "tsx scripts/fixes/fix-dmz-nat.ts",
+    "plugin": "tsx src/cli/plugin-cli.ts",
+    "plugin:create": "tsx src/cli/plugin-cli.ts create",
+    "plugin:install": "tsx src/cli/plugin-cli.ts install",
+    "plugin:list": "tsx src/cli/plugin-cli.ts list",
+    "plugin:validate": "tsx src/cli/plugin-cli.ts validate"
   },
   "keywords": [
     "mcp",
     "opnsense",
     "firewall",
-    "api"
+    "api",
+    "plugin",
+    "model-context-protocol",
+    "claude",
+    "ai"
   ],
   "author": "VinSpo",
   "license": "MIT",
   "bin": {
-    "opnsense-mcp-server": "dist/index.js"
+    "opnsense-mcp-server": "dist/index.js",
+    "opnsense-mcp-plugin": "dist/cli/plugin-cli.js"
   },
   "files": [
     "dist/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_PLUGINS.md"
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.5.0",
