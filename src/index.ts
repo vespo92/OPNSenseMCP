@@ -89,8 +89,7 @@ class OPNSenseMCPServer {
     this.server = new Server(
       {
         name: 'opnsense-mcp',
-        version: '0.8.0',
-        description: 'OPNsense firewall management via MCP with CLI execution, IaC, ARP table, DNS filtering and HAProxy support'
+        version: '0.9.0',
       },
       {
         capabilities: {

@@ -43,63 +43,7 @@ export class NetworkQueryMCP {
       },
       {
         capabilities: {
-          tools: {
-            'network_query': {
-              description: 'Query network devices using natural language',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  query: {
-                    type: 'string',
-                    description: 'Natural language query about network devices'
-                  }
-                },
-                required: ['query']
-              }
-            },
-            'sync_network_data': {
-              description: 'Sync network data from OPNsense',
-              inputSchema: {
-                type: 'object',
-                properties: {}
-              }
-            },
-            'update_device_name': {
-              description: 'Update friendly name for a device',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  macAddress: {
-                    type: 'string',
-                    description: 'MAC address of the device'
-                  },
-                  friendlyName: {
-                    type: 'string',
-                    description: 'New friendly name for the device'
-                  }
-                },
-                required: ['macAddress', 'friendlyName']
-              }
-            },
-            'group_devices': {
-              description: 'Group devices together (e.g., all devices belonging to one person)',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  groupName: {
-                    type: 'string',
-                    description: 'Name of the group'
-                  },
-                  macAddresses: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: 'MAC addresses to group together'
-                  }
-                },
-                required: ['groupName', 'macAddresses']
-              }
-            }
-          }
+          tools: {}
         }
       }
     );

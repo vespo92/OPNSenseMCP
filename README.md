@@ -45,12 +45,12 @@ A Model Context Protocol (MCP) server for comprehensive OPNsense firewall manage
 ## Installation
 
 ### Prerequisites
-- Node.js 18+ and npm
+- Node.js 18+ or Bun 1.0+
 - OPNsense firewall (v24.7+ recommended)
 - API credentials for OPNsense
 - SSH access (optional, for advanced features)
 
-### Quick Start
+### Quick Start with npm
 
 1. Install the package:
 ```bash
@@ -78,7 +78,53 @@ OPNSENSE_SSH_PASSWORD=your-password
 opnsense-mcp-server
 ```
 
-## Usage with Claude Desktop
+### Quick Start with Bun (Faster)
+
+[Bun](https://bun.sh) provides significantly faster startup times and better performance.
+
+1. Install Bun (if not already installed):
+```bash
+curl -fsSL https://bun.sh/install | bash
+```
+
+2. Clone and install:
+```bash
+git clone https://github.com/vespo92/OPNSenseMCP.git
+cd OPNSenseMCP
+bun install
+```
+
+3. Create your `.env` file (same as npm version above)
+
+4. Run with Bun:
+```bash
+# Development with hot reload
+bun run dev:bun
+
+# Production
+bun run start:bun
+```
+
+### Using Bun with Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "opnsense": {
+      "command": "bun",
+      "args": ["run", "/path/to/OPNSenseMCP/src/index.ts"],
+      "env": {
+        "OPNSENSE_HOST": "https://your-opnsense:port",
+        "OPNSENSE_API_KEY": "your-key",
+        "OPNSENSE_API_SECRET": "your-secret",
+        "OPNSENSE_VERIFY_SSL": "false"
+      }
+    }
+  }
+}
+```
+
+## Usage with Claude Desktop (npm)
 
 Add to your Claude Desktop configuration (`claude_desktop_config.json`):
 

@@ -1,6 +1,6 @@
 {
   "name": "opnsense-mcp-server",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Model Context Protocol server for OPNSense firewall management with inter-VLAN routing diagnostics, ARP table, DNS filtering and HAProxy support via Claude Desktop",
   "main": "dist/index.js",
   "type": "module",
@@ -14,9 +14,12 @@
   "homepage": "https://github.com/vespo92/OPNSenseMCP#readme",
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
+    "build:bun": "bun build src/index.ts --outdir dist --target node",
     "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
+    "start:bun": "bun run src/index.ts",
     "dev": "tsx src/index.ts",
+    "dev:bun": "bun run --watch src/index.ts",
     "test": "tsx src/test-resources.ts",
     "test:api": "node test-simple.js",
     "test:vlan": "node test-vlan-comprehensive.js",
@@ -65,7 +68,7 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^0.5.0",
+    "@modelcontextprotocol/sdk": "^1.24.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/uuid": "^10.0.0",
