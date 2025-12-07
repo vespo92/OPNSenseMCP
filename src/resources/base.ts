@@ -90,7 +90,7 @@ export abstract class IaCResource {
       if (error instanceof z.ZodError) {
         return {
           valid: false,
-          errors: error.errors.map(e => ({
+          errors: error.issues.map((e) => ({
             path: e.path.join('.'),
             message: e.message
           }))
@@ -196,7 +196,7 @@ export abstract class IaCResource {
       if (error instanceof z.ZodError) {
         return {
           valid: false,
-          errors: error.errors.map(e => ({
+          errors: error.issues.map((e) => ({
             path: e.path.join('.'),
             message: e.message
           }))

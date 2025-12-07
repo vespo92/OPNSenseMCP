@@ -46,12 +46,9 @@ updates:
         update-types:
           - "minor"
           - "patch"
-    # Ignore major version updates for these (require manual review)
-    ignore:
-      - dependency-name: "zod"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "drizzle-orm"
-        update-types: ["version-update:semver-major"]
+    # Note: zod v4 and drizzle-orm 0.45+ are now supported
+    # Only ignore packages with known compatibility issues
+    ignore: []
 
   # GitHub Actions
   - package-ecosystem: "github-actions"

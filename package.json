@@ -76,7 +76,7 @@
     "axios": "^1.6.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
-    "drizzle-orm": "^0.29.0",
+    "drizzle-orm": "^0.45.0",
     "express": "^5.2.1",
     "ioredis": "^5.6.1",
     "jsonpath": "^1.1.1",
@@ -85,7 +85,7 @@
     "ssh2-promise": "^1.0.3",
     "uuid": "^11.1.0",
     "xml2js": "^0.6.2",
-    "zod": "^3.25.62"
+    "zod": "^4.1.13"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -93,7 +93,7 @@
     "@types/node": "^20.0.0",
     "@types/pg": "^8.11.0",
     "@types/ssh2": "^1.11.0",
-    "drizzle-kit": "^0.31.4",
+    "drizzle-kit": "^0.31.8",
     "eslint": "^9.28.0",
     "jest": "^30.0.0",
     "prettier": "^3.5.3",
