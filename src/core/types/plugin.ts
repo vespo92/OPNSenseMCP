@@ -4,11 +4,11 @@
  * Defines interfaces and types for the modular plugin architecture
  */
 
-import type { OPNsenseAPIClient } from '../../api/client.js';
+import type { OPNSenseAPIClient } from '../../api/client.js';
 import type { SSHExecutor } from '../../resources/ssh/executor.js';
 import type { EventBus } from '../event-bus/bus.js';
-import type { CacheManager } from '../../cache/manager.js';
-import type { StateStore } from '../../state/store.js';
+import type { MCPCacheManager } from '../../cache/manager.js';
+import type { ResourceStateStore } from '../../state/store.js';
 import type { Logger } from '../../utils/logger.js';
 
 /**
@@ -99,7 +99,7 @@ export interface PluginMetadata {
  */
 export interface PluginContext {
   /** OPNsense REST API client */
-  apiClient: OPNsenseAPIClient;
+  apiClient: OPNSenseAPIClient;
 
   /** SSH command executor */
   sshExecutor: SSHExecutor;
@@ -108,10 +108,10 @@ export interface PluginContext {
   eventBus: EventBus;
 
   /** Cache manager */
-  cache: CacheManager;
+  cache: MCPCacheManager;
 
   /** State store */
-  state: StateStore;
+  state: ResourceStateStore;
 
   /** Logger instance */
   logger: Logger;

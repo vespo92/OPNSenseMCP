@@ -91,3 +91,38 @@ test-mcp-fix.ts
 
 # MCP configuration (contains API keys)
 .mcp.json
+mcp.json
+*.mcp.json
+claude_desktop_config.json
+
+# Credentials and secrets
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+secrets.json
+**/secrets/
+**/credentials/
+*.secret
+.secrets
+.credentials
+
+# API keys in config files
+config.local.json
+config.production.json
+*.local.json
+
+# SSH keys
+id_rsa*
+id_ed25519*
+*.pub
+
+# Token files
+.token
+*.token
+tokens.json
+
+# Experimental/consolidated code
+consolidated/

@@ -494,7 +494,7 @@ export default class FirewallPlugin extends BasePlugin {
    */
   private async loadRulesFromCache(): Promise<void> {
     try {
-      const cached = await this.cache.get('firewall:rules');
+      const cached = await this.cache.getValue<Record<string, any>>('firewall:rules');
       if (cached) {
         this.ruleCache = new Map(Object.entries(cached));
         this.logger.info(`Loaded ${this.ruleCache.size} rules from cache`);

@@ -195,10 +195,41 @@ export class MCPCacheManager {
   }
 
   /**
+   * Simple key-value get (for plugins)
+   */
+  async getValue<T>(key: string): Promise<T | null> {
+    if (!this.redisClient) return null;
+    try {
+      const cached = await this.redisClient.get(key);
+      return cached ? JSON.parse(cached) : null;
+    } catch (error) {
+      console.error('Redis getValue error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Simple key-value set (for plugins)
+   */
+  async set(key: string, value: any, ttl?: number): Promise<void> {
+    if (!this.redisClient) return;
+    try {
+      const serialized = JSON.stringify(value);
+      if (ttl) {
+        await this.redisClient.setex(key, ttl, serialized);
+      } else {
+        await this.redisClient.set(key, serialized);
+      }
+    } catch (error) {
+      console.error('Redis set error:', error);
+    }
+  }
+
+  /**
    * Get cached firewall rules
    */
   async getFirewallRules(): Promise<CachedData<any[]>> {
-    return this.get('cache:firewall:rules', 
+    return this.get('cache:firewall:rules',
       () => this.client.searchFirewallRules(),
       300 // 5 minute cache
     );

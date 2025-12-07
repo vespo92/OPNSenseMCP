@@ -4,11 +4,12 @@
  * Manages plugin lifecycle and registration
  */
 
-import type {
-  MCPPlugin,
-  PluginRegistryEntry,
-  PluginContext,
-  HealthStatus,
+import {
+  PluginState,
+  type MCPPlugin,
+  type PluginRegistryEntry,
+  type PluginContext,
+  type HealthStatus,
 } from '../types/plugin.js';
 import type { Logger } from '../../utils/logger.js';
 import { EventType, EventSeverity } from '../types/events.js';
@@ -135,7 +136,7 @@ export class PluginRegistry {
         entry.state = entry.plugin.state;
       } catch (error) {
         this.logger.error(`Failed to initialize plugin ${pluginId}:`, error);
-        entry.state = 'error';
+        entry.state = PluginState.ERROR;
       }
     }
   }
@@ -152,7 +153,7 @@ export class PluginRegistry {
           entry.state = entry.plugin.state;
         } catch (error) {
           this.logger.error(`Failed to start plugin ${entry.plugin.metadata.id}:`, error);
-          entry.state = 'error';
+          entry.state = PluginState.ERROR;
         }
       }
     }

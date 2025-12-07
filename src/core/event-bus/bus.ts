@@ -6,13 +6,13 @@
 
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
-import type {
-  Event,
-  EventType,
+import {
   EventSeverity,
-  EventFilter,
-  EventSubscription,
-  EventStreamConfig,
+  type Event,
+  type EventType,
+  type EventFilter,
+  type EventSubscription,
+  type EventStreamConfig,
 } from '../types/events.js';
 
 /**

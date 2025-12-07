@@ -8,11 +8,11 @@ import { EventBus } from './core/event-bus/bus.js';
 import { PluginRegistry } from './core/plugin-system/registry.js';
 import { PluginLoader } from './core/plugin-system/loader.js';
 import { SSEServer } from './core/sse/server.js';
-import { OPNsenseAPIClient } from './api/client.js';
+import { OPNSenseAPIClient } from './api/client.js';
 import { SSHExecutor } from './resources/ssh/executor.js';
-import { CacheManager } from './cache/manager.js';
-import { StateStore } from './state/store.js';
-import { createLogger } from './utils/logger.js';
+import { MCPCacheManager } from './cache/manager.js';
+import { ResourceStateStore } from './state/store.js';
+import { Logger, LogLevel } from './utils/logger.js';
 import type { PluginContext } from './core/types/plugin.js';
 
 /**
@@ -71,14 +71,18 @@ export class OPNsenseMCPServerV2 {
   private registry: PluginRegistry;
   private loader: PluginLoader;
   private sseServer?: SSEServer;
-  private apiClient!: OPNsenseAPIClient;
+  private apiClient!: OPNSenseAPIClient;
   private sshExecutor!: SSHExecutor;
-  private cache!: CacheManager;
-  private state!: StateStore;
+  private cache!: MCPCacheManager;
+  private state!: ResourceStateStore;
 
   constructor(config: ServerConfig) {
     this.config = config;
-    this.logger = createLogger(config.logging?.level || 'info');
+    const logLevel = config.logging?.level === 'debug' ? LogLevel.DEBUG
+      : config.logging?.level === 'warn' ? LogLevel.WARN
+      : config.logging?.level === 'error' ? LogLevel.ERROR
+      : LogLevel.INFO;
+    this.logger = new Logger({ level: logLevel });
     this.eventBus = new EventBus(config.events);
     this.registry = new PluginRegistry(this.logger);
     this.loader = new PluginLoader(this.registry, this.logger, {
@@ -119,28 +123,29 @@ export class OPNsenseMCPServerV2 {
     this.logger.info('Initializing core services');
 
     // Initialize API client
-    this.apiClient = new OPNsenseAPIClient(
-      this.config.opnsense.host,
-      this.config.opnsense.apiKey,
-      this.config.opnsense.apiSecret,
-      { verifySsl: this.config.opnsense.verifySsl }
-    );
+    this.apiClient = new OPNSenseAPIClient({
+      host: this.config.opnsense.host,
+      apiKey: this.config.opnsense.apiKey,
+      apiSecret: this.config.opnsense.apiSecret,
+      verifySsl: this.config.opnsense.verifySsl,
+    });
 
     // Initialize SSH executor
     if (this.config.ssh?.enabled) {
-      this.sshExecutor = new SSHExecutor(
-        this.config.ssh.host,
-        this.config.ssh.username,
-        this.config.ssh.password,
-        this.config.ssh.privateKey
-      );
+      this.sshExecutor = new SSHExecutor({
+        host: this.config.ssh.host,
+        port: this.config.ssh.port,
+        username: this.config.ssh.username,
+        password: this.config.ssh.password,
+        privateKey: this.config.ssh.privateKey,
+      });
     }
 
-    // Initialize cache (simplified - use in-memory for now)
-    this.cache = new CacheManager();
+    // Initialize cache
+    this.cache = new MCPCacheManager(this.apiClient);
 
     // Initialize state store
-    this.state = new StateStore();
+    this.state = new ResourceStateStore();
 
     this.logger.info('Core services initialized');
   }
