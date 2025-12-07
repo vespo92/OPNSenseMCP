@@ -1,6 +1,6 @@
 {
   "name": "opnsense-mcp-server",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Model Context Protocol server for OPNSense firewall management with inter-VLAN routing diagnostics, ARP table, DNS filtering and HAProxy support via Claude Desktop",
   "main": "dist/index.js",
   "type": "module",
