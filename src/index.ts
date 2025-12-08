@@ -1105,34 +1105,84 @@ class OPNSenseMCPServer {
         // HAProxy ACL Management
         {
           name: 'haproxy_acl_create',
-          description: 'Create an ACL for HAProxy frontend',
+          description: 'Create an ACL for HAProxy frontend. Supports all OPNsense HAProxy ACL expression types including SNI matching for TCP/SSL passthrough.',
           inputSchema: {
             type: 'object',
             properties: {
               frontend: { type: 'string', description: 'Frontend UUID' },
               name: { type: 'string', description: 'ACL name' },
-              expression: { type: 'string', description: 'ACL expression' }
+              expression: {
+                type: 'string',
+                enum: [
+                  // SNI-based expressions (for TCP/SSL passthrough)
+                  'ssl_sni', 'ssl_sni_end', 'ssl_sni_beg', 'ssl_sni_sub', 'ssl_sni_reg',
+                  // Host-based expressions (for HTTP)
+                  'hdr_host', 'hdr_host_end', 'hdr_host_beg', 'hdr_host_sub', 'hdr_host_reg',
+                  // Path-based expressions
+                  'path', 'path_beg', 'path_end', 'path_sub', 'path_reg', 'path_dir',
+                  // URL-based expressions
+                  'url', 'url_beg', 'url_end', 'url_sub', 'url_reg',
+                  // Source IP expressions
+                  'src', 'src_port', 'src_is_local',
+                  // Custom expressions
+                  'custom_acl',
+                  // HTTP method
+                  'method',
+                  // SSL/TLS
+                  'ssl_fc', 'ssl_fc_sni', 'ssl_c_used', 'ssl_c_verify',
+                  // Other
+                  'nbsrv', 'connslots', 'queue'
+                ],
+                description: 'ACL expression type. Use ssl_sni_end for suffix matching (e.g., .example.com)'
+              },
+              value: { type: 'string', description: 'Value to match against (e.g., ".example.com" for ssl_sni_end)' },
+              negate: { type: 'boolean', description: 'Negate the ACL condition', default: false }
             },
-            required: ['frontend', 'name', 'expression']
+            required: ['frontend', 'name', 'expression', 'value']
           }
         },
 
         // HAProxy Action Management
         {
           name: 'haproxy_action_create',
-          description: 'Create an action for HAProxy frontend',
+          description: 'Create an action for HAProxy frontend. Supports all OPNsense HAProxy action types including tcp-request for SNI routing.',
           inputSchema: {
             type: 'object',
             properties: {
               frontend: { type: 'string', description: 'Frontend UUID' },
               type: {
                 type: 'string',
-                enum: ['use_backend', 'redirect', 'add_header', 'set_header', 'del_header'],
-                description: 'Action type'
+                enum: [
+                  // Backend selection
+                  'use_backend',
+                  // HTTP actions
+                  'redirect', 'add_header', 'set_header', 'del_header', 'replace_header', 'replace_value',
+                  // TCP actions (for SNI routing)
+                  'tcp-request_content_accept', 'tcp-request_content_reject',
+                  'tcp-request_content_use-server', 'tcp-request_inspect-delay',
+                  // Connection actions
+                  'http-request_deny', 'http-request_tarpit', 'http-request_auth', 'http-request_set-var',
+                  // Logging/tracking
+                  'http-request_capture', 'http-request_track-sc',
+                  // Response actions
+                  'http-response_add-header', 'http-response_set-header', 'http-response_del-header'
+                ],
+                description: 'Action type. Use tcp-request_inspect-delay for SNI inspection setup.'
               },
-              backend: { type: 'string', description: 'Backend name (for use_backend)' },
-              condition: { type: 'string', description: 'ACL condition' },
-              value: { type: 'string', description: 'Action value' }
+              backend: { type: 'string', description: 'Backend name or UUID (required for use_backend)' },
+              condition: { type: 'string', description: 'ACL condition string (e.g., "if acl_name")' },
+              aclNames: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Array of ACL names to link to this action'
+              },
+              operator: {
+                type: 'string',
+                enum: ['if', 'unless'],
+                description: 'Condition operator',
+                default: 'if'
+              },
+              value: { type: 'string', description: 'Action-specific value (e.g., delay in ms for tcp-request_inspect-delay)' }
             },
             required: ['frontend', 'type']
           }
@@ -4362,33 +4412,37 @@ class OPNSenseMCPServer {
         // HAProxy ACL Management
         case 'haproxy_acl_create': {
           await this.ensureInitialized();
-          
-          if (!args || !args.frontend || !args.name || !args.expression) {
+
+          if (!args || !args.frontend || !args.name || !args.expression || !args.value) {
             throw new McpError(
               ErrorCode.InvalidRequest,
-              'frontend, name, and expression parameters are required'
+              'frontend, name, expression, and value parameters are required'
             );
           }
-          
+
           try {
             const result = await this.haproxyResource!.addACLToFrontend(
               args.frontend as string,
               {
                 name: args.name as string,
-                expression: args.expression as string
+                expression: args.expression as any,
+                value: args.value as string,
+                negate: args.negate as boolean | undefined
               }
             );
-            
+
             return {
               content: [{
                 type: 'text',
-                text: `Successfully created ACL ${args.name} with UUID: ${result.uuid}`
+                text: `Successfully created ACL "${args.name}" (${args.expression}: ${args.value}) with UUID: ${result.uuid}`
               }]
             };
           } catch (error: any) {
+            // Return detailed error information
+            const errorDetails = error.details ? `\nDetails: ${JSON.stringify(error.details)}` : '';
             throw new McpError(
               ErrorCode.InvalidRequest,
-              error.message
+              `${error.message}${errorDetails}`
             );
           }
         }
@@ -4396,35 +4450,39 @@ class OPNSenseMCPServer {
         // HAProxy Action Management
         case 'haproxy_action_create': {
           await this.ensureInitialized();
-          
+
           if (!args || !args.frontend || !args.type) {
             throw new McpError(
               ErrorCode.InvalidRequest,
               'frontend and type parameters are required'
             );
           }
-          
+
           try {
             const result = await this.haproxyResource!.addActionToFrontend(
               args.frontend as string,
               {
                 type: args.type as any,
-                backend: args.backend as string,
-                condition: args.condition as string,
-                value: args.value as string
+                backend: args.backend as string | undefined,
+                condition: args.condition as string | undefined,
+                aclNames: args.aclNames as string[] | undefined,
+                operator: args.operator as 'if' | 'unless' | undefined,
+                value: args.value as string | undefined
               }
             );
-            
+
             return {
               content: [{
                 type: 'text',
-                text: `Successfully created action with UUID: ${result.uuid}`
+                text: `Successfully created action (${args.type}) with UUID: ${result.uuid}`
               }]
             };
           } catch (error: any) {
+            // Return detailed error information
+            const errorDetails = error.details ? `\nDetails: ${JSON.stringify(error.details)}` : '';
             throw new McpError(
               ErrorCode.InvalidRequest,
-              error.message
+              `${error.message}${errorDetails}`
             );
           }
         }
