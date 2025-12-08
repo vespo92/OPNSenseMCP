@@ -401,21 +401,215 @@ export class NATResource {
     return null;
   }
 
-  // ==================== Port Forwarding Methods (Placeholders) ====================
+  // ==================== Port Forwarding Methods (SSH/XML Implementation) ====================
 
+  /**
+   * List all port forward rules
+   */
   async listPortForwards(): Promise<PortForwardRule[]> {
     if (this.debugMode) {
-      console.log('[NATResource] Port forwarding via SSH not yet implemented');
+      console.log('[NATResource] Fetching port forward rules via SSH');
     }
-    return [];
+
+    if (!this.sshExecutor) {
+      console.warn('[NATResource] SSH not configured, returning empty list');
+      return [];
+    }
+
+    try {
+      const config = await this.getNATConfigViaSSH();
+      const natConfig = config.nat || {};
+
+      // Port forwards are stored in nat.rule (not nat.outbound.rule)
+      let rules: PortForwardRule[] = [];
+      if (natConfig.rule) {
+        if (Array.isArray(natConfig.rule)) {
+          rules = natConfig.rule.map((rule: any, index: number) =>
+            this.normalizePortForwardFromXML(rule, `pf-${index}`)
+          );
+        } else if (typeof natConfig.rule === 'object') {
+          rules = [this.normalizePortForwardFromXML(natConfig.rule, 'pf-0')];
+        }
+      }
+
+      if (this.debugMode) {
+        console.log(`[NATResource] Found ${rules.length} port forward rules`);
+      }
+
+      return rules;
+    } catch (error) {
+      console.error('Failed to list port forward rules:', error);
+      return [];
+    }
   }
 
+  /**
+   * Create a port forward rule
+   */
   async createPortForward(rule: PortForwardRule): Promise<{ uuid: string; success: boolean }> {
-    throw new Error('Port forwarding via SSH not yet implemented');
+    if (this.debugMode) {
+      console.log('[NATResource] Creating port forward rule via SSH:', rule);
+    }
+
+    if (!this.sshExecutor) {
+      throw new Error('SSH not configured. Please set OPNSENSE_SSH_HOST, OPNSENSE_SSH_USERNAME, and OPNSENSE_SSH_PASSWORD environment variables.');
+    }
+
+    try {
+      const config = await this.getNATConfigViaSSH();
+
+      // Ensure NAT structure exists
+      if (!config.nat) config.nat = {};
+      if (!config.nat.rule) config.nat.rule = [];
+
+      // Generate UUID for the new rule
+      const uuid = this.generateUUID();
+
+      // Build the port forward rule XML structure
+      // OPNsense port forward format in config.xml
+      const xmlRule: any = {
+        interface: rule.interface || 'wan',
+        protocol: rule.protocol || 'tcp',
+        target: rule.target,
+        'local-port': rule.local_port || rule.destination_port,
+        descr: rule.description || '',
+        associated: 'add-associated'  // Auto-create firewall rule
+      };
+
+      // Handle source - default to any
+      if (rule.source_net && rule.source_net !== 'any') {
+        xmlRule.source = { network: rule.source_net };
+      } else {
+        xmlRule.source = { any: '' };
+      }
+
+      // Handle destination (external side)
+      if (rule.destination_net && rule.destination_net !== 'any') {
+        xmlRule.destination = {
+          network: rule.destination_net,
+          port: rule.destination_port
+        };
+      } else {
+        // Default to WAN address
+        xmlRule.destination = {
+          network: `${rule.interface || 'wan'}ip`,
+          port: rule.destination_port
+        };
+      }
+
+      // Handle enabled/disabled
+      if (rule.enabled === '0') {
+        xmlRule.disabled = '';
+      }
+
+      // Handle logging
+      if (rule.log === '1') {
+        xmlRule.log = '';
+      }
+
+      // Ensure rule array is an array
+      if (!Array.isArray(config.nat.rule)) {
+        config.nat.rule = config.nat.rule ? [config.nat.rule] : [];
+      }
+
+      // Add the rule
+      config.nat.rule.push(xmlRule);
+
+      // Save configuration
+      await this.saveNATConfigViaSSH(config);
+
+      // Apply changes
+      await this.applyNATChanges();
+
+      if (this.debugMode) {
+        console.log(`[NATResource] Port forward created successfully: ${uuid}`);
+      }
+
+      return { uuid, success: true };
+    } catch (error) {
+      console.error('Failed to create port forward rule:', error);
+      throw error;
+    }
   }
 
-  async deletePortForward(uuid: string): Promise<boolean> {
-    throw new Error('Port forwarding via SSH not yet implemented');
+  /**
+   * Delete a port forward rule by description or index
+   */
+  async deletePortForward(identifier: string): Promise<boolean> {
+    if (this.debugMode) {
+      console.log('[NATResource] Deleting port forward rule:', identifier);
+    }
+
+    if (!this.sshExecutor) {
+      throw new Error('SSH not configured. Cannot delete port forward rules.');
+    }
+
+    try {
+      const config = await this.getNATConfigViaSSH();
+
+      if (!config.nat?.rule) {
+        throw new Error('No port forward rules found');
+      }
+
+      // Ensure rules is an array
+      let rules = config.nat.rule;
+      if (!Array.isArray(rules)) {
+        rules = [rules];
+      }
+
+      // Find the rule by description or UUID-like identifier
+      const originalLength = rules.length;
+      const filteredRules = rules.filter((r: any) => {
+        // Match by description
+        if (r.descr === identifier) return false;
+        // Match by target:port combination
+        if (`${r.target}:${r['local-port']}` === identifier) return false;
+        return true;
+      });
+
+      if (filteredRules.length === originalLength) {
+        throw new Error(`Port forward rule "${identifier}" not found`);
+      }
+
+      config.nat.rule = filteredRules;
+
+      // Save configuration
+      await this.saveNATConfigViaSSH(config);
+
+      // Apply changes
+      await this.applyNATChanges();
+
+      if (this.debugMode) {
+        console.log(`[NATResource] Port forward deleted successfully`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to delete port forward rule:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Normalize port forward rule from XML config
+   */
+  private normalizePortForwardFromXML(rule: any, uuid: string): PortForwardRule {
+    return {
+      uuid,
+      enabled: rule.disabled !== undefined ? '0' : '1',
+      interface: rule.interface || 'wan',
+      protocol: rule.protocol || 'tcp',
+      source_net: rule.source?.network || (rule.source?.any !== undefined ? 'any' : 'any'),
+      source_port: rule.source?.port,
+      destination_net: rule.destination?.network || 'any',
+      destination_port: rule.destination?.port || '',
+      target: rule.target || '',
+      local_port: rule['local-port'] || rule.localport || rule.destination?.port || '',
+      description: rule.descr || '',
+      associated_rule: rule.associated,
+      nosync: rule.nosync !== undefined ? '1' : '0',
+      log: rule.log !== undefined ? '1' : '0'
+    };
   }
 
   // ==================== One-to-One NAT Methods (Placeholders) ====================
