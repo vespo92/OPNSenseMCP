@@ -1,5 +1,6 @@
-import { Outlet, NavLink } from 'react-router-dom';
-import { Activity, Settings, List, Server } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Activity, List, Server, Settings } from 'lucide-react';
+import { NavLink, Outlet } from 'react-router-dom';
 
 export default function Layout() {
   return (
@@ -113,8 +114,8 @@ function ConnectionStatus() {
           status === 'connected'
             ? 'bg-green-500'
             : status === 'connecting'
-            ? 'bg-yellow-500'
-            : 'bg-red-500'
+              ? 'bg-yellow-500'
+              : 'bg-red-500'
         }`}
       />
       <span className="text-sm text-gray-600 dark:text-gray-400 capitalize">{status}</span>

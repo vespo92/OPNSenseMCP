@@ -1,6 +1,7 @@
+import * as dotenv from 'dotenv';
 import { OPNSenseAPIClient } from '../../src/api/client.js';
 import { FirewallRuleResource } from '../../src/resources/firewall/rule.js';
-import * as dotenv from 'dotenv';
+
 dotenv.config();
 
 async function createNFSRules() {
@@ -8,11 +9,11 @@ async function createNFSRules() {
     host: process.env.OPNSENSE_HOST!,
     apiKey: process.env.OPNSENSE_API_KEY!,
     apiSecret: process.env.OPNSENSE_API_SECRET!,
-    verifySsl: true
+    verifySsl: true,
   });
 
   const firewall = new FirewallRuleResource(client);
-  
+
   console.log('🔥 Creating NFS Firewall Rules for DMZ to TrueNAS');
   console.log('================================================');
   console.log('DMZ Interface: opt8');
@@ -23,51 +24,51 @@ async function createNFSRules() {
     {
       enabled: '1',
       action: 'pass',
-      interface: 'opt8',  // DMZ interface
+      interface: 'opt8', // DMZ interface
       direction: 'in',
       ipprotocol: 'inet',
       protocol: 'tcp',
       source_net: '10.0.6.0/24',
       destination_net: '10.0.0.14',
       destination_port: '111',
-      description: 'DMZ to TrueNAS - RPC Portmapper TCP'
+      description: 'DMZ to TrueNAS - RPC Portmapper TCP',
     },
     {
       enabled: '1',
       action: 'pass',
-      interface: 'opt8',  // DMZ interface
+      interface: 'opt8', // DMZ interface
       direction: 'in',
       ipprotocol: 'inet',
       protocol: 'udp',
       source_net: '10.0.6.0/24',
       destination_net: '10.0.0.14',
       destination_port: '111',
-      description: 'DMZ to TrueNAS - RPC Portmapper UDP'
+      description: 'DMZ to TrueNAS - RPC Portmapper UDP',
     },
     {
       enabled: '1',
       action: 'pass',
-      interface: 'opt8',  // DMZ interface
+      interface: 'opt8', // DMZ interface
       direction: 'in',
       ipprotocol: 'inet',
       protocol: 'tcp',
       source_net: '10.0.6.0/24',
       destination_net: '10.0.0.14',
       destination_port: '2049',
-      description: 'DMZ to TrueNAS - NFS TCP'
+      description: 'DMZ to TrueNAS - NFS TCP',
     },
     {
       enabled: '1',
       action: 'pass',
-      interface: 'opt8',  // DMZ interface
+      interface: 'opt8', // DMZ interface
       direction: 'in',
       ipprotocol: 'inet',
       protocol: 'udp',
       source_net: '10.0.6.0/24',
       destination_net: '10.0.0.14',
       destination_port: '2049',
-      description: 'DMZ to TrueNAS - NFS UDP'
-    }
+      description: 'DMZ to TrueNAS - NFS UDP',
+    },
   ];
 
   const createdRules: string[] = [];
@@ -76,11 +77,11 @@ async function createNFSRules() {
     try {
       console.log(`📝 Creating rule: ${rule.description}`);
       const result = await firewall.create(rule);
-      
+
       if (result.uuid) {
         createdRules.push(result.uuid);
         console.log(`   ✅ Created with UUID: ${result.uuid}`);
-        
+
         // Verify it was created
         const verification = await firewall.get(result.uuid);
         if (verification) {
@@ -101,7 +102,7 @@ async function createNFSRules() {
 
   console.log('\n📊 Summary:');
   console.log(`Created ${createdRules.length} of ${rules.length} rules`);
-  
+
   if (createdRules.length === rules.length) {
     console.log('\n✅ All NFS rules created successfully!');
     console.log('\n🧪 Test from DMZ node (10.0.6.2):');

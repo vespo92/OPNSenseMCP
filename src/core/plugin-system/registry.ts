@@ -4,15 +4,14 @@
  * Manages plugin lifecycle and registration
  */
 
-import {
-  PluginState,
-  type MCPPlugin,
-  type PluginRegistryEntry,
-  type PluginContext,
-  type HealthStatus,
-} from '../types/plugin.js';
 import type { Logger } from '../../utils/logger.js';
-import { EventType, EventSeverity } from '../types/events.js';
+import {
+  type HealthStatus,
+  type MCPPlugin,
+  type PluginContext,
+  type PluginRegistryEntry,
+  PluginState,
+} from '../types/plugin.js';
 
 /**
  * Plugin registry for managing loaded plugins
@@ -93,7 +92,7 @@ export class PluginRegistry {
    * Get all registered plugins
    */
   getAll(): MCPPlugin[] {
-    return Array.from(this.plugins.values()).map(entry => entry.plugin);
+    return Array.from(this.plugins.values()).map((entry) => entry.plugin);
   }
 
   /**
@@ -108,8 +107,8 @@ export class PluginRegistry {
    */
   getByCategory(category: string): MCPPlugin[] {
     return Array.from(this.plugins.values())
-      .filter(entry => entry.plugin.metadata.category === category)
-      .map(entry => entry.plugin);
+      .filter((entry) => entry.plugin.metadata.category === category)
+      .map((entry) => entry.plugin);
   }
 
   /**

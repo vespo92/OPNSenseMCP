@@ -1,5 +1,5 @@
-import { OPNSenseAPIClient } from '../../src/api/client.js';
 import * as dotenv from 'dotenv';
+import { OPNSenseAPIClient } from '../../src/api/client.js';
 
 dotenv.config();
 
@@ -8,12 +8,12 @@ async function diagnoseRoutingBlock() {
     host: process.env.OPNSENSE_HOST!,
     apiKey: process.env.OPNSENSE_API_KEY!,
     apiSecret: process.env.OPNSENSE_API_SECRET!,
-    verifySsl: false
+    verifySsl: false,
   });
 
   console.log('🔍 Deep Diagnosis: Why is DMZ→LAN traffic blocked?');
   console.log('===================================================\n');
-  
+
   console.log('Known Facts:');
   console.log('✅ 39 firewall rules exist allowing DMZ→TrueNAS');
   console.log('✅ "Block private networks" is NOT enabled');
@@ -25,11 +25,11 @@ async function diagnoseRoutingBlock() {
   try {
     const natOutbound = await client.get('/firewall/nat/outbound/searchRule');
     console.log(`   Outbound NAT rules: ${natOutbound?.rows?.length || 0}`);
-    
+
     // Check if there's a NAT rule that might be masquerading DMZ traffic
     if (natOutbound?.rows) {
-      const dmzNat = natOutbound.rows.filter((r: any) => 
-        r.source?.includes('10.0.6') || r.interface === 'opt8'
+      const dmzNat = natOutbound.rows.filter(
+        (r: any) => r.source?.includes('10.0.6') || r.interface === 'opt8'
       );
       if (dmzNat.length > 0) {
         console.log('   ⚠️  Found NAT rules affecting DMZ:');
@@ -38,7 +38,7 @@ async function diagnoseRoutingBlock() {
         });
       }
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('   Could not check NAT rules');
   }
 
@@ -63,7 +63,7 @@ async function diagnoseRoutingBlock() {
         console.log(`   ⚠️  Static route filtering: ${advanced.static_route_filtering}`);
       }
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('   Could not check system settings');
   }
 
@@ -75,12 +75,12 @@ async function diagnoseRoutingBlock() {
     if (floating?.rows) {
       console.log(`   Found ${floating.rows.length} floating rules`);
       // Look for blocking rules
-      const blockRules = floating.rows.filter((r: any) => 
-        r.action === 'block' && (
-          r.source?.includes('10.0.6') || 
-          r.destination?.includes('10.0.0') ||
-          r.interface === 'opt8'
-        )
+      const blockRules = floating.rows.filter(
+        (r: any) =>
+          r.action === 'block' &&
+          (r.source?.includes('10.0.6') ||
+            r.destination?.includes('10.0.0') ||
+            r.interface === 'opt8')
       );
       if (blockRules.length > 0) {
         console.log('   ⚠️  Found BLOCKING floating rules:');
@@ -89,7 +89,7 @@ async function diagnoseRoutingBlock() {
         });
       }
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('   No floating rules or endpoint not available');
   }
 
@@ -106,7 +106,7 @@ async function diagnoseRoutingBlock() {
         }
       });
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('   Could not check gateway status');
   }
 
@@ -117,8 +117,8 @@ async function diagnoseRoutingBlock() {
     const routes = await client.get('/routes/routes/searchroute');
     if (routes?.rows) {
       console.log(`   Found ${routes.rows.length} static routes`);
-      const relevantRoutes = routes.rows.filter((r: any) => 
-        r.network?.includes('10.0.6') || r.network?.includes('10.0.0')
+      const relevantRoutes = routes.rows.filter(
+        (r: any) => r.network?.includes('10.0.6') || r.network?.includes('10.0.0')
       );
       if (relevantRoutes.length > 0) {
         console.log('   Routes affecting our networks:');
@@ -127,7 +127,7 @@ async function diagnoseRoutingBlock() {
         });
       }
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('   No static routes configured');
   }
 
@@ -138,7 +138,7 @@ async function diagnoseRoutingBlock() {
     const interfaces = await client.get('/interfaces/overview/status');
     if (interfaces) {
       // Look for opt8 and lan
-      ['opt8', 'lan'].forEach(iface => {
+      ['opt8', 'lan'].forEach((iface) => {
         if (interfaces[iface]) {
           const info = interfaces[iface];
           console.log(`   ${iface}:`);
@@ -148,7 +148,7 @@ async function diagnoseRoutingBlock() {
         }
       });
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('   Could not get interface status');
   }
 
@@ -159,16 +159,16 @@ async function diagnoseRoutingBlock() {
     const allRules = await client.get('/firewall/filter/get');
     if (allRules?.filter?.rules?.rule) {
       const rules = Object.values(allRules.filter.rules.rule);
-      
+
       // Find first BLOCK rule that might affect DMZ
       let blockFound = false;
       let allowFound = false;
-      
+
       rules.forEach((r: any, index: number) => {
         const isBlock = r.action?.pass?.selected === 0 && r.action?.block?.selected === 1;
         const isAllow = r.action?.pass?.selected === 1;
         const affectsDMZ = r.source_net?.includes('10.0.6') || r.interface?.opt8?.selected === 1;
-        
+
         if (isBlock && affectsDMZ && !allowFound) {
           console.log(`   ❌ BLOCK rule at position ${index}: ${r.description}`);
           blockFound = true;
@@ -177,17 +177,17 @@ async function diagnoseRoutingBlock() {
           allowFound = true;
         }
       });
-      
+
       if (blockFound) {
         console.log('   ⚠️  There are BLOCK rules before ALLOW rules!');
         console.log('   This would prevent traffic even with allow rules.');
       }
     }
-  } catch (e) {
+  } catch (_e) {
     console.log('   Could not check rule order');
   }
 
-  console.log('\n' + '='.repeat(50));
+  console.log(`\n${'='.repeat(50)}`);
   console.log('Possible Issues to Check in Web UI:');
   console.log('='.repeat(50));
   console.log('\n1. **Rule Order** - Are there any BLOCK rules above your ALLOW rules?');

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { CheckCircle, AlertTriangle, Settings, Activity } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle, Settings } from 'lucide-react';
 
 export default function Plugins() {
   const { data: plugins, isLoading } = useQuery({
@@ -34,9 +34,7 @@ export default function Plugins() {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="text-sm text-gray-500">
-            {plugins?.length || 0} plugins loaded
-          </span>
+          <span className="text-sm text-gray-500">{plugins?.length || 0} plugins loaded</span>
         </div>
       </div>
 

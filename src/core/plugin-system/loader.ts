@@ -4,16 +4,11 @@
  * Discovers and loads plugins from filesystem
  */
 
-import { readdir, readFile, access } from 'fs/promises';
-import { join, resolve } from 'path';
-import type {
-  MCPPlugin,
-  PluginConfig,
-  PluginLoaderOptions,
-  PluginContext,
-} from '../types/plugin.js';
+import { access, readdir, readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import type { Logger } from '../../utils/logger.js';
-import { PluginRegistry } from './registry.js';
+import type { MCPPlugin, PluginConfig, PluginLoaderOptions } from '../types/plugin.js';
+import type { PluginRegistry } from './registry.js';
 
 /**
  * Plugin loader for discovering and loading plugins
@@ -23,11 +18,7 @@ export class PluginLoader {
   private logger: Logger;
   private options: PluginLoaderOptions;
 
-  constructor(
-    registry: PluginRegistry,
-    logger: Logger,
-    options: PluginLoaderOptions
-  ) {
+  constructor(registry: PluginRegistry, logger: Logger, options: PluginLoaderOptions) {
     this.registry = registry;
     this.logger = logger;
     this.options = options;
@@ -108,7 +99,9 @@ export class PluginLoader {
         const tsPath = join(pluginPath, 'index.ts');
         try {
           await access(tsPath);
-          this.logger.warn(`Plugin ${config.metadata.id} has TypeScript source but no compiled JS. Please compile first.`);
+          this.logger.warn(
+            `Plugin ${config.metadata.id} has TypeScript source but no compiled JS. Please compile first.`
+          );
           return null;
         } catch {
           this.logger.error(`Plugin ${config.metadata.id} missing index.js/index.ts`);

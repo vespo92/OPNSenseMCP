@@ -2,15 +2,12 @@
  * Test auto-initialization feature
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-
 // Mock environment variables
 const mockEnv = {
   OPNSENSE_HOST: 'https://test.opnsense.local',
   OPNSENSE_API_KEY: 'test_api_key',
   OPNSENSE_API_SECRET: 'test_api_secret',
-  OPNSENSE_VERIFY_SSL: 'false'
+  OPNSENSE_VERIFY_SSL: 'false',
 };
 
 // Test scenarios
@@ -22,11 +19,11 @@ async function testAutoInitialization() {
   try {
     // Set mock environment variables
     Object.assign(process.env, mockEnv);
-    
+
     // Import after setting env vars to test initialization
     const { OPNSenseMCPServer } = await import('../../src/index.js');
-    const server = new OPNSenseMCPServer();
-    
+    const _server = new OPNSenseMCPServer();
+
     console.log('   ✓ Server created successfully');
     console.log('   ✓ Should attempt auto-initialization on start');
   } catch (error) {
@@ -40,10 +37,10 @@ async function testAutoInitialization() {
     delete process.env.OPNSENSE_HOST;
     delete process.env.OPNSENSE_API_KEY;
     delete process.env.OPNSENSE_API_SECRET;
-    
+
     const { OPNSenseMCPServer } = await import('../../src/index.js');
-    const server = new OPNSenseMCPServer();
-    
+    const _server = new OPNSenseMCPServer();
+
     console.log('   ✓ Server created successfully');
     console.log('   ✓ Should start without initialization');
   } catch (error) {
@@ -56,13 +53,13 @@ async function testAutoInitialization() {
     { input: 'opnsense.local:55443', expected: 'https://opnsense.local:55443' },
     { input: 'https://opnsense.local', expected: 'https://opnsense.local' },
     { input: 'http://opnsense.local', expected: 'http://opnsense.local' },
-    { input: '192.168.1.1', expected: 'https://192.168.1.1' }
+    { input: '192.168.1.1', expected: 'https://192.168.1.1' },
   ];
 
   for (const test of testUrls) {
     process.env.OPNSENSE_HOST = test.input;
     const { OPNSenseMCPServer } = await import('../../src/index.js');
-    const server = new OPNSenseMCPServer();
+    const _server = new OPNSenseMCPServer();
     // Note: We can't directly test the formatHostUrl method as it's private
     // but we can verify the server initializes correctly
     console.log(`   ✓ ${test.input} -> should format to ${test.expected}`);
@@ -73,10 +70,10 @@ async function testAutoInitialization() {
   try {
     // Clear environment
     delete process.env.OPNSENSE_HOST;
-    
+
     const { OPNSenseMCPServer } = await import('../../src/index.js');
-    const server = new OPNSenseMCPServer();
-    
+    const _server = new OPNSenseMCPServer();
+
     // Mock a tool call
     console.log('   - Server starts without client');
     console.log('   - Tool call should fail with "Use configure tool first" message');

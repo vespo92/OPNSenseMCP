@@ -4,18 +4,18 @@
  * Abstract base class that all plugins extend
  */
 
+import { EventSeverity, EventType } from '../types/events.js';
 import type {
+  EventHandler,
+  HealthStatus,
   MCPPlugin,
+  MCPPrompt,
+  MCPResource,
+  MCPTool,
+  PluginContext,
   PluginMetadata,
   PluginState,
-  PluginContext,
-  HealthStatus,
-  MCPTool,
-  MCPResource,
-  MCPPrompt,
-  EventHandler,
 } from '../types/plugin.js';
-import { EventSeverity, EventType } from '../types/events.js';
 
 /**
  * Abstract base plugin class
@@ -160,7 +160,7 @@ export abstract class BasePlugin implements MCPPlugin {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set());
     }
-    this.eventHandlers.get(event)!.add(handler);
+    this.eventHandlers.get(event)?.add(handler);
 
     // Subscribe to event bus
     if (this.context?.eventBus) {

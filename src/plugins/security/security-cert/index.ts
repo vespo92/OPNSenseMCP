@@ -5,8 +5,14 @@
  */
 
 import { BasePlugin } from '../../../core/plugin-system/base-plugin.js';
-import { PluginCategory, PluginMetadata, MCPTool, MCPResource, MCPPrompt } from '../../../core/types/plugin.js';
-import { EventType, EventSeverity } from '../../../core/types/events.js';
+import { EventSeverity, EventType } from '../../../core/types/events.js';
+import {
+  type MCPPrompt,
+  type MCPResource,
+  type MCPTool,
+  PluginCategory,
+  type PluginMetadata,
+} from '../../../core/types/plugin.js';
 
 export default class CertificatePlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
@@ -87,7 +93,7 @@ export default class CertificatePlugin extends BasePlugin {
       },
       {
         name: 'cert_letsencrypt_request',
-        description: 'Request a Let\'s Encrypt certificate',
+        description: "Request a Let's Encrypt certificate",
         inputSchema: {
           type: 'object',
           properties: {
@@ -101,7 +107,7 @@ export default class CertificatePlugin extends BasePlugin {
       },
       {
         name: 'cert_letsencrypt_renew',
-        description: 'Renew a Let\'s Encrypt certificate',
+        description: "Renew a Let's Encrypt certificate",
         inputSchema: {
           type: 'object',
           properties: {
@@ -117,7 +123,10 @@ export default class CertificatePlugin extends BasePlugin {
         inputSchema: {
           type: 'object',
           properties: {
-            uuid: { type: 'string', description: 'Certificate UUID (optional, checks all if omitted)' },
+            uuid: {
+              type: 'string',
+              description: 'Certificate UUID (optional, checks all if omitted)',
+            },
             warningDays: { type: 'number', description: 'Days before expiry to warn' },
           },
         },
@@ -169,7 +178,7 @@ export default class CertificatePlugin extends BasePlugin {
     return [];
   }
 
-  private async listCertificates(params: {}): Promise<any> {
+  private async listCertificates(_params: {}): Promise<any> {
     try {
       const response = await this.api.get('/api/trust/cert/search');
 
@@ -271,7 +280,7 @@ export default class CertificatePlugin extends BasePlugin {
         status: response.data,
       };
     } catch (error) {
-      this.logger.error('Error requesting Let\'s Encrypt certificate:', error);
+      this.logger.error("Error requesting Let's Encrypt certificate:", error);
       throw error;
     }
   }

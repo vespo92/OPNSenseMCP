@@ -8,26 +8,26 @@ export interface InterfaceMapping {
 // Default interface mappings for common setups
 // These can be overridden by API discovery or environment configuration
 export const DEFAULT_INTERFACE_MAPPINGS: InterfaceMapping = {
-  'wan': 'wan',
-  'lan': 'lan',
+  wan: 'wan',
+  lan: 'lan',
   // Common opt interface names - will be discovered from API
   // Users can override via OPNSENSE_INTERFACE_MAPPINGS env var
 };
 
 // Protocol mappings (OPNsense uses uppercase)
 export const PROTOCOL_MAPPINGS: { [key: string]: string } = {
-  'tcp': 'TCP',
-  'udp': 'UDP',
+  tcp: 'TCP',
+  udp: 'UDP',
   'tcp/udp': 'TCP/UDP',
-  'icmp': 'ICMP',
-  'esp': 'ESP',
-  'ah': 'AH',
-  'gre': 'GRE',
-  'ipv6': 'IPv6',
-  'igmp': 'IGMP',
-  'pim': 'PIM',
-  'ospf': 'OSPF',
-  'any': 'any'
+  icmp: 'ICMP',
+  esp: 'ESP',
+  ah: 'AH',
+  gre: 'GRE',
+  ipv6: 'IPv6',
+  igmp: 'IGMP',
+  pim: 'PIM',
+  ospf: 'OSPF',
+  any: 'any',
 };
 
 export class InterfaceMapper {
@@ -37,7 +37,7 @@ export class InterfaceMapper {
   constructor(apiInterfaces?: any) {
     // Start with default mappings
     this.interfaceMap = { ...DEFAULT_INTERFACE_MAPPINGS };
-    
+
     // Load custom mappings from environment if provided
     if (process.env.OPNSENSE_INTERFACE_MAPPINGS) {
       try {
@@ -47,12 +47,12 @@ export class InterfaceMapper {
         console.warn('Failed to parse OPNSENSE_INTERFACE_MAPPINGS:', e);
       }
     }
-    
+
     // Override with API-discovered interfaces if available
     if (apiInterfaces) {
       this.buildMapFromAPI(apiInterfaces);
     }
-    
+
     this.buildReverseMap();
   }
 
@@ -62,16 +62,16 @@ export class InterfaceMapper {
   private buildMapFromAPI(apiInterfaces: any) {
     Object.entries(apiInterfaces).forEach(([key, value]: [string, any]) => {
       const interfaceName = value.value;
-      
+
       // Extract clean name from value string
       // e.g., "DMZ" from "DMZ" or "igc3_vlan6 (Tag: 6, Parent: igc3) [DMZ]"
       const cleanName = this.extractCleanName(interfaceName);
-      
+
       if (cleanName) {
         // Store multiple mappings for flexibility
         this.interfaceMap[cleanName.toLowerCase()] = key;
         this.interfaceMap[key] = key; // Identity mapping
-        
+
         // Also map VLAN notation if present
         const vlanMatch = interfaceName.match(/(igc\d+_vlan\d+)/);
         if (vlanMatch) {
@@ -79,7 +79,7 @@ export class InterfaceMapper {
         }
       }
     });
-    
+
     this.buildReverseMap();
   }
 
@@ -89,9 +89,9 @@ export class InterfaceMapper {
     if (bracketMatch) {
       return bracketMatch[1];
     }
-    
+
     // Otherwise, take the first word
-    const firstWord = value.split(/[\s\(]/)[0];
+    const firstWord = value.split(/[\s(]/)[0];
     return firstWord;
   }
 
@@ -109,19 +109,19 @@ export class InterfaceMapper {
     if (this.interfaceMap[userInterface]) {
       return this.interfaceMap[userInterface];
     }
-    
+
     // Try lowercase
     const lower = userInterface.toLowerCase();
     if (this.interfaceMap[lower]) {
       return this.interfaceMap[lower];
     }
-    
+
     // Try without special characters
     const clean = lower.replace(/[^a-z0-9]/g, '');
     if (this.interfaceMap[clean]) {
       return this.interfaceMap[clean];
     }
-    
+
     // Return as-is if no mapping found
     console.warn(`No mapping found for interface: ${userInterface}`);
     return userInterface;

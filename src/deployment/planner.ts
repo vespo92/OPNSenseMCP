@@ -29,7 +29,11 @@ export interface ResourceChange {
 }
 
 export class DeploymentPlanner {
-  async planDeployment(name: string, resources: any[], currentResources: any[]): Promise<DeploymentPlan> {
+  async planDeployment(
+    name: string,
+    resources: any[],
+    currentResources: any[]
+  ): Promise<DeploymentPlan> {
     const plan: DeploymentPlan = {
       id: `plan-${Date.now()}`,
       name,
@@ -37,17 +41,19 @@ export class DeploymentPlanner {
         create: resources.length - currentResources.length,
         update: 0,
         delete: 0,
-        replace: 0
+        replace: 0,
       },
-      executionWaves: [{
-        wave: 1,
-        estimatedTime: 10,
-        changes: resources.map(r => ({
-          type: 'create' as const,
-          resource: r
-        }))
-      }],
-      risks: []
+      executionWaves: [
+        {
+          wave: 1,
+          estimatedTime: 10,
+          changes: resources.map((r) => ({
+            type: 'create' as const,
+            resource: r,
+          })),
+        },
+      ],
+      risks: [],
     };
     return plan;
   }
@@ -60,16 +66,18 @@ export class DeploymentPlanner {
         create: 0,
         update: 0,
         delete: resources.length,
-        replace: 0
+        replace: 0,
       },
-      executionWaves: [{
-        wave: 1,
-        estimatedTime: 5,
-        changes: resources.map(r => ({
-          type: 'delete' as const,
-          resource: r
-        }))
-      }]
+      executionWaves: [
+        {
+          wave: 1,
+          estimatedTime: 5,
+          changes: resources.map((r) => ({
+            type: 'delete' as const,
+            resource: r,
+          })),
+        },
+      ],
     };
   }
 }

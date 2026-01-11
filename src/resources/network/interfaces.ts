@@ -1,13 +1,13 @@
 // Interface Configuration Resource Implementation
 // Manages OPNsense network interface settings including VLAN routing configuration
-import { OPNSenseAPIClient } from '../../api/client.js';
+import type { OPNSenseAPIClient } from '../../api/client.js';
 
 export interface InterfaceConfig {
   uuid?: string;
   name?: string;
   descr?: string;
   device?: string;
-  enable?: string;              // '1' or '0'
+  enable?: string; // '1' or '0'
   ipaddr?: string;
   subnet?: string;
   gateway?: string;
@@ -16,13 +16,13 @@ export interface InterfaceConfig {
   media?: string;
   mediaopt?: string;
   // Inter-VLAN routing related settings
-  blockpriv?: string;           // '0' to allow private networks (RFC1918)
-  blockbogons?: string;         // '0' to allow bogons
+  blockpriv?: string; // '0' to allow private networks (RFC1918)
+  blockbogons?: string; // '0' to allow bogons
   disableftpproxy?: string;
   // VLAN specific
   vlan?: string;
   vlanpcp?: string;
-  if?: string;                  // Parent interface for VLANs
+  if?: string; // Parent interface for VLANs
 }
 
 export interface InterfaceOverview {
@@ -45,7 +45,8 @@ export interface InterfaceOverview {
 
 export class InterfaceConfigResource {
   private client: OPNSenseAPIClient;
-  private debugMode: boolean = process.env.MCP_DEBUG === 'true' || process.env.DEBUG_INTERFACES === 'true';
+  private debugMode: boolean =
+    process.env.MCP_DEBUG === 'true' || process.env.DEBUG_INTERFACES === 'true';
   private interfaceCache: Map<string, InterfaceConfig> = new Map();
 
   constructor(client: OPNSenseAPIClient) {
@@ -62,12 +63,12 @@ export class InterfaceConfigResource {
 
     try {
       const response = await this.client.get('/interfaces/overview/list');
-      
+
       if (this.debugMode) {
         console.log('[InterfaceConfig] Overview response:', {
           isArray: Array.isArray(response),
           hasRows: !!response?.rows,
-          keys: response ? Object.keys(response) : []
+          keys: response ? Object.keys(response) : [],
         });
       }
 
@@ -75,7 +76,7 @@ export class InterfaceConfigResource {
       if (Array.isArray(response)) {
         return response;
       }
-      
+
       if (response?.rows && Array.isArray(response.rows)) {
         return response.rows;
       }
@@ -84,7 +85,7 @@ export class InterfaceConfigResource {
       if (response && typeof response === 'object') {
         return Object.entries(response).map(([name, config]: [string, any]) => ({
           name,
-          ...config
+          ...config,
         }));
       }
     } catch (error) {
@@ -107,18 +108,18 @@ export class InterfaceConfigResource {
       const endpoints = [
         `/interfaces/settings/get/${interfaceName}`,
         `/interfaces/${interfaceName}/get`,
-        `/interfaces/vlan_settings/getItem/${interfaceName}`
+        `/interfaces/vlan_settings/getItem/${interfaceName}`,
       ];
 
       for (const endpoint of endpoints) {
         try {
           const response = await this.client.get(endpoint);
-          
+
           if (this.debugMode) {
             console.log(`[InterfaceConfig] ${endpoint} response:`, {
               hasInterface: !!response?.interface,
               hasSettings: !!response?.settings,
-              keys: Object.keys(response || {})
+              keys: Object.keys(response || {}),
             });
           }
 
@@ -144,7 +145,10 @@ export class InterfaceConfigResource {
   /**
    * Update interface configuration
    */
-  async updateInterfaceConfig(interfaceName: string, config: Partial<InterfaceConfig>): Promise<boolean> {
+  async updateInterfaceConfig(
+    interfaceName: string,
+    config: Partial<InterfaceConfig>
+  ): Promise<boolean> {
     if (this.debugMode) {
       console.log(`[InterfaceConfig] Updating interface ${interfaceName}:`, config);
     }
@@ -154,14 +158,14 @@ export class InterfaceConfigResource {
       const endpoints = [
         { path: `/interfaces/settings/set/${interfaceName}`, wrapper: 'interface' },
         { path: `/interfaces/${interfaceName}/set`, wrapper: 'settings' },
-        { path: `/interfaces/vlan_settings/setItem/${interfaceName}`, wrapper: 'vlan' }
+        { path: `/interfaces/vlan_settings/setItem/${interfaceName}`, wrapper: 'vlan' },
       ];
 
       for (const endpoint of endpoints) {
         try {
           const payload = endpoint.wrapper ? { [endpoint.wrapper]: config } : config;
           const response = await this.client.post(endpoint.path, payload);
-          
+
           if (this.debugMode) {
             console.log(`[InterfaceConfig] ${endpoint.path} response:`, response);
           }
@@ -170,7 +174,10 @@ export class InterfaceConfigResource {
             // Apply the changes
             await this.applyChanges();
             // Update cache
-            this.interfaceCache.set(interfaceName, { ...this.interfaceCache.get(interfaceName), ...config });
+            this.interfaceCache.set(interfaceName, {
+              ...this.interfaceCache.get(interfaceName),
+              ...config,
+            });
             return true;
           }
         } catch (error) {
@@ -196,7 +203,7 @@ export class InterfaceConfigResource {
     try {
       // Get current configuration
       const currentConfig = await this.getInterfaceConfig(interfaceName);
-      
+
       if (!currentConfig) {
         console.error(`Interface ${interfaceName} not found`);
         return false;
@@ -206,18 +213,18 @@ export class InterfaceConfigResource {
         console.log('[InterfaceConfig] Current interface config:', {
           name: interfaceName,
           blockpriv: currentConfig.blockpriv,
-          blockbogons: currentConfig.blockbogons
+          blockbogons: currentConfig.blockbogons,
         });
       }
 
       // Update settings to enable inter-VLAN routing
       const updatedConfig: Partial<InterfaceConfig> = {
-        blockpriv: '0',        // Don't block private networks (RFC1918)
-        blockbogons: '0'       // Don't block bogons
+        blockpriv: '0', // Don't block private networks (RFC1918)
+        blockbogons: '0', // Don't block bogons
       };
 
       const success = await this.updateInterfaceConfig(interfaceName, updatedConfig);
-      
+
       if (success) {
         console.log(`[InterfaceConfig] Inter-VLAN routing enabled on ${interfaceName}`);
       } else {
@@ -244,7 +251,7 @@ export class InterfaceConfigResource {
       const result = {
         interface: iface.name,
         success: false,
-        message: ''
+        message: '',
       };
 
       try {
@@ -258,10 +265,10 @@ export class InterfaceConfigResource {
       results.push(result);
     }
 
-    const allSuccess = results.every(r => r.success);
+    const allSuccess = results.every((r) => r.success);
     return {
       success: allSuccess,
-      details: results
+      details: results,
     };
   }
 
@@ -270,11 +277,14 @@ export class InterfaceConfigResource {
    */
   async findInterfaceBySubnet(subnet: string): Promise<InterfaceOverview | null> {
     const interfaces = await this.listOverview();
-    
+
     for (const iface of interfaces) {
       if (iface.ipaddr && iface.subnet) {
         const ifaceNetwork = `${iface.ipaddr.split('.').slice(0, 3).join('.')}.0/${iface.subnet}`;
-        if (ifaceNetwork === subnet || iface.ipaddr.startsWith(subnet.split('/')[0].split('.').slice(0, 3).join('.'))) {
+        if (
+          ifaceNetwork === subnet ||
+          iface.ipaddr.startsWith(subnet.split('/')[0].split('.').slice(0, 3).join('.'))
+        ) {
           return iface;
         }
       }
@@ -287,19 +297,21 @@ export class InterfaceConfigResource {
    * Configure DMZ interface for inter-VLAN routing
    */
   async configureDMZInterface(dmzInterface: string = 'opt8'): Promise<boolean> {
-    console.log(`[InterfaceConfig] Configuring DMZ interface ${dmzInterface} for inter-VLAN routing...`);
+    console.log(
+      `[InterfaceConfig] Configuring DMZ interface ${dmzInterface} for inter-VLAN routing...`
+    );
 
     try {
       // Enable inter-VLAN routing on DMZ interface
       const success = await this.enableInterVLANRoutingOnInterface(dmzInterface);
-      
+
       if (success) {
         // Additional DMZ-specific configuration if needed
         const dmzConfig: Partial<InterfaceConfig> = {
-          enable: '1',           // Ensure interface is enabled
-          blockpriv: '0',        // Allow private networks
-          blockbogons: '0',      // Allow bogons
-          disableftpproxy: '1'   // Disable FTP proxy for better routing
+          enable: '1', // Ensure interface is enabled
+          blockpriv: '0', // Allow private networks
+          blockbogons: '0', // Allow bogons
+          disableftpproxy: '1', // Disable FTP proxy for better routing
         };
 
         await this.updateInterfaceConfig(dmzInterface, dmzConfig);
@@ -320,10 +332,7 @@ export class InterfaceConfigResource {
       console.log('[InterfaceConfig] Applying interface changes');
     }
 
-    const applyEndpoints = [
-      '/interfaces/reconfigure',
-      '/interfaces/vlan_settings/reconfigure'
-    ];
+    const applyEndpoints = ['/interfaces/reconfigure', '/interfaces/vlan_settings/reconfigure'];
 
     for (const endpoint of applyEndpoints) {
       try {
@@ -339,7 +348,7 @@ export class InterfaceConfigResource {
     }
 
     // Add delay for changes to propagate
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
   /**
@@ -357,7 +366,7 @@ export class InterfaceConfigResource {
       '/interfaces/opt1/get',
       '/interfaces/opt8/get',
       '/interfaces/vlan_settings/get',
-      '/interfaces/vlan_settings/searchItem'
+      '/interfaces/vlan_settings/searchItem',
     ];
 
     for (const endpoint of testEndpoints) {
@@ -368,21 +377,23 @@ export class InterfaceConfigResource {
           isArray: Array.isArray(response),
           keys: Object.keys(response || {}).slice(0, 10),
           hasRows: !!response?.rows,
-          rowCount: response?.rows?.length
+          rowCount: response?.rows?.length,
         });
 
         // Check for interface-specific settings
         if (response && typeof response === 'object') {
-          const interfaces = Array.isArray(response) ? response : 
-                            response.rows ? response.rows : 
-                            [response];
-          
+          const interfaces = Array.isArray(response)
+            ? response
+            : response.rows
+              ? response.rows
+              : [response];
+
           for (const iface of interfaces.slice(0, 2)) {
             if (iface.blockpriv !== undefined || iface.blockbogons !== undefined) {
               console.log('  Found interface settings:', {
                 name: iface.name || iface.descr,
                 blockpriv: iface.blockpriv,
-                blockbogons: iface.blockbogons
+                blockbogons: iface.blockbogons,
               });
             }
           }

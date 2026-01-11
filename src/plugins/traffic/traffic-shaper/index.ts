@@ -5,8 +5,13 @@
  */
 
 import { BasePlugin } from '../../../core/plugin-system/base-plugin.js';
-import { PluginCategory, PluginMetadata, MCPTool, MCPResource, MCPPrompt } from '../../../core/types/plugin.js';
-import { EventSeverity } from '../../../core/types/events.js';
+import {
+  type MCPPrompt,
+  type MCPResource,
+  type MCPTool,
+  PluginCategory,
+  type PluginMetadata,
+} from '../../../core/types/plugin.js';
 
 export default class TrafficShaperPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
@@ -147,7 +152,7 @@ export default class TrafficShaperPlugin extends BasePlugin {
     return ['core-network'];
   }
 
-  private async listPipes(params: {}): Promise<any> {
+  private async listPipes(_params: {}): Promise<any> {
     try {
       const response = await this.api.get('/api/trafficshaper/settings/searchPipes');
       return {
@@ -196,7 +201,11 @@ export default class TrafficShaperPlugin extends BasePlugin {
     }
   }
 
-  private async updatePipe(params: { uuid: string; bandwidth?: number; description?: string }): Promise<any> {
+  private async updatePipe(params: {
+    uuid: string;
+    bandwidth?: number;
+    description?: string;
+  }): Promise<any> {
     try {
       const response = await this.api.post(`/api/trafficshaper/settings/setPipe/${params.uuid}`, {
         pipe: {
@@ -233,7 +242,7 @@ export default class TrafficShaperPlugin extends BasePlugin {
     }
   }
 
-  private async listQueues(params: {}): Promise<any> {
+  private async listQueues(_params: {}): Promise<any> {
     try {
       const response = await this.api.get('/api/trafficshaper/settings/searchQueues');
       return {
@@ -246,7 +255,11 @@ export default class TrafficShaperPlugin extends BasePlugin {
     }
   }
 
-  private async createQueue(params: { pipe: string; weight: number; description: string }): Promise<any> {
+  private async createQueue(params: {
+    pipe: string;
+    weight: number;
+    description: string;
+  }): Promise<any> {
     try {
       const response = await this.api.post('/api/trafficshaper/settings/addQueue', {
         queue: {
@@ -276,7 +289,7 @@ export default class TrafficShaperPlugin extends BasePlugin {
     }
   }
 
-  private async listRules(params: {}): Promise<any> {
+  private async listRules(_params: {}): Promise<any> {
     try {
       const response = await this.api.get('/api/trafficshaper/settings/searchRules');
       return {
@@ -329,7 +342,7 @@ export default class TrafficShaperPlugin extends BasePlugin {
     }
   }
 
-  private async applyChanges(params: {}): Promise<any> {
+  private async applyChanges(_params: {}): Promise<any> {
     try {
       const response = await this.api.post('/api/trafficshaper/service/reconfigure');
 
@@ -346,7 +359,7 @@ export default class TrafficShaperPlugin extends BasePlugin {
     }
   }
 
-  private async getStatistics(params: {}): Promise<any> {
+  private async getStatistics(_params: {}): Promise<any> {
     try {
       const [pipes, queues, rules] = await Promise.all([
         this.listPipes({}),

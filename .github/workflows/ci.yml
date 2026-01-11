@@ -39,8 +39,11 @@ jobs:
     - name: Check for TypeScript errors
       run: npx tsc --noEmit
     
-    - name: Run linter
-      run: npm run lint || echo "Linting not configured"
+    - name: Run Biome linter
+      run: npm run lint
+
+    - name: Run Biome format check
+      run: npm run format:check
     
     - name: Run tests
       run: npm test || echo "Tests not configured"

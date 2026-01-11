@@ -248,14 +248,17 @@ export interface MetricsEventData {
     percentage: number;
   };
   network: {
-    interfaces: Record<string, {
-      bytesIn: number;
-      bytesOut: number;
-      packetsIn: number;
-      packetsOut: number;
-      errorsIn: number;
-      errorsOut: number;
-    }>;
+    interfaces: Record<
+      string,
+      {
+        bytesIn: number;
+        bytesOut: number;
+        packetsIn: number;
+        packetsOut: number;
+        errorsIn: number;
+        errorsOut: number;
+      }
+    >;
   };
   timestamp: Date;
 }

@@ -1,7 +1,8 @@
 // Consolidated OPNsense API Client with enhanced error handling and full functionality
-import axios, { AxiosInstance, AxiosError } from 'axios';
-import https from 'https';
-import { APICall } from '../macro/types.js';
+
+import https from 'node:https';
+import axios, { type AxiosError, type AxiosInstance } from 'axios';
+import type { APICall } from '../macro/types.js';
 
 /**
  * Custom error class for OPNsense API errors
@@ -25,29 +26,31 @@ export class OPNSenseAPIClient {
   private debugMode: boolean;
   private recorder?: (call: Omit<APICall, 'id' | 'timestamp'>) => void;
 
-  constructor(private config: {
-    host: string;
-    apiKey: string;
-    apiSecret: string;
-    verifySsl?: boolean;
-    debugMode?: boolean;
-    timeout?: number;
-  }) {
+  constructor(
+    private config: {
+      host: string;
+      apiKey: string;
+      apiSecret: string;
+      verifySsl?: boolean;
+      debugMode?: boolean;
+      timeout?: number;
+    }
+  ) {
     this.debugMode = config.debugMode || false;
-    
+
     // Create axios instance with proper configuration
     this.axios = axios.create({
       baseURL: `${this.config.host}/api`,
       auth: {
         username: this.config.apiKey,
-        password: this.config.apiSecret
+        password: this.config.apiSecret,
       },
       httpsAgent: new https.Agent({
-        rejectUnauthorized: this.config.verifySsl !== false
+        rejectUnauthorized: this.config.verifySsl !== false,
       }),
       timeout: this.config.timeout || 30000,
       // Don't set default headers - we'll add them per request type
-      validateStatus: () => true // Handle all status codes
+      validateStatus: () => true, // Handle all status codes
     });
 
     // Add request interceptor for debugging
@@ -58,7 +61,7 @@ export class OPNSenseAPIClient {
             method: config.method?.toUpperCase(),
             url: config.url,
             headers: config.headers,
-            data: config.data
+            data: config.data,
           });
         }
         return config;
@@ -78,7 +81,7 @@ export class OPNSenseAPIClient {
           console.log('[API Response]', {
             status: response.status,
             statusText: response.statusText,
-            data: response.data
+            data: response.data,
           });
         }
         return response;
@@ -88,7 +91,7 @@ export class OPNSenseAPIClient {
           console.error('[API Response Error]', {
             status: error.response?.status,
             statusText: error.response?.statusText,
-            data: error.response?.data
+            data: error.response?.data,
           });
         }
         return Promise.reject(error);
@@ -155,14 +158,14 @@ export class OPNSenseAPIClient {
       path,
       params,
       payload,
-      duration
+      duration,
     };
 
     if (response) {
       call.response = {
         status: response.status,
         data: response.data,
-        headers: response.headers
+        headers: response.headers,
       };
     }
 
@@ -180,9 +183,9 @@ export class OPNSenseAPIClient {
     const startTime = Date.now();
     const response = await this.axios.get(path, {
       headers: {
-        'Accept': 'application/json'
+        Accept: 'application/json',
         // NO Content-Type header for GET requests!
-      }
+      },
     });
 
     const duration = Date.now() - startTime;
@@ -190,7 +193,7 @@ export class OPNSenseAPIClient {
     if (response.status === 404) {
       this.recordCall('GET', path, undefined, undefined, response, duration, {
         code: 'NOT_FOUND',
-        message: `Endpoint not found: ${path}`
+        message: `Endpoint not found: ${path}`,
       });
       throw new OPNSenseAPIError(`Endpoint not found: ${path}`, 404);
     }
@@ -200,7 +203,7 @@ export class OPNSenseAPIClient {
       const errorMessage = this.extractErrorMessage(response.data) || 'API operation failed';
       this.recordCall('GET', path, undefined, undefined, response, duration, {
         code: 'API_FAILED',
-        message: errorMessage
+        message: errorMessage,
       });
       throw new OPNSenseAPIError(errorMessage, response.status, response.data);
     }
@@ -210,10 +213,12 @@ export class OPNSenseAPIClient {
       return response.data;
     }
 
-    const errorMessage = this.extractErrorMessage(response.data) || `API error: ${response.status} ${response.statusText}`;
+    const errorMessage =
+      this.extractErrorMessage(response.data) ||
+      `API error: ${response.status} ${response.statusText}`;
     this.recordCall('GET', path, undefined, undefined, response, duration, {
       code: 'API_ERROR',
-      message: errorMessage
+      message: errorMessage,
     });
     throw new OPNSenseAPIError(errorMessage, response.status, response.data);
   }
@@ -225,9 +230,9 @@ export class OPNSenseAPIClient {
     const startTime = Date.now();
     const response = await this.axios.post(path, data, {
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
     });
 
     const duration = Date.now() - startTime;
@@ -235,7 +240,7 @@ export class OPNSenseAPIClient {
     if (response.status === 404) {
       this.recordCall('POST', path, undefined, data, response, duration, {
         code: 'NOT_FOUND',
-        message: `Endpoint not found: ${path}`
+        message: `Endpoint not found: ${path}`,
       });
       throw new OPNSenseAPIError(`Endpoint not found: ${path}`, 404);
     }
@@ -245,7 +250,7 @@ export class OPNSenseAPIClient {
       const errorMessage = this.extractErrorMessage(response.data) || 'API operation failed';
       this.recordCall('POST', path, undefined, data, response, duration, {
         code: 'API_FAILED',
-        message: errorMessage
+        message: errorMessage,
       });
       throw new OPNSenseAPIError(errorMessage, response.status, response.data);
     }
@@ -255,10 +260,12 @@ export class OPNSenseAPIClient {
       return response.data;
     }
 
-    const errorMessage = this.extractErrorMessage(response.data) || `API error: ${response.status} ${response.statusText}`;
+    const errorMessage =
+      this.extractErrorMessage(response.data) ||
+      `API error: ${response.status} ${response.statusText}`;
     this.recordCall('POST', path, undefined, data, response, duration, {
       code: 'API_ERROR',
-      message: errorMessage
+      message: errorMessage,
     });
     throw new OPNSenseAPIError(errorMessage, response.status, response.data);
   }
@@ -270,9 +277,9 @@ export class OPNSenseAPIClient {
     const startTime = Date.now();
     const response = await this.axios.put(path, data, {
       headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
     });
 
     const duration = Date.now() - startTime;
@@ -280,7 +287,7 @@ export class OPNSenseAPIClient {
     if (response.status === 404) {
       this.recordCall('PUT', path, undefined, data, response, duration, {
         code: 'NOT_FOUND',
-        message: `Endpoint not found: ${path}`
+        message: `Endpoint not found: ${path}`,
       });
       throw new OPNSenseAPIError(`Endpoint not found: ${path}`, 404);
     }
@@ -290,10 +297,12 @@ export class OPNSenseAPIClient {
       return response.data;
     }
 
-    const errorMessage = this.extractErrorMessage(response.data) || `API error: ${response.status} ${response.statusText}`;
+    const errorMessage =
+      this.extractErrorMessage(response.data) ||
+      `API error: ${response.status} ${response.statusText}`;
     this.recordCall('PUT', path, undefined, data, response, duration, {
       code: 'API_ERROR',
-      message: errorMessage
+      message: errorMessage,
     });
     throw new OPNSenseAPIError(errorMessage, response.status, response.data);
   }
@@ -305,8 +314,8 @@ export class OPNSenseAPIClient {
     const startTime = Date.now();
     const response = await this.axios.delete(path, {
       headers: {
-        'Accept': 'application/json'
-      }
+        Accept: 'application/json',
+      },
     });
 
     const duration = Date.now() - startTime;
@@ -314,7 +323,7 @@ export class OPNSenseAPIClient {
     if (response.status === 404) {
       this.recordCall('DELETE', path, undefined, undefined, response, duration, {
         code: 'NOT_FOUND',
-        message: `Endpoint not found: ${path}`
+        message: `Endpoint not found: ${path}`,
       });
       throw new OPNSenseAPIError(`Endpoint not found: ${path}`, 404);
     }
@@ -324,10 +333,12 @@ export class OPNSenseAPIClient {
       return response.data;
     }
 
-    const errorMessage = this.extractErrorMessage(response.data) || `API error: ${response.status} ${response.statusText}`;
+    const errorMessage =
+      this.extractErrorMessage(response.data) ||
+      `API error: ${response.status} ${response.statusText}`;
     this.recordCall('DELETE', path, undefined, undefined, response, duration, {
       code: 'API_ERROR',
-      message: errorMessage
+      message: errorMessage,
     });
     throw new OPNSenseAPIError(errorMessage, response.status, response.data);
   }
@@ -342,7 +353,7 @@ export class OPNSenseAPIClient {
       current: params.current || 1,
       rowCount: params.rowCount || 100,
       sort: params.sort || {},
-      searchPhrase: params.searchPhrase || ''
+      searchPhrase: params.searchPhrase || '',
     };
 
     // Use the working endpoint
@@ -394,7 +405,7 @@ export class OPNSenseAPIClient {
       current: params.current || 1,
       rowCount: params.rowCount || 1000,
       sort: params.sort || {},
-      searchPhrase: params.searchPhrase || ''
+      searchPhrase: params.searchPhrase || '',
     };
     return this.post('/firewall/filter/searchRule', searchParams);
   }
@@ -502,7 +513,7 @@ export class OPNSenseAPIClient {
       current: params.current || 1,
       rowCount: params.rowCount || 1000,
       sort: params.sort || {},
-      searchPhrase: params.searchPhrase || ''
+      searchPhrase: params.searchPhrase || '',
     };
     return this.post('/dhcpv4/leases/searchLease', searchParams);
   }
@@ -522,7 +533,7 @@ export class OPNSenseAPIClient {
       current: params.current || 1,
       rowCount: params.rowCount || 1000,
       sort: params.sort || {},
-      searchPhrase: params.searchPhrase || ''
+      searchPhrase: params.searchPhrase || '',
     };
     return this.post('/dhcpv4/settings/searchStaticMap', searchParams);
   }
@@ -600,7 +611,7 @@ export class OPNSenseAPIClient {
       current: params.current || 1,
       rowCount: params.rowCount || 1000,
       sort: params.sort || {},
-      searchPhrase: params.searchPhrase || ''
+      searchPhrase: params.searchPhrase || '',
     };
     return this.post('/unbound/settings/searchHostOverride', searchParams);
   }
@@ -664,7 +675,7 @@ export class OPNSenseAPIClient {
       current: params.current || 1,
       rowCount: params.rowCount || 10000,
       sort: params.sort || {},
-      searchPhrase: params.searchPhrase || ''
+      searchPhrase: params.searchPhrase || '',
     };
     return this.post('/diagnostics/interface/searchArp', searchParams);
   }
@@ -688,18 +699,23 @@ export class OPNSenseAPIClient {
   /**
    * Test connection
    */
-  async testConnection(): Promise<{ success: boolean; version?: string; product?: string; error?: string }> {
+  async testConnection(): Promise<{
+    success: boolean;
+    version?: string;
+    product?: string;
+    error?: string;
+  }> {
     try {
       const result = await this.get<any>('/core/firmware/info');
-      return { 
-        success: true, 
+      return {
+        success: true,
         version: result.product_version,
-        product: result.product_name 
+        product: result.product_name,
       };
     } catch (error: any) {
-      return { 
-        success: false, 
-        error: error.message 
+      return {
+        success: false,
+        error: error.message,
       };
     }
   }
@@ -707,15 +723,20 @@ export class OPNSenseAPIClient {
   /**
    * Get service status
    */
-  async getServiceStatus(serviceName: string): Promise<{ status: 'running' | 'stopped'; pid?: number }> {
+  async getServiceStatus(
+    serviceName: string
+  ): Promise<{ status: 'running' | 'stopped'; pid?: number }> {
     return this.post('/core/service/status', { name: serviceName });
   }
 
   /**
    * Control service (start/stop/restart)
    */
-  async controlService(serviceName: string, action: 'start' | 'stop' | 'restart'): Promise<{ response: string }> {
-    return this.post('/core/service/' + action, { name: serviceName });
+  async controlService(
+    serviceName: string,
+    action: 'start' | 'stop' | 'restart'
+  ): Promise<{ response: string }> {
+    return this.post(`/core/service/${action}`, { name: serviceName });
   }
 }
 

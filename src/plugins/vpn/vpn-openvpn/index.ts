@@ -5,8 +5,14 @@
  */
 
 import { BasePlugin } from '../../../core/plugin-system/base-plugin.js';
-import { PluginCategory, PluginMetadata, MCPTool, MCPResource, MCPPrompt } from '../../../core/types/plugin.js';
-import { EventType, EventSeverity } from '../../../core/types/events.js';
+import { EventSeverity } from '../../../core/types/events.js';
+import {
+  type MCPPrompt,
+  type MCPResource,
+  type MCPTool,
+  PluginCategory,
+  type PluginMetadata,
+} from '../../../core/types/plugin.js';
 
 export default class OpenVPNPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
@@ -144,7 +150,7 @@ export default class OpenVPNPlugin extends BasePlugin {
       const connections = Array.from(this.connectionCache.values());
 
       if (params.serverId) {
-        return connections.filter(c => c.serverId === params.serverId);
+        return connections.filter((c) => c.serverId === params.serverId);
       }
 
       return { connections, count: connections.length };

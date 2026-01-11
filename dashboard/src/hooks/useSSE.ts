@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface SSEEvent {
   id: string;
@@ -19,10 +19,14 @@ export function useSSE(url: string, filter?: { types?: string[]; severity?: stri
     // Build URL with query parameters
     const params = new URLSearchParams();
     if (filter?.types) {
-      filter.types.forEach(type => params.append('types', type));
+      for (const type of filter.types) {
+        params.append('types', type);
+      }
     }
     if (filter?.severity) {
-      filter.severity.forEach(sev => params.append('severity', sev));
+      for (const sev of filter.severity) {
+        params.append('severity', sev);
+      }
     }
 
     const fullUrl = params.toString() ? `${url}?${params}` : url;
@@ -52,7 +56,7 @@ export function useSSE(url: string, filter?: { types?: string[]; severity?: stri
           data: data.data,
         };
 
-        setEvents(prev => [event, ...prev].slice(0, 1000)); // Keep last 1000 events
+        setEvents((prev) => [event, ...prev].slice(0, 1000)); // Keep last 1000 events
       } catch (err) {
         console.error('Error parsing SSE event:', err);
       }

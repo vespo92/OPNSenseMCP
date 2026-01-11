@@ -1,37 +1,37 @@
 // DHCP Lease Management Resource - FIXED VERSION
-import { OPNSenseAPIClient } from '../../../api/client.js';
+import type { OPNSenseAPIClient } from '../../../api/client.js';
 
 export interface DhcpLease {
-  address: string;          // IP address
-  hwaddr: string;           // MAC address
-  hostname?: string;        // Device hostname
-  descr?: string;           // Description
-  starts?: string;          // Lease start time
-  ends?: string;            // Lease end time
-  state?: string;           // active, expired, etc.
-  act?: string;             // Action
-  wstatus?: string;         // Status
-  if?: string;              // Interface
+  address: string; // IP address
+  hwaddr: string; // MAC address
+  hostname?: string; // Device hostname
+  descr?: string; // Description
+  starts?: string; // Lease start time
+  ends?: string; // Lease end time
+  state?: string; // active, expired, etc.
+  act?: string; // Action
+  wstatus?: string; // Status
+  if?: string; // Interface
   // Additional fields that might be in the API response
-  mac?: string;             // Alternative MAC field
-  interface?: string;       // Alternative interface field
-  description?: string;     // Alternative description field
-  type?: string;            // Lease type
-  man?: string;             // Manufacturer
+  mac?: string; // Alternative MAC field
+  interface?: string; // Alternative interface field
+  description?: string; // Alternative description field
+  type?: string; // Lease type
+  man?: string; // Manufacturer
 }
 
 export interface DhcpStaticMapping {
   uuid?: string;
-  mac: string;              // MAC address
-  ipaddr: string;           // IP address
-  hostname?: string;        // Hostname
-  descr?: string;           // Description
-  winsserver?: string;      // WINS server
-  dnsserver?: string;       // DNS server
-  gateway?: string;         // Gateway
-  domain?: string;          // Domain
+  mac: string; // MAC address
+  ipaddr: string; // IP address
+  hostname?: string; // Hostname
+  descr?: string; // Description
+  winsserver?: string; // WINS server
+  dnsserver?: string; // DNS server
+  gateway?: string; // Gateway
+  domain?: string; // Domain
   domainsearchlist?: string; // Domain search list
-  ntpserver?: string;       // NTP server
+  ntpserver?: string; // NTP server
 }
 
 export class DhcpLeaseResource {
@@ -64,7 +64,7 @@ export class DhcpLeaseResource {
       state: rawLease.state || rawLease.status || 'unknown',
       act: rawLease.act || rawLease.action || '',
       wstatus: rawLease.wstatus || rawLease.status || '',
-      if: rawLease.if || rawLease.interface || rawLease.intf || ''
+      if: rawLease.if || rawLease.interface || rawLease.intf || '',
     };
   }
 
@@ -81,7 +81,7 @@ export class DhcpLeaseResource {
         current: 1,
         rowCount: 1000,
         sort: {},
-        searchPhrase: ''
+        searchPhrase: '',
       });
 
       if (this.debugMode) {
@@ -90,14 +90,14 @@ export class DhcpLeaseResource {
 
       // Handle different response formats
       let leases: any[] = [];
-      
-      if (response && response.rows && Array.isArray(response.rows)) {
+
+      if (response?.rows && Array.isArray(response.rows)) {
         leases = response.rows;
-      } else if (response && response.leases && Array.isArray(response.leases)) {
+      } else if (response?.leases && Array.isArray(response.leases)) {
         leases = response.leases;
       } else if (Array.isArray(response)) {
         leases = response;
-      } else if (response && response.data && Array.isArray(response.data)) {
+      } else if (response?.data && Array.isArray(response.data)) {
         leases = response.data;
       }
 
@@ -109,18 +109,18 @@ export class DhcpLeaseResource {
       }
 
       // Normalize the lease data
-      return leases.map(lease => this.normalizeLease(lease));
+      return leases.map((lease) => this.normalizeLease(lease));
     } catch (error) {
       if (this.debugMode) {
         console.error('[DHCP] Failed to list leases:', error);
       }
-      
+
       // Try alternative endpoint
       try {
         if (this.debugMode) {
           console.log('[DHCP] Trying alternative endpoint...');
         }
-        
+
         const altResponse = await this.client.get('/dhcpv4/leases');
         if (altResponse && Array.isArray(altResponse)) {
           return altResponse.map((lease: any) => this.normalizeLease(lease));
@@ -130,8 +130,11 @@ export class DhcpLeaseResource {
           console.error('[DHCP] Alternative endpoint also failed:', altError);
         }
       }
-      
-      console.error('Failed to list DHCP leases:', error instanceof Error ? error.message : 'Unknown error');
+
+      console.error(
+        'Failed to list DHCP leases:',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
       return [];
     }
   }
@@ -142,10 +145,11 @@ export class DhcpLeaseResource {
   async findByHostname(pattern: string): Promise<DhcpLease[]> {
     const leases = await this.listLeases();
     const searchPattern = pattern.toLowerCase();
-    
-    return leases.filter(lease => 
-      lease.hostname?.toLowerCase().includes(searchPattern) ||
-      lease.descr?.toLowerCase().includes(searchPattern)
+
+    return leases.filter(
+      (lease) =>
+        lease.hostname?.toLowerCase().includes(searchPattern) ||
+        lease.descr?.toLowerCase().includes(searchPattern)
     );
   }
 
@@ -155,8 +159,8 @@ export class DhcpLeaseResource {
   async findByMac(mac: string): Promise<DhcpLease[]> {
     const leases = await this.listLeases();
     const searchMac = mac.toLowerCase().replace(/[:-]/g, '');
-    
-    return leases.filter(lease => {
+
+    return leases.filter((lease) => {
       if (!lease.hwaddr) return false;
       const leaseMac = lease.hwaddr.toLowerCase().replace(/[:-]/g, '');
       return leaseMac.includes(searchMac);
@@ -168,7 +172,7 @@ export class DhcpLeaseResource {
    */
   async getInterfaceLeases(interfaceName: string): Promise<DhcpLease[]> {
     const leases = await this.listLeases();
-    return leases.filter(lease => lease.if === interfaceName);
+    return leases.filter((lease) => lease.if === interfaceName);
   }
 
   /**
@@ -178,18 +182,18 @@ export class DhcpLeaseResource {
     // Try multiple possible interface names for VLAN 4
     const possibleInterfaces = ['igc2_vlan4', 'vlan4', 'opt3', 'guest'];
     const leases = await this.listLeases();
-    
-    return leases.filter(lease => {
+
+    return leases.filter((lease) => {
       // Check if the interface matches any of the possible names
       if (possibleInterfaces.includes(lease.if || '')) {
         return true;
       }
-      
+
       // Also check if the IP is in the guest network range (10.0.4.x)
-      if (lease.address && lease.address.startsWith('10.0.4.')) {
+      if (lease.address?.startsWith('10.0.4.')) {
         return true;
       }
-      
+
       return false;
     });
   }
@@ -200,7 +204,7 @@ export class DhcpLeaseResource {
   getDeviceInfo(lease: DhcpLease): string {
     const hostname = lease.hostname || 'Unknown device';
     const manufacturer = lease.hwaddr ? this.getMacManufacturer(lease.hwaddr) : 'Unknown';
-    
+
     return `${hostname} - ${lease.address} (${manufacturer})`;
   }
 
@@ -213,7 +217,7 @@ export class DhcpLeaseResource {
     }
 
     const prefix = mac.substring(0, 8).toUpperCase();
-    
+
     // Common manufacturer prefixes
     const manufacturers: { [key: string]: string } = {
       '00:1B:63': 'Apple',
@@ -280,7 +284,7 @@ export class DhcpLeaseResource {
       '1C:40:24': 'Dell',
       '20:04:0F': 'Dell',
       '24:B6:FD': 'Dell',
-      '28:F1:0E': 'Dell'
+      '28:F1:0E': 'Dell',
     };
 
     // Check for manufacturer
@@ -300,7 +304,7 @@ export class DhcpLeaseResource {
     const hostname = lease.hostname || 'Unknown';
     const state = lease.state || 'unknown';
     const manufacturer = lease.hwaddr ? this.getMacManufacturer(lease.hwaddr) : 'Unknown';
-    
+
     return `${hostname} - IP: ${lease.address}, MAC: ${lease.hwaddr} (${manufacturer}), State: ${state}`;
   }
 
@@ -310,15 +314,15 @@ export class DhcpLeaseResource {
   async getLeasesByInterface(): Promise<Map<string, DhcpLease[]>> {
     const leases = await this.listLeases();
     const grouped = new Map<string, DhcpLease[]>();
-    
+
     for (const lease of leases) {
       const iface = lease.if || 'unknown';
       if (!grouped.has(iface)) {
         grouped.set(iface, []);
       }
-      grouped.get(iface)!.push(lease);
+      grouped.get(iface)?.push(lease);
     }
-    
+
     return grouped;
   }
 
@@ -339,11 +343,15 @@ export class DhcpLeaseResource {
     for (const endpoint of endpoints) {
       console.log(`Testing ${endpoint.method} ${endpoint.path}...`);
       try {
-        const response = endpoint.method === 'POST' 
-          ? await this.client.post(endpoint.path, endpoint.data || {})
-          : await this.client.get(endpoint.path);
-        
-        console.log('Success! Response structure:', JSON.stringify(response, null, 2).substring(0, 500));
+        const response =
+          endpoint.method === 'POST'
+            ? await this.client.post(endpoint.path, endpoint.data || {})
+            : await this.client.get(endpoint.path);
+
+        console.log(
+          'Success! Response structure:',
+          JSON.stringify(response, null, 2).substring(0, 500)
+        );
       } catch (error: any) {
         console.log('Failed:', error.message);
       }

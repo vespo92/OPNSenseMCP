@@ -1,8 +1,8 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
-import Plugins from './pages/Plugins';
 import Events from './pages/Events';
+import Plugins from './pages/Plugins';
 import SystemStatus from './pages/SystemStatus';
 
 function App() {

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Server, Activity, Cpu, HardDrive } from 'lucide-react';
+import { Activity, Cpu, HardDrive, Server } from 'lucide-react';
 
 export default function SystemStatus() {
   const { data: status } = useQuery({
@@ -32,8 +32,12 @@ export default function SystemStatus() {
       {/* Overall Health */}
       <div className="card">
         <div className="flex items-center space-x-4">
-          <div className={`p-4 rounded-lg ${status?.healthy ? 'bg-green-100 dark:bg-green-900/20' : 'bg-red-100 dark:bg-red-900/20'}`}>
-            <Activity className={`w-8 h-8 ${status?.healthy ? 'text-green-600' : 'text-red-600'}`} />
+          <div
+            className={`p-4 rounded-lg ${status?.healthy ? 'bg-green-100 dark:bg-green-900/20' : 'bg-red-100 dark:bg-red-900/20'}`}
+          >
+            <Activity
+              className={`w-8 h-8 ${status?.healthy ? 'text-green-600' : 'text-red-600'}`}
+            />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -88,7 +92,9 @@ export default function SystemStatus() {
       {/* System Resources */}
       {stats?.memory && (
         <div className="card">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">System Resources</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+            System Resources
+          </h2>
           <div className="space-y-4">
             <ResourceBar
               label="Memory Usage"
@@ -107,7 +113,9 @@ export default function SystemStatus() {
           {Object.entries(status?.events?.eventsBySeverity || {}).map(([severity, count]) => (
             <div key={severity} className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700/50">
               <p className="text-sm text-gray-600 dark:text-gray-400 capitalize">{severity}</p>
-              <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{count as number}</p>
+              <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-white">
+                {count as number}
+              </p>
             </div>
           ))}
         </div>
@@ -136,9 +144,7 @@ function ResourceBar({ label, used, total, icon }: any) {
           style={{ width: `${percentage}%` }}
         />
       </div>
-      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        {percentage.toFixed(1)}% used
-      </p>
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{percentage.toFixed(1)}% used</p>
     </div>
   );
 }
@@ -161,5 +167,5 @@ function formatBytes(bytes: number): string {
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+  return `${(bytes / k ** i).toFixed(2)} ${sizes[i]}`;
 }

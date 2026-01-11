@@ -2,18 +2,18 @@
 
 /**
  * Enable Inter-VLAN Routing Script
- * 
+ *
  * This script enables inter-VLAN routing in OPNsense by:
  * 1. Updating system-level firewall settings
  * 2. Configuring interface settings (removing "Block private networks")
  * 3. Creating necessary firewall rules for VLAN communication
  */
 
-import { OPNSenseAPIClient } from '../../src/api/client.js';
-import SystemSettingsResource from '../../src/resources/system/settings.js';
-import InterfaceConfigResource from '../../src/resources/network/interfaces.js';
-import { FirewallRuleResource } from '../../src/resources/firewall/rule.js';
 import dotenv from 'dotenv';
+import { OPNSenseAPIClient } from '../../src/api/client.js';
+import { FirewallRuleResource } from '../../src/resources/firewall/rule.js';
+import InterfaceConfigResource from '../../src/resources/network/interfaces.js';
+import SystemSettingsResource from '../../src/resources/system/settings.js';
 
 dotenv.config();
 
@@ -23,15 +23,15 @@ const API_CONFIG = {
   apiKey: process.env.OPNSENSE_API_KEY || '',
   apiSecret: process.env.OPNSENSE_API_SECRET || '',
   verifySsl: process.env.OPNSENSE_VERIFY_SSL !== 'false',
-  debugMode: true
+  debugMode: true,
 };
 
 // Target configuration for DMZ to LAN routing
 const DMZ_CONFIG = {
-  interface: 'opt8',           // DMZ interface
-  subnet: '10.0.6.0/24',       // DMZ subnet
+  interface: 'opt8', // DMZ interface
+  subnet: '10.0.6.0/24', // DMZ subnet
   targetSubnet: '10.0.0.0/24', // LAN subnet
-  truenasIP: '10.0.0.14'       // TrueNAS server IP
+  truenasIP: '10.0.0.14', // TrueNAS server IP
 };
 
 async function main() {
@@ -59,7 +59,7 @@ async function main() {
   // Step 1: Enable system-level inter-VLAN routing
   console.log('Step 1: Enabling system-level inter-VLAN routing...');
   console.log('----------------------------------------');
-  
+
   const systemSuccess = await systemSettings.enableInterVLANRouting();
   if (systemSuccess) {
     console.log('✓ System-level inter-VLAN routing enabled');
@@ -109,7 +109,7 @@ async function main() {
       protocol: 'any',
       source_net: DMZ_CONFIG.subnet,
       destination_net: DMZ_CONFIG.targetSubnet,
-      description: 'Allow DMZ to LAN traffic (Inter-VLAN routing)'
+      description: 'Allow DMZ to LAN traffic (Inter-VLAN routing)',
     });
     console.log(`✓ DMZ to LAN rule created: ${dmzToLanRule.uuid}`);
   } catch (error: any) {
@@ -129,7 +129,7 @@ async function main() {
       protocol: 'any',
       source_net: DMZ_CONFIG.targetSubnet,
       destination_net: DMZ_CONFIG.subnet,
-      description: 'Allow LAN to DMZ traffic (Inter-VLAN routing)'
+      description: 'Allow LAN to DMZ traffic (Inter-VLAN routing)',
     });
     console.log(`✓ LAN to DMZ rule created: ${lanToDmzRule.uuid}`);
   } catch (error: any) {
@@ -142,7 +142,7 @@ async function main() {
     const nfsRules = await firewallRules.createNFSRules({
       interface: DMZ_CONFIG.interface,
       sourceNetwork: DMZ_CONFIG.subnet,
-      truenasIP: DMZ_CONFIG.truenasIP
+      truenasIP: DMZ_CONFIG.truenasIP,
     });
     console.log(`✓ NFS TCP rule created: ${nfsRules.tcp}`);
     console.log(`✓ NFS UDP rule created: ${nfsRules.udp}`);
@@ -159,25 +159,34 @@ async function main() {
   const currentSettings = await systemSettings.getFirewallSettings();
   if (currentSettings) {
     console.log('System settings:');
-    console.log(`  Block private networks: ${currentSettings.blockprivatenetworks === '0' ? 'Disabled ✓' : 'Enabled ✗'}`);
-    console.log(`  Block bogons: ${currentSettings.blockbogons === '0' ? 'Disabled ✓' : 'Enabled ✗'}`);
-    console.log(`  Allow inter-LAN traffic: ${currentSettings.allowinterlantraffic === '1' ? 'Enabled ✓' : 'Disabled ✗'}`);
+    console.log(
+      `  Block private networks: ${currentSettings.blockprivatenetworks === '0' ? 'Disabled ✓' : 'Enabled ✗'}`
+    );
+    console.log(
+      `  Block bogons: ${currentSettings.blockbogons === '0' ? 'Disabled ✓' : 'Enabled ✗'}`
+    );
+    console.log(
+      `  Allow inter-LAN traffic: ${currentSettings.allowinterlantraffic === '1' ? 'Enabled ✓' : 'Disabled ✗'}`
+    );
   }
 
   // Check interface configuration
   const dmzInterface = await interfaceConfig.getInterfaceConfig(DMZ_CONFIG.interface);
   if (dmzInterface) {
     console.log(`\nDMZ Interface (${DMZ_CONFIG.interface}) settings:`);
-    console.log(`  Block private networks: ${dmzInterface.blockpriv === '0' ? 'Disabled ✓' : 'Enabled ✗'}`);
+    console.log(
+      `  Block private networks: ${dmzInterface.blockpriv === '0' ? 'Disabled ✓' : 'Enabled ✗'}`
+    );
     console.log(`  Block bogons: ${dmzInterface.blockbogons === '0' ? 'Disabled ✓' : 'Enabled ✗'}`);
   }
 
   // Check firewall rules
   const allRules = await firewallRules.list();
-  const interVlanRules = allRules.filter(r => 
-    r.description?.toLowerCase().includes('inter-vlan') ||
-    r.description?.toLowerCase().includes('dmz to lan') ||
-    r.description?.toLowerCase().includes('lan to dmz')
+  const interVlanRules = allRules.filter(
+    (r) =>
+      r.description?.toLowerCase().includes('inter-vlan') ||
+      r.description?.toLowerCase().includes('dmz to lan') ||
+      r.description?.toLowerCase().includes('lan to dmz')
   );
   console.log(`\nFirewall rules for inter-VLAN routing: ${interVlanRules.length} rules found`);
 
@@ -196,7 +205,7 @@ async function main() {
 }
 
 // Run the script
-main().catch(error => {
+main().catch((error) => {
   console.error('Script failed:', error);
   process.exit(1);
 });

@@ -5,8 +5,14 @@
  */
 
 import { BasePlugin } from '../../../core/plugin-system/base-plugin.js';
-import { PluginCategory, PluginMetadata, MCPTool, MCPResource, MCPPrompt } from '../../../core/types/plugin.js';
-import { EventType, EventSeverity } from '../../../core/types/events.js';
+import { EventSeverity } from '../../../core/types/events.js';
+import {
+  type MCPPrompt,
+  type MCPResource,
+  type MCPTool,
+  PluginCategory,
+  type PluginMetadata,
+} from '../../../core/types/plugin.js';
 
 /**
  * Firewall plugin for OPNsense
@@ -227,7 +233,7 @@ export default class FirewallPlugin extends BasePlugin {
       {
         name: 'firewall_audit',
         description: 'Audit firewall rules for security issues',
-        handler: async (args) => ({
+        handler: async (_args) => ({
           messages: [
             {
               role: 'user' as const,
@@ -346,10 +352,9 @@ export default class FirewallPlugin extends BasePlugin {
    */
   private async updateRule(params: { uuid: string; rule: any }): Promise<any> {
     try {
-      const response = await this.api.post(
-        `/api/firewall/filter/setRule/${params.uuid}`,
-        { rule: params.rule }
-      );
+      const response = await this.api.post(`/api/firewall/filter/setRule/${params.uuid}`, {
+        rule: params.rule,
+      });
 
       if (response.data?.result === 'saved') {
         // Apply changes
@@ -446,7 +451,7 @@ export default class FirewallPlugin extends BasePlugin {
   /**
    * Apply firewall changes
    */
-  private async applyChanges(params: {}): Promise<any> {
+  private async applyChanges(_params: {}): Promise<any> {
     try {
       const response = await this.api.post('/api/firewall/filter/apply');
 
@@ -499,7 +504,7 @@ export default class FirewallPlugin extends BasePlugin {
         this.ruleCache = new Map(Object.entries(cached));
         this.logger.info(`Loaded ${this.ruleCache.size} rules from cache`);
       }
-    } catch (error) {
+    } catch (_error) {
       this.logger.debug('No cached rules found');
     }
   }

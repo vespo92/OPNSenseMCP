@@ -4,16 +4,16 @@
  * Modular plugin-based architecture with SSE event streaming
  */
 
-import { EventBus } from './core/event-bus/bus.js';
-import { PluginRegistry } from './core/plugin-system/registry.js';
-import { PluginLoader } from './core/plugin-system/loader.js';
-import { SSEServer } from './core/sse/server.js';
 import { OPNSenseAPIClient } from './api/client.js';
-import { SSHExecutor } from './resources/ssh/executor.js';
 import { MCPCacheManager } from './cache/manager.js';
+import { EventBus } from './core/event-bus/bus.js';
+import { PluginLoader } from './core/plugin-system/loader.js';
+import { PluginRegistry } from './core/plugin-system/registry.js';
+import { SSEServer } from './core/sse/server.js';
+import type { PluginContext } from './core/types/plugin.js';
+import { SSHExecutor } from './resources/ssh/executor.js';
 import { ResourceStateStore } from './state/store.js';
 import { Logger, LogLevel } from './utils/logger.js';
-import type { PluginContext } from './core/types/plugin.js';
 
 /**
  * Server configuration
@@ -78,10 +78,14 @@ export class OPNsenseMCPServerV2 {
 
   constructor(config: ServerConfig) {
     this.config = config;
-    const logLevel = config.logging?.level === 'debug' ? LogLevel.DEBUG
-      : config.logging?.level === 'warn' ? LogLevel.WARN
-      : config.logging?.level === 'error' ? LogLevel.ERROR
-      : LogLevel.INFO;
+    const logLevel =
+      config.logging?.level === 'debug'
+        ? LogLevel.DEBUG
+        : config.logging?.level === 'warn'
+          ? LogLevel.WARN
+          : config.logging?.level === 'error'
+            ? LogLevel.ERROR
+            : LogLevel.INFO;
     this.logger = new Logger({ level: logLevel });
     this.eventBus = new EventBus(config.events);
     this.registry = new PluginRegistry(this.logger);
@@ -248,8 +252,7 @@ export class OPNsenseMCPServerV2 {
     setInterval(async () => {
       const health = await this.registry.healthCheckAll();
 
-      const unhealthy = Array.from(health.entries())
-        .filter(([, status]) => !status.healthy);
+      const unhealthy = Array.from(health.entries()).filter(([, status]) => !status.healthy);
 
       if (unhealthy.length > 0) {
         this.logger.warn(`${unhealthy.length} unhealthy plugins:`, unhealthy);
@@ -263,25 +266,30 @@ export class OPNsenseMCPServerV2 {
   private logServerInfo(): void {
     const stats = this.registry.getStats();
 
-    this.logger.info('\n' + [
-      '='.repeat(60),
-      '  OPNsense MCP Server v2.0 - Ready',
-      '='.repeat(60),
-      `  Plugins Loaded:    ${stats.total}`,
-      `  Running Plugins:   ${stats.byState.running || 0}`,
-      `  Categories:        ${Object.keys(stats.byCategory).length}`,
-      '',
-      this.sseServer
-        ? `  SSE Server:        http://${this.config.server.host}:${this.config.server.port}`
-        : '',
-      this.sseServer
-        ? `  Event Stream:      http://${this.config.server.host}:${this.config.server.port}/sse/events`
-        : '',
-      this.sseServer
-        ? `  API Docs:          http://${this.config.server.host}:${this.config.server.port}/api/plugins`
-        : '',
-      '='.repeat(60),
-    ].filter(Boolean).join('\n'));
+    this.logger.info(
+      '\n' +
+        [
+          '='.repeat(60),
+          '  OPNsense MCP Server v2.0 - Ready',
+          '='.repeat(60),
+          `  Plugins Loaded:    ${stats.total}`,
+          `  Running Plugins:   ${stats.byState.running || 0}`,
+          `  Categories:        ${Object.keys(stats.byCategory).length}`,
+          '',
+          this.sseServer
+            ? `  SSE Server:        http://${this.config.server.host}:${this.config.server.port}`
+            : '',
+          this.sseServer
+            ? `  Event Stream:      http://${this.config.server.host}:${this.config.server.port}/sse/events`
+            : '',
+          this.sseServer
+            ? `  API Docs:          http://${this.config.server.host}:${this.config.server.port}/api/plugins`
+            : '',
+          '='.repeat(60),
+        ]
+          .filter(Boolean)
+          .join('\n')
+    );
   }
 
   /**
@@ -306,7 +314,7 @@ export async function createServer(configPath?: string): Promise<OPNsenseMCPServ
     : {
         server: {
           host: process.env.SERVER_HOST || '0.0.0.0',
-          port: parseInt(process.env.SERVER_PORT || '3000'),
+          port: parseInt(process.env.SERVER_PORT || '3000', 10),
           transport: (process.env.TRANSPORT as any) || 'sse',
         },
         opnsense: {
@@ -318,7 +326,7 @@ export async function createServer(configPath?: string): Promise<OPNsenseMCPServ
         ssh: {
           enabled: process.env.SSH_ENABLED === 'true',
           host: process.env.OPNSENSE_HOST!,
-          port: parseInt(process.env.SSH_PORT || '22'),
+          port: parseInt(process.env.SSH_PORT || '22', 10),
           username: process.env.SSH_USER!,
           password: process.env.SSH_PASSWORD,
         },

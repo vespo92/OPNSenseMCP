@@ -1,5 +1,4 @@
-import { z } from 'zod';
-import { OPNSenseAPIClient, OPNSenseAPIError } from '../../../api/client.js';
+import { type OPNSenseAPIClient, OPNSenseAPIError } from '../../../api/client.js';
 
 // ==================== Custom Error Types ====================
 
@@ -41,7 +40,7 @@ export enum HAProxyErrorCode {
 
   // API errors
   API_ERROR = 'API_ERROR',
-  UNKNOWN_ERROR = 'UNKNOWN_ERROR'
+  UNKNOWN_ERROR = 'UNKNOWN_ERROR',
 }
 
 // ==================== ACL Expression Types ====================
@@ -52,55 +51,55 @@ export enum HAProxyErrorCode {
  */
 export const ACL_EXPRESSION_TYPES = {
   // SNI-based expressions (for TCP/SSL passthrough)
-  'ssl_sni': 'SSL SNI exact match',
-  'ssl_sni_end': 'SSL SNI ends with (suffix match)',
-  'ssl_sni_beg': 'SSL SNI begins with (prefix match)',
-  'ssl_sni_sub': 'SSL SNI contains (substring match)',
-  'ssl_sni_reg': 'SSL SNI regex match',
+  ssl_sni: 'SSL SNI exact match',
+  ssl_sni_end: 'SSL SNI ends with (suffix match)',
+  ssl_sni_beg: 'SSL SNI begins with (prefix match)',
+  ssl_sni_sub: 'SSL SNI contains (substring match)',
+  ssl_sni_reg: 'SSL SNI regex match',
 
   // Host-based expressions (for HTTP)
-  'hdr_host': 'Host header exact match',
-  'hdr_host_end': 'Host header ends with',
-  'hdr_host_beg': 'Host header begins with',
-  'hdr_host_sub': 'Host header contains',
-  'hdr_host_reg': 'Host header regex match',
+  hdr_host: 'Host header exact match',
+  hdr_host_end: 'Host header ends with',
+  hdr_host_beg: 'Host header begins with',
+  hdr_host_sub: 'Host header contains',
+  hdr_host_reg: 'Host header regex match',
 
   // Path-based expressions
-  'path': 'Path exact match',
-  'path_beg': 'Path begins with',
-  'path_end': 'Path ends with',
-  'path_sub': 'Path contains',
-  'path_reg': 'Path regex match',
-  'path_dir': 'Path directory match',
+  path: 'Path exact match',
+  path_beg: 'Path begins with',
+  path_end: 'Path ends with',
+  path_sub: 'Path contains',
+  path_reg: 'Path regex match',
+  path_dir: 'Path directory match',
 
   // URL-based expressions
-  'url': 'URL exact match',
-  'url_beg': 'URL begins with',
-  'url_end': 'URL ends with',
-  'url_sub': 'URL contains',
-  'url_reg': 'URL regex match',
+  url: 'URL exact match',
+  url_beg: 'URL begins with',
+  url_end: 'URL ends with',
+  url_sub: 'URL contains',
+  url_reg: 'URL regex match',
 
   // Source IP expressions
-  'src': 'Source IP address',
-  'src_port': 'Source port',
-  'src_is_local': 'Source is local',
+  src: 'Source IP address',
+  src_port: 'Source port',
+  src_is_local: 'Source is local',
 
   // Custom expressions
-  'custom_acl': 'Custom ACL expression (pass-through)',
+  custom_acl: 'Custom ACL expression (pass-through)',
 
   // HTTP method
-  'method': 'HTTP method',
+  method: 'HTTP method',
 
   // SSL/TLS
-  'ssl_fc': 'SSL frontend connection',
-  'ssl_fc_sni': 'SSL frontend SNI',
-  'ssl_c_used': 'SSL client certificate used',
-  'ssl_c_verify': 'SSL client certificate verify result',
+  ssl_fc: 'SSL frontend connection',
+  ssl_fc_sni: 'SSL frontend SNI',
+  ssl_c_used: 'SSL client certificate used',
+  ssl_c_verify: 'SSL client certificate verify result',
 
   // Other common expressions
-  'nbsrv': 'Number of available servers in backend',
-  'connslots': 'Connection slots available',
-  'queue': 'Queue size'
+  nbsrv: 'Number of available servers in backend',
+  connslots: 'Connection slots available',
+  queue: 'Queue size',
 } as const;
 
 export type ACLExpressionType = keyof typeof ACL_EXPRESSION_TYPES;
@@ -112,15 +111,15 @@ export type ACLExpressionType = keyof typeof ACL_EXPRESSION_TYPES;
  */
 export const ACTION_TYPES = {
   // Backend selection
-  'use_backend': 'Route to specified backend',
+  use_backend: 'Route to specified backend',
 
   // HTTP actions
-  'redirect': 'HTTP redirect',
-  'add_header': 'Add HTTP header',
-  'set_header': 'Set/replace HTTP header',
-  'del_header': 'Delete HTTP header',
-  'replace_header': 'Replace header value with regex',
-  'replace_value': 'Replace header value',
+  redirect: 'HTTP redirect',
+  add_header: 'Add HTTP header',
+  set_header: 'Set/replace HTTP header',
+  del_header: 'Delete HTTP header',
+  replace_header: 'Replace header value with regex',
+  replace_value: 'Replace header value',
 
   // TCP actions (for SNI routing)
   'tcp-request_content_accept': 'Accept TCP connection',
@@ -141,7 +140,7 @@ export const ACTION_TYPES = {
   // Response actions
   'http-response_add-header': 'Add response header',
   'http-response_set-header': 'Set response header',
-  'http-response_del-header': 'Delete response header'
+  'http-response_del-header': 'Delete response header',
 } as const;
 
 export type ActionType = keyof typeof ACTION_TYPES;
@@ -179,9 +178,9 @@ export interface HAProxyServer {
   address: string;
   port: number;
   ssl?: boolean;
-  sslVerify?: boolean;  // Changed from 'none' | 'required' to boolean for clarity
-  sslSNI?: string;      // SNI hostname to send
-  sslCA?: string;       // CA certificate UUID for verification
+  sslVerify?: boolean; // Changed from 'none' | 'required' to boolean for clarity
+  sslSNI?: string; // SNI hostname to send
+  sslCA?: string; // CA certificate UUID for verification
   weight?: number;
   backup?: boolean;
   enabled?: boolean;
@@ -199,9 +198,9 @@ export interface HAProxyFrontend {
   bindOptions?: {
     ssl?: boolean;
     certificates?: string[];
-    alpn?: string[];           // ALPN protocols
-    sslMinVersion?: string;    // Minimum SSL/TLS version
-    sslMaxVersion?: string;    // Maximum SSL/TLS version
+    alpn?: string[]; // ALPN protocols
+    sslMinVersion?: string; // Minimum SSL/TLS version
+    sslMaxVersion?: string; // Maximum SSL/TLS version
   };
   mode: 'http' | 'tcp';
   backend: string;
@@ -209,26 +208,26 @@ export interface HAProxyFrontend {
   actions?: HAProxyAction[];
   description?: string;
   enabled?: boolean;
-  tcpInspectDelay?: number;   // TCP inspect delay in ms (required for SNI routing)
+  tcpInspectDelay?: number; // TCP inspect delay in ms (required for SNI routing)
 }
 
 export interface HAProxyACL {
   uuid?: string;
   name: string;
-  expression: ACLExpressionType;  // Now typed to valid expression types
-  value: string;                   // The value to match against
-  negate?: boolean;               // Negate the ACL condition
+  expression: ACLExpressionType; // Now typed to valid expression types
+  value: string; // The value to match against
+  negate?: boolean; // Negate the ACL condition
   enabled?: boolean;
 }
 
 export interface HAProxyAction {
   uuid?: string;
-  type: ActionType;               // Now typed to all valid action types
-  backend?: string;               // For use_backend
-  condition?: string;             // ACL condition (e.g., "if acl_name")
-  aclNames?: string[];            // ACL names to use in condition
-  value?: string;                 // Action-specific value
-  operator?: 'if' | 'unless';     // Condition operator
+  type: ActionType; // Now typed to all valid action types
+  backend?: string; // For use_backend
+  condition?: string; // ACL condition (e.g., "if acl_name")
+  aclNames?: string[]; // ACL names to use in condition
+  value?: string; // Action-specific value
+  operator?: 'if' | 'unless'; // Condition operator
   enabled?: boolean;
 }
 
@@ -287,12 +286,13 @@ function validateServerAddress(address: string): boolean {
   // IPv6 pattern (simplified)
   const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
   // Hostname pattern (RFC 1123)
-  const hostnamePattern = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  const hostnamePattern =
+    /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 
   if (ipv4Pattern.test(address)) {
     // Validate each octet is 0-255
     const octets = address.split('.').map(Number);
-    return octets.every(o => o >= 0 && o <= 255);
+    return octets.every((o) => o >= 0 && o <= 255);
   }
 
   return ipv6Pattern.test(address) || hostnamePattern.test(address);
@@ -335,7 +335,7 @@ export class HAProxyResource {
         running: response.running === true,
         pid: response.pid,
         uptime: response.uptime,
-        version: response.version
+        version: response.version,
       };
     } catch (error) {
       if (error instanceof OPNSenseAPIError) {
@@ -399,7 +399,7 @@ export class HAProxyResource {
     try {
       const payload = this.buildBackendPayload(backend);
       const response = await this.client.post('/haproxy/settings/addBackend', payload);
-      
+
       if (!response.uuid) {
         throw new Error('No UUID returned from create backend');
       }
@@ -424,7 +424,7 @@ export class HAProxyResource {
     try {
       const payload = this.buildBackendPayload(updates as HAProxyBackend);
       const response = await this.client.post(`/haproxy/settings/setBackend/${uuid}`, payload);
-      
+
       if (response.result !== 'saved') {
         throw new Error('Failed to save backend updates');
       }
@@ -442,7 +442,7 @@ export class HAProxyResource {
       if (response.result !== 'deleted') {
         throw new Error('Failed to delete backend');
       }
-      
+
       await this.reconfigure();
       return true;
     } catch (error) {
@@ -455,14 +455,15 @@ export class HAProxyResource {
   /**
    * Add a server to a backend with full validation
    */
-  async addServerToBackend(backendUuid: string, server: Omit<HAProxyServer, 'uuid'>): Promise<{ uuid: string }> {
+  async addServerToBackend(
+    backendUuid: string,
+    server: Omit<HAProxyServer, 'uuid'>
+  ): Promise<{ uuid: string }> {
     // Validate required fields
     if (!server.name || server.name.trim() === '') {
-      throw new HAProxyError(
-        'Server name is required',
-        HAProxyErrorCode.MISSING_REQUIRED_FIELD,
-        { field: 'name' }
-      );
+      throw new HAProxyError('Server name is required', HAProxyErrorCode.MISSING_REQUIRED_FIELD, {
+        field: 'name',
+      });
     }
 
     if (!server.address || server.address.trim() === '') {
@@ -497,11 +498,9 @@ export class HAProxyResource {
 
       const response = await this.client.post('/haproxy/settings/addServer', payload);
       if (!response.uuid) {
-        throw new HAProxyError(
-          'No UUID returned from add server',
-          HAProxyErrorCode.API_ERROR,
-          { response }
-        );
+        throw new HAProxyError('No UUID returned from add server', HAProxyErrorCode.API_ERROR, {
+          response,
+        });
       }
 
       return { uuid: response.uuid };
@@ -527,11 +526,11 @@ export class HAProxyResource {
     try {
       const payload = this.buildServerPayload(updates as HAProxyServer);
       const response = await this.client.post(`/haproxy/settings/setServer/${uuid}`, payload);
-      
+
       if (response.result !== 'saved') {
         throw new Error('Failed to save server updates');
       }
-      
+
       await this.reconfigure();
       return true;
     } catch (error) {
@@ -545,7 +544,7 @@ export class HAProxyResource {
       if (response.result !== 'deleted') {
         throw new Error('Failed to delete server');
       }
-      
+
       await this.reconfigure();
       return true;
     } catch (error) {
@@ -582,7 +581,7 @@ export class HAProxyResource {
     try {
       const payload = this.buildFrontendPayload(frontend);
       const response = await this.client.post('/haproxy/settings/addFrontend', payload);
-      
+
       if (!response.uuid) {
         throw new Error('No UUID returned from create frontend');
       }
@@ -612,7 +611,7 @@ export class HAProxyResource {
     try {
       const payload = this.buildFrontendPayload(updates as HAProxyFrontend);
       const response = await this.client.post(`/haproxy/settings/setFrontend/${uuid}`, payload);
-      
+
       if (response.result !== 'saved') {
         throw new Error('Failed to save frontend updates');
       }
@@ -630,7 +629,7 @@ export class HAProxyResource {
       if (response.result !== 'deleted') {
         throw new Error('Failed to delete frontend');
       }
-      
+
       await this.reconfigure();
       return true;
     } catch (error) {
@@ -644,14 +643,15 @@ export class HAProxyResource {
    * Add an ACL to a frontend with validation
    * Supports all OPNsense HAProxy ACL expression types including SNI matching
    */
-  async addACLToFrontend(frontendUuid: string, acl: Omit<HAProxyACL, 'uuid'>): Promise<{ uuid: string }> {
+  async addACLToFrontend(
+    frontendUuid: string,
+    acl: Omit<HAProxyACL, 'uuid'>
+  ): Promise<{ uuid: string }> {
     // Validate required fields
     if (!acl.name || acl.name.trim() === '') {
-      throw new HAProxyError(
-        'ACL name is required',
-        HAProxyErrorCode.MISSING_REQUIRED_FIELD,
-        { field: 'name' }
-      );
+      throw new HAProxyError('ACL name is required', HAProxyErrorCode.MISSING_REQUIRED_FIELD, {
+        field: 'name',
+      });
     }
 
     if (!acl.expression) {
@@ -672,11 +672,9 @@ export class HAProxyResource {
     }
 
     if (!acl.value || acl.value.trim() === '') {
-      throw new HAProxyError(
-        'ACL value is required',
-        HAProxyErrorCode.MISSING_REQUIRED_FIELD,
-        { field: 'value' }
-      );
+      throw new HAProxyError('ACL value is required', HAProxyErrorCode.MISSING_REQUIRED_FIELD, {
+        field: 'value',
+      });
     }
 
     try {
@@ -684,11 +682,9 @@ export class HAProxyResource {
 
       const response = await this.client.post('/haproxy/settings/addAcl', payload);
       if (!response.uuid) {
-        throw new HAProxyError(
-          'No UUID returned from add ACL',
-          HAProxyErrorCode.API_ERROR,
-          { response }
-        );
+        throw new HAProxyError('No UUID returned from add ACL', HAProxyErrorCode.API_ERROR, {
+          response,
+        });
       }
 
       return { uuid: response.uuid };
@@ -727,17 +723,15 @@ export class HAProxyResource {
           ...(updates.expression && { expression: updates.expression }),
           ...(updates.value && { value: updates.value }),
           ...(updates.negate !== undefined && { negate: updates.negate ? '1' : '0' }),
-          enabled: updates.enabled !== false ? '1' : '0'
-        }
+          enabled: updates.enabled !== false ? '1' : '0',
+        },
       };
 
       const response = await this.client.post(`/haproxy/settings/setAcl/${uuid}`, payload);
       if (response.result !== 'saved') {
-        throw new HAProxyError(
-          'Failed to save ACL updates',
-          HAProxyErrorCode.API_ERROR,
-          { response }
-        );
+        throw new HAProxyError('Failed to save ACL updates', HAProxyErrorCode.API_ERROR, {
+          response,
+        });
       }
 
       await this.reconfigure();
@@ -764,11 +758,7 @@ export class HAProxyResource {
     try {
       const response = await this.client.post(`/haproxy/settings/delAcl/${uuid}`);
       if (response.result !== 'deleted') {
-        throw new HAProxyError(
-          'Failed to delete ACL',
-          HAProxyErrorCode.API_ERROR,
-          { response }
-        );
+        throw new HAProxyError('Failed to delete ACL', HAProxyErrorCode.API_ERROR, { response });
       }
 
       await this.reconfigure();
@@ -797,14 +787,15 @@ export class HAProxyResource {
    * Add an action to a frontend with validation
    * Supports all OPNsense HAProxy action types including tcp-request for SNI routing
    */
-  async addActionToFrontend(frontendUuid: string, action: Omit<HAProxyAction, 'uuid'>): Promise<{ uuid: string }> {
+  async addActionToFrontend(
+    frontendUuid: string,
+    action: Omit<HAProxyAction, 'uuid'>
+  ): Promise<{ uuid: string }> {
     // Validate required fields
     if (!action.type) {
-      throw new HAProxyError(
-        'Action type is required',
-        HAProxyErrorCode.MISSING_REQUIRED_FIELD,
-        { field: 'type' }
-      );
+      throw new HAProxyError('Action type is required', HAProxyErrorCode.MISSING_REQUIRED_FIELD, {
+        field: 'type',
+      });
     }
 
     // Validate action type
@@ -839,11 +830,9 @@ export class HAProxyResource {
 
       const response = await this.client.post('/haproxy/settings/addAction', payload);
       if (!response.uuid) {
-        throw new HAProxyError(
-          'No UUID returned from add action',
-          HAProxyErrorCode.API_ERROR,
-          { response }
-        );
+        throw new HAProxyError('No UUID returned from add action', HAProxyErrorCode.API_ERROR, {
+          response,
+        });
       }
 
       return { uuid: response.uuid };
@@ -884,17 +873,15 @@ export class HAProxyResource {
           ...(updates.value && { value: updates.value }),
           ...(updates.operator && { operator: updates.operator }),
           ...(updates.aclNames && { linkedAcls: updates.aclNames.join(',') }),
-          enabled: updates.enabled !== false ? '1' : '0'
-        }
+          enabled: updates.enabled !== false ? '1' : '0',
+        },
       };
 
       const response = await this.client.post(`/haproxy/settings/setAction/${uuid}`, payload);
       if (response.result !== 'saved') {
-        throw new HAProxyError(
-          'Failed to save action updates',
-          HAProxyErrorCode.API_ERROR,
-          { response }
-        );
+        throw new HAProxyError('Failed to save action updates', HAProxyErrorCode.API_ERROR, {
+          response,
+        });
       }
 
       await this.reconfigure();
@@ -921,11 +908,7 @@ export class HAProxyResource {
     try {
       const response = await this.client.post(`/haproxy/settings/delAction/${uuid}`);
       if (response.result !== 'deleted') {
-        throw new HAProxyError(
-          'Failed to delete action',
-          HAProxyErrorCode.API_ERROR,
-          { response }
-        );
+        throw new HAProxyError('Failed to delete action', HAProxyErrorCode.API_ERROR, { response });
       }
 
       await this.reconfigure();
@@ -960,7 +943,7 @@ export class HAProxyResource {
         name: row.descr,
         type: row.method,
         cn: row.dn?.CN,
-        san: row.altnames ? row.altnames.split(',') : []
+        san: row.altnames ? row.altnames.split(',') : [],
       }));
     } catch (error) {
       throw new Error(`Failed to list certificates: ${error}`);
@@ -972,8 +955,8 @@ export class HAProxyResource {
       const payload = {
         cert: {
           descr: cert.name,
-          method: cert.type
-        }
+          method: cert.type,
+        },
       };
 
       if (cert.type === 'selfsigned') {
@@ -985,7 +968,7 @@ export class HAProxyResource {
           dn_country: 'US',
           dn_state: 'State',
           dn_city: 'City',
-          dn_organization: 'Organization'
+          dn_organization: 'Organization',
         });
 
         if (cert.san && cert.san.length > 0) {
@@ -995,7 +978,7 @@ export class HAProxyResource {
         Object.assign(payload.cert, {
           crt: cert.certificate,
           prv: cert.key,
-          ca: cert.ca
+          ca: cert.ca,
         });
       }
 
@@ -1003,7 +986,7 @@ export class HAProxyResource {
       if (!response.uuid) {
         throw new Error('No UUID returned from create certificate');
       }
-      
+
       return { uuid: response.uuid };
     } catch (error) {
       throw new Error(`Failed to create certificate: ${error}`);
@@ -1039,11 +1022,14 @@ export class HAProxyResource {
       description: data.description,
       enabled: data.enabled === '1',
       servers: [],
-      healthCheck: data.healthCheckEnabled === '1' ? {
-        type: data.healthCheck,
-        interval: parseInt(data.healthCheckInterval) || undefined,
-        timeout: parseInt(data.healthCheckTimeout) || undefined
-      } : undefined
+      healthCheck:
+        data.healthCheckEnabled === '1'
+          ? {
+              type: data.healthCheck,
+              interval: parseInt(data.healthCheckInterval, 10) || undefined,
+              timeout: parseInt(data.healthCheckTimeout, 10) || undefined,
+            }
+          : undefined,
     };
   }
 
@@ -1060,8 +1046,8 @@ export class HAProxyResource {
       actions: [],
       bindOptions: {
         ssl: data.ssl === '1',
-        certificates: data.certificates ? data.certificates.split(',') : []
-      }
+        certificates: data.certificates ? data.certificates.split(',') : [],
+      },
     };
   }
 
@@ -1076,8 +1062,8 @@ export class HAProxyResource {
         healthCheckEnabled: backend.healthCheck ? '1' : '0',
         healthCheck: backend.healthCheck?.type || '',
         healthCheckInterval: backend.healthCheck?.interval?.toString() || '',
-        healthCheckTimeout: backend.healthCheck?.timeout?.toString() || ''
-      }
+        healthCheckTimeout: backend.healthCheck?.timeout?.toString() || '',
+      },
     };
   }
 
@@ -1096,8 +1082,8 @@ export class HAProxyResource {
         sslVerify: server.sslVerify ? '1' : '0',
         weight: (server.weight || 1).toString(),
         backup: server.backup ? '1' : '0',
-        enabled: server.enabled !== false ? '1' : '0'
-      }
+        enabled: server.enabled !== false ? '1' : '0',
+      },
     };
 
     // Add optional SSL-related fields
@@ -1130,8 +1116,8 @@ export class HAProxyResource {
         mode: frontend.mode,
         defaultBackend: frontend.backend,
         description: frontend.description || '',
-        enabled: frontend.enabled !== false ? '1' : '0'
-      }
+        enabled: frontend.enabled !== false ? '1' : '0',
+      },
     };
 
     if (frontend.bindOptions?.ssl) {
@@ -1170,8 +1156,8 @@ export class HAProxyResource {
         value: acl.value,
         negate: acl.negate ? '1' : '0',
         frontend: frontendUuid,
-        enabled: acl.enabled !== false ? '1' : '0'
-      }
+        enabled: acl.enabled !== false ? '1' : '0',
+      },
     };
   }
 
@@ -1184,8 +1170,8 @@ export class HAProxyResource {
       action: {
         type: action.type,
         frontend: frontendUuid,
-        enabled: action.enabled !== false ? '1' : '0'
-      }
+        enabled: action.enabled !== false ? '1' : '0',
+      },
     };
 
     // Add type-specific fields
@@ -1211,7 +1197,7 @@ export class HAProxyResource {
   private parseStats(data: any): HAProxyStats {
     const stats: HAProxyStats = {
       frontends: {},
-      backends: {}
+      backends: {},
     };
 
     // Parse the stats data from HAProxy
@@ -1227,7 +1213,7 @@ export class HAProxyResource {
             bytesIn: (frontendData as any).bin || 0,
             bytesOut: (frontendData as any).bout || 0,
             requestRate: (frontendData as any).req_rate || 0,
-            errorRate: (frontendData as any).ereq || 0
+            errorRate: (frontendData as any).ereq || 0,
           };
         }
       }
@@ -1242,7 +1228,7 @@ export class HAProxyResource {
             backupServers: backend.bck || 0,
             sessions: backend.scur || 0,
             queuedRequests: backend.qcur || 0,
-            health: {}
+            health: {},
           };
 
           // Parse server health
@@ -1254,7 +1240,7 @@ export class HAProxyResource {
                 lastCheck: server.check_status || '',
                 weight: server.weight || 0,
                 checksPassed: server.chkpass || 0,
-                checksFailed: server.chkfail || 0
+                checksFailed: server.chkfail || 0,
               };
             }
           }

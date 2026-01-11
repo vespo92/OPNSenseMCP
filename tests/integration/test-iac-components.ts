@@ -2,10 +2,10 @@
  * Test the IaC components integration
  */
 
-import { resourceRegistry } from '../src/resources/registry';
-import { VlanResource } from '../src/resources/network/vlan-iac';
 import { DeploymentPlanner } from '../src/deployment/planner';
-import { IaCResource } from '../src/resources/base';
+import type { IaCResource } from '../src/resources/base';
+import { VlanResource } from '../src/resources/network/vlan-iac';
+import { resourceRegistry } from '../src/resources/registry';
 
 async function testIaCComponents() {
   console.log('Testing IaC Components...\n');
@@ -15,7 +15,7 @@ async function testIaCComponents() {
   const vlan1 = new VlanResource('vlan-100', 'Guest VLAN', {
     interface: 'igc1',
     tag: 100,
-    description: 'Guest Network VLAN'
+    description: 'Guest Network VLAN',
   });
 
   const validation = vlan1.validate();
@@ -41,34 +41,30 @@ async function testIaCComponents() {
 
   // Test 5: Deployment Planning
   console.log('\n5. Testing Deployment Planning:');
-  
+
   const desiredResources: IaCResource[] = [
     new VlanResource('vlan-100', 'Guest VLAN', {
       interface: 'igc1',
       tag: 100,
-      description: 'Guest Network'
+      description: 'Guest Network',
     }),
     new VlanResource('vlan-200', 'IoT VLAN', {
       interface: 'igc1',
       tag: 200,
-      description: 'IoT Devices'
-    })
+      description: 'IoT Devices',
+    }),
   ];
 
   const currentResources: IaCResource[] = [
     new VlanResource('vlan-100', 'Guest VLAN', {
       interface: 'igc1',
       tag: 100,
-      description: 'Old Guest Network' // Different description
-    })
+      description: 'Old Guest Network', // Different description
+    }),
   ];
 
   const planner = new DeploymentPlanner();
-  const plan = await planner.planDeployment(
-    'test-deployment',
-    desiredResources,
-    currentResources
-  );
+  const plan = await planner.planDeployment('test-deployment', desiredResources, currentResources);
 
   console.log(`   Plan Summary:`);
   console.log(`     - Create: ${plan.summary.create}`);
@@ -80,7 +76,7 @@ async function testIaCComponents() {
   console.log('\n6. Testing Dependencies:');
   vlan1.addDependency({
     resourceId: 'interface-igc1',
-    type: 'hard'
+    type: 'hard',
   });
   console.log(`   Dependencies:`, vlan1.getDependencies());
 

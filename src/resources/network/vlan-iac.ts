@@ -13,7 +13,7 @@ export const VlanPropertiesSchema = z.object({
   tag: z.number().min(1).max(4094).describe('VLAN tag (1-4094)'),
   description: z.string().optional().describe('VLAN description'),
   pcp: z.number().min(0).max(7).optional().default(0).describe('Priority Code Point (0-7)'),
-  enabled: z.boolean().optional().default(true).describe('Enable/disable VLAN')
+  enabled: z.boolean().optional().default(true).describe('Enable/disable VLAN'),
 });
 
 export type VlanProperties = z.infer<typeof VlanPropertiesSchema>;
@@ -21,10 +21,6 @@ export type VlanProperties = z.infer<typeof VlanPropertiesSchema>;
 export class VlanResource extends IaCResource {
   readonly type = 'opnsense:network:vlan';
   readonly schema = VlanPropertiesSchema;
-
-  constructor(id: string, name: string, properties: VlanProperties) {
-    super(id, name, properties);
-  }
 
   /**
    * Convert to OPNSense API payload
@@ -36,8 +32,8 @@ export class VlanResource extends IaCResource {
         if: props.interface,
         tag: props.tag.toString(),
         descr: props.description || '',
-        pcp: props.pcp?.toString() || '0'
-      }
+        pcp: props.pcp?.toString() || '0',
+      },
     };
   }
 
@@ -48,17 +44,17 @@ export class VlanResource extends IaCResource {
     if (response.vlan) {
       this._properties = {
         interface: response.vlan.if,
-        tag: parseInt(response.vlan.tag),
+        tag: parseInt(response.vlan.tag, 10),
         description: response.vlan.descr || undefined,
-        pcp: response.vlan.pcp ? parseInt(response.vlan.pcp) : 0,
-        enabled: true
+        pcp: response.vlan.pcp ? parseInt(response.vlan.pcp, 10) : 0,
+        enabled: true,
       };
-      
+
       // Set outputs
       this._outputs = {
         device: response.vlan.vlanif || `${response.vlan.if}_vlan${response.vlan.tag}`,
         interface: response.vlan.if,
-        tag: parseInt(response.vlan.tag)
+        tag: parseInt(response.vlan.tag, 10),
       };
     }
   }
@@ -84,9 +80,8 @@ export class VlanResource extends IaCResource {
   conflictsWith(other: VlanResource): boolean {
     const thisProps = this._properties as VlanProperties;
     const otherProps = other._properties as VlanProperties;
-    
-    return thisProps.interface === otherProps.interface && 
-           thisProps.tag === otherProps.tag;
+
+    return thisProps.interface === otherProps.interface && thisProps.tag === otherProps.tag;
   }
 }
 
@@ -104,8 +99,8 @@ resourceRegistry.register({
       properties: {
         interface: 'igc1',
         tag: 100,
-        description: 'Guest Network VLAN'
-      }
+        description: 'Guest Network VLAN',
+      },
     },
     {
       name: 'IoT VLAN',
@@ -114,17 +109,13 @@ resourceRegistry.register({
         interface: 'igc1',
         tag: 200,
         description: 'IoT Devices VLAN',
-        pcp: 1
-      }
-    }
-  ]
+        pcp: 1,
+      },
+    },
+  ],
 });
 
 // Export for convenience
-export const createVlan = (
-  id: string,
-  name: string,
-  properties: VlanProperties
-): VlanResource => {
+export const createVlan = (id: string, name: string, properties: VlanProperties): VlanResource => {
   return new VlanResource(id, name, properties);
 };

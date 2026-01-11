@@ -1,5 +1,6 @@
-import { OPNSenseAPIClient } from '../../src/api/client.js';
 import * as dotenv from 'dotenv';
+import { OPNSenseAPIClient } from '../../src/api/client.js';
+
 dotenv.config();
 
 async function discoverInterfaces() {
@@ -7,15 +8,15 @@ async function discoverInterfaces() {
     host: process.env.OPNSENSE_HOST!,
     apiKey: process.env.OPNSENSE_API_KEY!,
     apiSecret: process.env.OPNSENSE_API_SECRET!,
-    verifySsl: true
+    verifySsl: true,
   });
 
   console.log('🔍 Discovering available interfaces in OPNsense...\n');
-  
+
   try {
     // Get the rule form to see available options
     const ruleForm = await client.get('/firewall/filter/getRule');
-    
+
     if (ruleForm?.rule?.interface) {
       console.log('✅ Available interfaces from OPNsense:');
       console.log('=====================================');
@@ -40,10 +41,9 @@ async function discoverInterfaces() {
           console.log(`  ${key}: ${value.description || value.device || 'N/A'}`);
         });
       }
-    } catch (e) {
+    } catch (_e) {
       console.log('Could not fetch interface overview');
     }
-
   } catch (error: any) {
     console.error('❌ Error:', error.message);
     if (error.apiResponse) {

@@ -1,5 +1,5 @@
 // OPNsense Backup Manager
-import { OPNSenseAPIClient } from '../../api/client.js';
+import type { OPNSenseAPIClient } from '../../api/client.js';
 
 export interface BackupInfo {
   id: string;
@@ -19,7 +19,6 @@ export interface BackupOptions {
 
 export class BackupManager {
   private client: OPNSenseAPIClient;
-  private backupPath: string;
 
   constructor(client: OPNSenseAPIClient, backupPath: string = './backups') {
     this.client = client;
@@ -34,28 +33,28 @@ export class BackupManager {
       // Generate backup ID
       const timestamp = new Date();
       const id = `backup-${timestamp.toISOString().replace(/[:.]/g, '-')}`;
-      
+
       // Download configuration
       const config = await this.downloadConfig();
-      
+
       // Create backup info
       const backupInfo: BackupInfo = {
         id,
         filename: `${id}.xml`,
         timestamp,
         description: options.description || `Automated backup before API operation`,
-        size: config.length
+        size: config.length,
       };
 
       // Log backup creation
       console.log(`Created backup: ${backupInfo.id}`);
-      
+
       // Store backup metadata (in production, save to database)
       await this.saveBackupMetadata(backupInfo);
-      
+
       // Store backup file (in production, save to TrueNAS or local storage)
       await this.saveBackupFile(backupInfo.filename, config);
-      
+
       return backupInfo;
     } catch (error: any) {
       throw new Error(`Failed to create backup: ${error.message}`);
@@ -82,8 +81,8 @@ export class BackupManager {
         filename: 'backup-2025-01-10T10-30-00-000Z.xml',
         timestamp: new Date('2025-01-10T10:30:00.000Z'),
         description: 'Before firewall rule creation',
-        size: 524288
-      }
+        size: 524288,
+      },
     ];
   }
 
@@ -99,18 +98,18 @@ export class BackupManager {
 
       // Read backup file
       const configData = await this.readBackupFile(backup.filename);
-      
+
       // Upload to OPNsense
       const formData = new FormData();
       formData.append('conffile', new Blob([configData]), backup.filename);
-      
+
       const response = await this.client.post('/core/backup/restore', formData);
-      
+
       if (response.result === 'ok') {
         console.log(`Restored backup: ${backupId}`);
         return true;
       }
-      
+
       throw new Error('Restore failed');
     } catch (error: any) {
       throw new Error(`Failed to restore backup: ${error.message}`);
@@ -138,7 +137,7 @@ export class BackupManager {
    */
   private async getBackup(backupId: string): Promise<BackupInfo | null> {
     const backups = await this.listBackups();
-    return backups.find(b => b.id === backupId) || null;
+    return backups.find((b) => b.id === backupId) || null;
   }
 
   /**
@@ -168,7 +167,7 @@ export class BackupManager {
   /**
    * Read backup file
    */
-  private async readBackupFile(filename: string): Promise<string> {
+  private async readBackupFile(_filename: string): Promise<string> {
     // In production, read from storage
     return '<opnsense>mock config data</opnsense>';
   }
@@ -182,14 +181,14 @@ export class BackupManager {
   ): Promise<{ result: T; backupId: string }> {
     // Create backup first
     const backup = await this.createBackup({ description });
-    
+
     try {
       // Execute operation
       const result = await operation();
-      
+
       return {
         result,
-        backupId: backup.id
+        backupId: backup.id,
       };
     } catch (error) {
       console.error(`Operation failed. Backup available: ${backup.id}`);

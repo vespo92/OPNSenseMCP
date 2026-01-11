@@ -3,9 +3,9 @@
  * Executes deployment plans with rollback support
  */
 
-import { DeploymentPlan, ExecutionWave, ResourceChange } from '../deployment/planner';
-import { IaCResource, ResourceStatus } from '../resources/base';
-import { OPNSenseAPIClient } from '../api/client';
+import type { OPNSenseAPIClient } from '../api/client';
+import type { DeploymentPlan, ExecutionWave, ResourceChange } from '../deployment/planner';
+import type { IaCResource } from '../resources/base';
 
 export interface ExecutionResult {
   success: boolean;
@@ -71,10 +71,7 @@ export class ExecutionEngine {
   /**
    * Execute a deployment plan
    */
-  async execute(
-    plan: DeploymentPlan,
-    options: ExecutionOptions = {}
-  ): Promise<ExecutionResult> {
+  async execute(plan: DeploymentPlan, options: ExecutionOptions = {}): Promise<ExecutionResult> {
     const startTime = Date.now();
     const executedChanges: ExecutedChange[] = [];
     const failedChanges: FailedChange[] = [];
@@ -86,32 +83,32 @@ export class ExecutionEngine {
       // Execute each wave
       for (let i = 0; i < plan.executionWaves.length; i++) {
         const wave = plan.executionWaves[i];
-        
+
         this.log('info', `Executing wave ${wave.wave} with ${wave.changes.length} changes`);
-        
+
         if (options.progressCallback) {
           options.progressCallback({
             totalChanges: this.getTotalChanges(plan),
             completedChanges: executedChanges.length,
             currentWave: wave.wave,
             totalWaves: plan.executionWaves.length,
-            estimatedTimeRemaining: this.calculateRemainingTime(plan, i)
+            estimatedTimeRemaining: this.calculateRemainingTime(plan, i),
           });
         }
 
         const waveResults = await this.executeWave(wave, options);
         executedChanges.push(...waveResults.executed);
-        
+
         if (waveResults.failed.length > 0) {
           failedChanges.push(...waveResults.failed);
-          
+
           if (!options.continueOnError) {
             this.log('error', 'Wave execution failed, initiating rollback');
             rollbackPerformed = await this.rollback(executedChanges);
             break;
           }
         }
-        
+
         // Create checkpoint after successful wave
         this.createCheckpoint(wave.wave, executedChanges);
       }
@@ -121,7 +118,7 @@ export class ExecutionEngine {
     }
 
     const duration = Date.now() - startTime;
-    
+
     return {
       success: failedChanges.length === 0 && !rollbackPerformed,
       planId: plan.id,
@@ -129,7 +126,7 @@ export class ExecutionEngine {
       failedChanges: failedChanges.length > 0 ? failedChanges : undefined,
       rollbackPerformed,
       duration,
-      logs: this.logs
+      logs: this.logs,
     };
   }
 
@@ -146,14 +143,12 @@ export class ExecutionEngine {
     if (options.parallel && options.maxConcurrency && options.maxConcurrency > 1) {
       // Parallel execution
       const chunks = this.chunkArray(wave.changes, options.maxConcurrency);
-      
+
       for (const chunk of chunks) {
-        const promises = chunk.map(change => 
-          this.executeChange(change, options.dryRun || false)
-        );
-        
+        const promises = chunk.map((change) => this.executeChange(change, options.dryRun || false));
+
         const results = await Promise.allSettled(promises);
-        
+
         results.forEach((result, index) => {
           if (result.status === 'fulfilled') {
             executed.push(result.value);
@@ -162,7 +157,7 @@ export class ExecutionEngine {
               changeId: this.getChangeId(chunk[index]),
               resourceId: chunk[index].resource.id,
               error: result.reason.message,
-              canRetry: true
+              canRetry: true,
             });
           }
         });
@@ -178,9 +173,9 @@ export class ExecutionEngine {
             changeId: this.getChangeId(change),
             resourceId: change.resource.id,
             error: error.message,
-            canRetry: true
+            canRetry: true,
           });
-          
+
           if (!options.continueOnError) {
             break;
           }
@@ -194,16 +189,13 @@ export class ExecutionEngine {
   /**
    * Execute a single resource change
    */
-  private async executeChange(
-    change: ResourceChange,
-    dryRun: boolean
-  ): Promise<ExecutedChange> {
+  private async executeChange(change: ResourceChange, dryRun: boolean): Promise<ExecutedChange> {
     const startTime = Date.now();
     const changeId = this.getChangeId(change);
-    
+
     this.log('info', `Executing ${change.type} for ${change.resource.id}`, {
       resourceId: change.resource.id,
-      changeType: change.type
+      changeType: change.type,
     });
 
     try {
@@ -215,7 +207,7 @@ export class ExecutionEngine {
           resourceId: change.resource.id,
           type: change.type,
           status: 'success',
-          duration: Date.now() - startTime
+          duration: Date.now() - startTime,
         };
       }
 
@@ -243,13 +235,17 @@ export class ExecutionEngine {
         type: change.type,
         status: 'success',
         outputs,
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
       };
     } catch (error: any) {
-      this.log('error', `Failed to execute ${change.type} for ${change.resource.id}: ${error.message}`, {
-        resourceId: change.resource.id,
-        error: error.message
-      });
+      this.log(
+        'error',
+        `Failed to execute ${change.type} for ${change.resource.id}: ${error.message}`,
+        {
+          resourceId: change.resource.id,
+          error: error.message,
+        }
+      );
       throw error;
     }
   }
@@ -261,7 +257,7 @@ export class ExecutionEngine {
     // Resource-specific creation logic would go here
     // This is a placeholder that would call the appropriate API
     const payload = resource.toAPIPayload();
-    
+
     // Example for VLAN
     if (resource.type === 'opnsense:network:vlan') {
       const response = await this.client.post('/api/interfaces/vlan_settings/addItem', payload);
@@ -275,13 +271,10 @@ export class ExecutionEngine {
   /**
    * Update a resource
    */
-  private async updateResource(
-    resource: IaCResource,
-    diff: any[]
-  ): Promise<Record<string, any>> {
+  private async updateResource(resource: IaCResource, _diff: any[]): Promise<Record<string, any>> {
     // Resource-specific update logic would go here
     const payload = resource.toAPIPayload();
-    
+
     // Example for VLAN
     if (resource.type === 'opnsense:network:vlan') {
       const response = await this.client.post(
@@ -300,7 +293,7 @@ export class ExecutionEngine {
    */
   private async deleteResource(resource: IaCResource): Promise<void> {
     // Resource-specific deletion logic would go here
-    
+
     // Example for VLAN
     if (resource.type === 'opnsense:network:vlan') {
       await this.client.post(`/api/interfaces/vlan_settings/delItem/${resource.id}`, {});
@@ -315,14 +308,14 @@ export class ExecutionEngine {
    */
   private async rollback(executedChanges: ExecutedChange[]): Promise<boolean> {
     this.log('warn', 'Starting rollback procedure');
-    
+
     // Rollback in reverse order
     const reversedChanges = [...executedChanges].reverse();
-    
+
     for (const change of reversedChanges) {
       try {
         this.log('info', `Rolling back ${change.type} for ${change.resourceId}`);
-        
+
         // Rollback logic based on change type
         switch (change.type) {
           case 'create':
@@ -343,7 +336,7 @@ export class ExecutionEngine {
         return false;
       }
     }
-    
+
     return true;
   }
 
@@ -354,7 +347,7 @@ export class ExecutionEngine {
     const checkpointId = `wave-${waveNumber}`;
     this.checkpoints.set(checkpointId, {
       timestamp: new Date().toISOString(),
-      executedChanges: [...executedChanges]
+      executedChanges: [...executedChanges],
     });
   }
 
@@ -384,7 +377,7 @@ export class ExecutionEngine {
   }
 
   private async simulateDelay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private log(level: ExecutionLog['level'], message: string, metadata?: Record<string, any>): void {
@@ -392,7 +385,7 @@ export class ExecutionEngine {
       timestamp: new Date().toISOString(),
       level,
       message,
-      ...metadata
+      ...metadata,
     });
   }
 }

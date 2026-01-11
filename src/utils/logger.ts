@@ -6,7 +6,7 @@ export enum LogLevel {
   ERROR = 0,
   WARN = 1,
   INFO = 2,
-  DEBUG = 3
+  DEBUG = 3,
 }
 
 export interface LoggerConfig {
@@ -25,7 +25,7 @@ export class Logger {
       prefix: '[OPNSense MCP]',
       timestamp: true,
       output: 'stderr',
-      ...config
+      ...config,
     };
 
     // Set log level from environment
@@ -50,11 +50,11 @@ export class Logger {
     parts.push(message);
 
     // Format additional arguments
-    const formattedArgs = args.map(arg => 
+    const formattedArgs = args.map((arg) =>
       typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
     );
 
-    return parts.join(' ') + (formattedArgs.length ? ' ' + formattedArgs.join(' ') : '');
+    return parts.join(' ') + (formattedArgs.length ? ` ${formattedArgs.join(' ')}` : '');
   }
 
   private log(level: LogLevel, levelName: string, message: string, ...args: any[]): void {
@@ -85,7 +85,7 @@ export class Logger {
   child(context: string): Logger {
     return new Logger({
       ...this.config,
-      prefix: `${this.config.prefix} [${context}]`
+      prefix: `${this.config.prefix} [${context}]`,
     });
   }
 }

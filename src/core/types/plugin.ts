@@ -5,11 +5,11 @@
  */
 
 import type { OPNSenseAPIClient } from '../../api/client.js';
-import type { SSHExecutor } from '../../resources/ssh/executor.js';
-import type { EventBus } from '../event-bus/bus.js';
 import type { MCPCacheManager } from '../../cache/manager.js';
+import type { SSHExecutor } from '../../resources/ssh/executor.js';
 import type { ResourceStateStore } from '../../state/store.js';
 import type { Logger } from '../../utils/logger.js';
+import type { EventBus } from '../event-bus/bus.js';
 
 /**
  * Plugin categories matching OPNsense's organization

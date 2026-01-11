@@ -2,11 +2,17 @@
  * Unit Tests for Plugin System
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { PluginRegistry } from '../../src/core/plugin-system/registry.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventBus } from '../../src/core/event-bus/bus.js';
 import { BasePlugin } from '../../src/core/plugin-system/base-plugin.js';
-import { PluginCategory, PluginMetadata, MCPTool, MCPResource, MCPPrompt } from '../../src/core/types/plugin.js';
+import { PluginRegistry } from '../../src/core/plugin-system/registry.js';
+import {
+  type MCPPrompt,
+  type MCPResource,
+  type MCPTool,
+  PluginCategory,
+  type PluginMetadata,
+} from '../../src/core/types/plugin.js';
 
 // Mock plugin for testing
 class TestPlugin extends BasePlugin {
@@ -21,12 +27,14 @@ class TestPlugin extends BasePlugin {
   };
 
   getTools(): MCPTool[] {
-    return [{
-      name: 'test_tool',
-      description: 'A test tool',
-      inputSchema: { type: 'object', properties: {} },
-      handler: async () => ({ success: true }),
-    }];
+    return [
+      {
+        name: 'test_tool',
+        description: 'A test tool',
+        inputSchema: { type: 'object', properties: {} },
+        handler: async () => ({ success: true }),
+      },
+    ];
   }
 
   getResources(): MCPResource[] {
@@ -117,7 +125,7 @@ describe('PluginRegistry', () => {
     registry.register(plugin2, {});
 
     // Should not throw
-    expect(() => registry['resolveDependencies']()).not.toThrow();
+    expect(() => registry.resolveDependencies()).not.toThrow();
   });
 
   it('should detect circular dependencies', () => {
@@ -140,7 +148,7 @@ describe('PluginRegistry', () => {
     registry.register(p1, {});
     registry.register(p2, {});
 
-    expect(() => registry['resolveDependencies']()).toThrow('Circular dependency');
+    expect(() => registry.resolveDependencies()).toThrow('Circular dependency');
   });
 
   it('should get plugin stats', () => {

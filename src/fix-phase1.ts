@@ -13,20 +13,20 @@ export const applyResourceTool = {
           type: { type: 'string' },
           name: { type: 'string' },
           properties: { type: 'object' },
-          dependencies: { 
-            type: 'array', 
-            items: { type: 'string' } 
-          }
+          dependencies: {
+            type: 'array',
+            items: { type: 'string' },
+          },
         },
-        required: ['type', 'name', 'properties']
+        required: ['type', 'name', 'properties'],
       },
       action: {
         type: 'string',
-        enum: ['create', 'update', 'delete']
-      }
+        enum: ['create', 'update', 'delete'],
+      },
     },
-    required: ['resource', 'action']
-  }
+    required: ['resource', 'action'],
+  },
 };
 
 // Fix 2: Update ResourceExecutor to handle plan reconstruction
@@ -61,7 +61,7 @@ export async function handleApplyResource(args: any, executor: any, registry: an
   }
 
   // Execute the action
-  let result;
+  let result: unknown;
   switch (args.action) {
     case 'create':
       result = await executor.createResource(resource);
@@ -84,25 +84,22 @@ export async function handleApplyResource(args: any, executor: any, registry: an
       type: resource.type,
       name: resource.name,
       state: resource.state,
-      outputs: resource.outputs
+      outputs: resource.outputs,
     },
-    result
+    result,
   };
 }
 
 // Fix 4: Update the executor's execute method to reconstruct resources
 export function fixExecutor(executor: any) {
   const originalExecuteAction = executor.executeAction.bind(executor);
-  
-  executor.executeAction = async function(action: any) {
+
+  executor.executeAction = async function (action: any) {
     // If action.resource is a plain object, reconstruct it
     if (action.resource && !action.resource.validate) {
-      action.resource = reconstructResourceFromPlan(
-        action.resource, 
-        this.registry
-      );
+      action.resource = reconstructResourceFromPlan(action.resource, this.registry);
     }
-    
+
     return originalExecuteAction(action);
   };
 }

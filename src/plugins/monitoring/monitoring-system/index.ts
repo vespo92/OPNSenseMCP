@@ -5,8 +5,14 @@
  */
 
 import { BasePlugin } from '../../../core/plugin-system/base-plugin.js';
-import { PluginCategory, PluginMetadata, MCPTool, MCPResource, MCPPrompt } from '../../../core/types/plugin.js';
-import { EventType, EventSeverity } from '../../../core/types/events.js';
+import { EventSeverity, EventType } from '../../../core/types/events.js';
+import {
+  type MCPPrompt,
+  type MCPResource,
+  type MCPTool,
+  PluginCategory,
+  type PluginMetadata,
+} from '../../../core/types/plugin.js';
 
 export default class SystemMonitoringPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
@@ -93,7 +99,7 @@ export default class SystemMonitoringPlugin extends BasePlugin {
     return [];
   }
 
-  private async getMetrics(params: {}): Promise<any> {
+  private async getMetrics(_params: {}): Promise<any> {
     try {
       const [cpu, memory, disk, network] = await Promise.all([
         this.getCPUUsage({}),
@@ -120,43 +126,43 @@ export default class SystemMonitoringPlugin extends BasePlugin {
     }
   }
 
-  private async getCPUUsage(params: {}): Promise<any> {
+  private async getCPUUsage(_params: {}): Promise<any> {
     try {
       // Call OPNsense system API for CPU stats
-      const response = await this.ssh.execute('top -b -n 1 | grep "CPU:"');
+      const _response = await this.ssh.execute('top -b -n 1 | grep "CPU:"');
       // Parse response and return CPU usage
       return { usage: 0, cores: 1, loadAverage: [0, 0, 0] };
-    } catch (error) {
+    } catch (_error) {
       return { usage: 0, cores: 1, loadAverage: [0, 0, 0] };
     }
   }
 
-  private async getMemoryUsage(params: {}): Promise<any> {
+  private async getMemoryUsage(_params: {}): Promise<any> {
     try {
-      const response = await this.ssh.execute('sysctl hw.physmem vm.stats.vm.v_free_count');
+      const _response = await this.ssh.execute('sysctl hw.physmem vm.stats.vm.v_free_count');
       // Parse response
       return { total: 0, used: 0, free: 0, percentage: 0 };
-    } catch (error) {
+    } catch (_error) {
       return { total: 0, used: 0, free: 0, percentage: 0 };
     }
   }
 
-  private async getDiskUsage(params: {}): Promise<any> {
+  private async getDiskUsage(_params: {}): Promise<any> {
     try {
-      const response = await this.ssh.execute('df -h /');
+      const _response = await this.ssh.execute('df -h /');
       // Parse response
       return { total: 0, used: 0, free: 0, percentage: 0 };
-    } catch (error) {
+    } catch (_error) {
       return { total: 0, used: 0, free: 0, percentage: 0 };
     }
   }
 
-  private async getNetworkStats(params: {}): Promise<any> {
+  private async getNetworkStats(_params: {}): Promise<any> {
     try {
-      const response = await this.ssh.execute('netstat -I -b -n');
+      const _response = await this.ssh.execute('netstat -I -b -n');
       // Parse response
       return { interfaces: {} };
-    } catch (error) {
+    } catch (_error) {
       return { interfaces: {} };
     }
   }

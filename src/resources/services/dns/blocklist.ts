@@ -1,4 +1,4 @@
-import { OPNSenseAPIClient } from '../../../api/client.js';
+import type { OPNSenseAPIClient } from '../../../api/client.js';
 
 /**
  * DNS blocklist item interface
@@ -32,7 +32,7 @@ export class DnsBlocklistResource {
     try {
       // Get all Unbound settings
       const response = await this.client.getUnboundSettings();
-      
+
       if (!response?.unbound?.hosts) {
         return [];
       }
@@ -50,7 +50,7 @@ export class DnsBlocklistResource {
               uuid,
               enabled: hostData.enabled === '1',
               host: `${hostData.host}.${hostData.domain}`,
-              description: hostData.description || ''
+              description: hostData.description || '',
             });
           }
         }
@@ -72,12 +72,12 @@ export class DnsBlocklistResource {
       const parts = domain.split('.');
       let host = '';
       let domainPart = '';
-      
+
       if (parts.length >= 2) {
         // For subdomains like ads.example.com, host=ads, domain=example.com
         // For domains like example.com, host=@, domain=example.com
         if (parts.length === 2) {
-          host = '@';  // Special case for root domain
+          host = '@'; // Special case for root domain
           domainPart = domain;
         } else {
           host = parts[0];
@@ -91,19 +91,19 @@ export class DnsBlocklistResource {
         enabled: '1',
         host: host,
         domain: domainPart,
-        server: '0.0.0.0',  // Block by pointing to 0.0.0.0
-        description: description || `Blocked: ${domain}`
+        server: '0.0.0.0', // Block by pointing to 0.0.0.0
+        description: description || `Blocked: ${domain}`,
       };
 
       // Add the host override
       const response = await this.client.addUnboundHost(hostData);
-      
+
       if (response?.uuid) {
         // Apply changes
         await this.applyChanges();
         return { uuid: response.uuid };
       }
-      
+
       throw new Error('Failed to add domain to blocklist');
     } catch (error: any) {
       console.error('Failed to block domain:', error);
@@ -118,15 +118,15 @@ export class DnsBlocklistResource {
     try {
       // Find the entry
       const blocklist = await this.list();
-      const entry = blocklist.find(item => item.host === domain);
-      
+      const entry = blocklist.find((item) => item.host === domain);
+
       if (!entry || !entry.uuid) {
         throw new Error(`Domain ${domain} not found in blocklist`);
       }
 
       // Delete the entry
       await this.client.delUnboundHost(entry.uuid);
-      
+
       // Apply changes
       await this.applyChanges();
     } catch (error: any) {
@@ -138,7 +138,10 @@ export class DnsBlocklistResource {
   /**
    * Block multiple domains at once
    */
-  async blockMultipleDomains(domains: string[], description?: string): Promise<{ blocked: string[], failed: string[] }> {
+  async blockMultipleDomains(
+    domains: string[],
+    description?: string
+  ): Promise<{ blocked: string[]; failed: string[] }> {
     const blocked: string[] = [];
     const failed: string[] = [];
 
@@ -162,17 +165,17 @@ export class DnsBlocklistResource {
   async getInterfaceBlocklist(interfaceName: string): Promise<DnsBlocklistConfig[]> {
     // For now, return all blocklist entries with a note about interface filtering
     const allBlocked = await this.list();
-    
+
     // In a full implementation, this would filter based on ACLs
     console.warn(`Interface-specific filtering for ${interfaceName} requires ACL configuration`);
-    
+
     return allBlocked;
   }
 
   /**
    * Block common adult content domains
    */
-  async blockAdultContent(): Promise<{ blocked: string[], failed: string[] }> {
+  async blockAdultContent(): Promise<{ blocked: string[]; failed: string[] }> {
     const adultDomains = [
       'pornhub.com',
       'www.pornhub.com',
@@ -185,7 +188,7 @@ export class DnsBlocklistResource {
       'redtube.com',
       'www.redtube.com',
       'youporn.com',
-      'www.youporn.com'
+      'www.youporn.com',
     ];
 
     return this.blockMultipleDomains(adultDomains, 'Adult Content Block');
@@ -194,7 +197,7 @@ export class DnsBlocklistResource {
   /**
    * Block common malware domains (example list)
    */
-  async blockMalware(): Promise<{ blocked: string[], failed: string[] }> {
+  async blockMalware(): Promise<{ blocked: string[]; failed: string[] }> {
     const malwareDomains = [
       'malware-test.com',
       'phishing-test.com',
@@ -216,7 +219,7 @@ export class DnsBlocklistResource {
 
       const updated = {
         ...entry.host,
-        enabled: entry.host.enabled === '1' ? '0' : '1'
+        enabled: entry.host.enabled === '1' ? '0' : '1',
       };
 
       await this.client.setUnboundHost(uuid, updated);
@@ -233,10 +236,11 @@ export class DnsBlocklistResource {
   async searchBlocklist(pattern: string): Promise<DnsBlocklistConfig[]> {
     const allEntries = await this.list();
     const searchLower = pattern.toLowerCase();
-    
-    return allEntries.filter(entry => 
-      entry.host.toLowerCase().includes(searchLower) ||
-      (entry.description && entry.description.toLowerCase().includes(searchLower))
+
+    return allEntries.filter(
+      (entry) =>
+        entry.host.toLowerCase().includes(searchLower) ||
+        entry.description?.toLowerCase().includes(searchLower)
     );
   }
 
@@ -255,14 +259,16 @@ export class DnsBlocklistResource {
   /**
    * Create predefined blocklist categories
    */
-  async applyBlocklistCategory(category: 'adult' | 'malware' | 'ads' | 'social'): Promise<{ blocked: string[], failed: string[] }> {
+  async applyBlocklistCategory(
+    category: 'adult' | 'malware' | 'ads' | 'social'
+  ): Promise<{ blocked: string[]; failed: string[] }> {
     switch (category) {
       case 'adult':
         return this.blockAdultContent();
-      
+
       case 'malware':
         return this.blockMalware();
-      
+
       case 'ads': {
         const adDomains = [
           'doubleclick.net',
@@ -270,11 +276,11 @@ export class DnsBlocklistResource {
           'googlesyndication.com',
           'adnxs.com',
           'facebook.com/tr',
-          'amazon-adsystem.com'
+          'amazon-adsystem.com',
         ];
         return this.blockMultipleDomains(adDomains, 'Ad Block');
       }
-      
+
       case 'social': {
         const socialDomains = [
           'facebook.com',
@@ -284,11 +290,11 @@ export class DnsBlocklistResource {
           'twitter.com',
           'www.twitter.com',
           'tiktok.com',
-          'www.tiktok.com'
+          'www.tiktok.com',
         ];
         return this.blockMultipleDomains(socialDomains, 'Social Media Block');
       }
-      
+
       default:
         throw new Error(`Unknown category: ${category}`);
     }

@@ -3,8 +3,8 @@
  * Manages all available resource types and their factories
  */
 
-import { IaCResource } from './base';
 import { z } from 'zod';
+import type { IaCResource } from './base';
 
 export type ResourceFactory<T extends IaCResource = IaCResource> = (
   id: string,
@@ -82,9 +82,7 @@ export class ResourceRegistry {
    * Get resource types by category
    */
   getResourcesByCategory(category: string): ResourceTypeDefinition[] {
-    return Array.from(this.resources.values()).filter(
-      def => def.category === category
-    );
+    return Array.from(this.resources.values()).filter((def) => def.category === category);
   }
 
   /**
@@ -92,7 +90,9 @@ export class ResourceRegistry {
    */
   getCategories(): string[] {
     const categories = new Set<string>();
-    this.resources.forEach(def => categories.add(def.category));
+    for (const def of this.resources.values()) {
+      categories.add(def.category);
+    }
     return Array.from(categories);
   }
 
@@ -107,7 +107,7 @@ export class ResourceRegistry {
     if (!definition) {
       return {
         valid: false,
-        errors: [{ path: '', message: `Unknown resource type: ${type}` }]
+        errors: [{ path: '', message: `Unknown resource type: ${type}` }],
       };
     }
 
@@ -120,13 +120,13 @@ export class ResourceRegistry {
           valid: false,
           errors: error.issues.map((e) => ({
             path: e.path.join('.'),
-            message: e.message
-          }))
+            message: e.message,
+          })),
         };
       }
       return {
         valid: false,
-        errors: [{ path: '', message: 'Unknown validation error' }]
+        errors: [{ path: '', message: 'Unknown validation error' }],
       };
     }
   }
@@ -141,7 +141,7 @@ export class ResourceRegistry {
         category: def.category,
         description: def.description,
         schema: def.schema._def,
-        examples: def.examples
+        examples: def.examples,
       };
     });
     return definitions;

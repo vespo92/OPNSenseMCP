@@ -24,7 +24,7 @@ export const FirewallRulePropertiesSchema = z.object({
   description: z.string().optional().describe('Rule description'),
   category: z.string().optional().describe('Rule category for organization'),
   quick: z.boolean().default(true).describe('Stop processing after match'),
-  sequence: z.number().optional().describe('Rule order/priority')
+  sequence: z.number().optional().describe('Rule order/priority'),
 });
 
 export type FirewallRuleProperties = z.infer<typeof FirewallRulePropertiesSchema>;
@@ -32,10 +32,6 @@ export type FirewallRuleProperties = z.infer<typeof FirewallRulePropertiesSchema
 export class FirewallRuleResource extends IaCResource {
   readonly type = 'opnsense:firewall:rule';
   readonly schema = FirewallRulePropertiesSchema;
-
-  constructor(id: string, name: string, properties: FirewallRuleProperties) {
-    super(id, name, properties);
-  }
 
   /**
    * Convert to OPNSense API payload
@@ -59,8 +55,8 @@ export class FirewallRuleResource extends IaCResource {
         description: props.description || '',
         category: props.category || '',
         quick: props.quick ? '1' : '0',
-        sequence: props.sequence?.toString() || ''
-      }
+        sequence: props.sequence?.toString() || '',
+      },
     };
   }
 
@@ -86,14 +82,14 @@ export class FirewallRuleResource extends IaCResource {
         description: rule.description || undefined,
         category: rule.category || undefined,
         quick: rule.quick !== '0',
-        sequence: rule.sequence ? parseInt(rule.sequence) : undefined
+        sequence: rule.sequence ? parseInt(rule.sequence, 10) : undefined,
       };
-      
+
       // Set outputs
       this._outputs = {
         uuid: rule.uuid,
         sequence: rule.sequence,
-        enabled: rule.enabled === '1'
+        enabled: rule.enabled === '1',
       };
     }
   }
@@ -102,11 +98,7 @@ export class FirewallRuleResource extends IaCResource {
    * Get required permissions for this resource
    */
   getRequiredPermissions(): string[] {
-    return [
-      'firewall:filter:rule:read',
-      'firewall:filter:rule:write',
-      'firewall:filter:apply'
-    ];
+    return ['firewall:filter:rule:read', 'firewall:filter:rule:write', 'firewall:filter:apply'];
   }
 
   /**
@@ -119,7 +111,7 @@ export class FirewallRuleResource extends IaCResource {
     // Validate protocol and port combinations
     const hasPort = props.sourcePort || props.destinationPort;
     const isPortProtocol = ['tcp', 'udp', 'tcp/udp'].includes(props.protocol.toLowerCase());
-    
+
     if (hasPort && !isPortProtocol) {
       errors.push(`Ports can only be specified for TCP or UDP protocols, not ${props.protocol}`);
     }
@@ -142,21 +134,21 @@ export class FirewallRuleResource extends IaCResource {
 
     return {
       valid: errors.length === 0,
-      errors: errors.length > 0 ? errors : undefined
+      errors: errors.length > 0 ? errors : undefined,
     };
   }
 
   private isValidAddressFormat(address: string): boolean {
     if (address === 'any') return true;
-    
+
     // Check for IP address (v4 or v6)
     const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/;
     const ipv6Regex = /^([0-9a-fA-F:]+)(\/\d{1,3})?$/;
-    
+
     if (ipv4Regex.test(address) || ipv6Regex.test(address)) {
       return true;
     }
-    
+
     // Could be an alias - allow alphanumeric with underscores
     const aliasRegex = /^[a-zA-Z0-9_]+$/;
     return aliasRegex.test(address);
@@ -165,16 +157,16 @@ export class FirewallRuleResource extends IaCResource {
   private isValidPortFormat(port: string): boolean {
     // Single port
     if (/^\d{1,5}$/.test(port)) {
-      const portNum = parseInt(port);
+      const portNum = parseInt(port, 10);
       return portNum >= 1 && portNum <= 65535;
     }
-    
+
     // Port range
     if (/^\d{1,5}:\d{1,5}$/.test(port)) {
-      const [start, end] = port.split(':').map(p => parseInt(p));
+      const [start, end] = port.split(':').map((p) => parseInt(p, 10));
       return start >= 1 && start <= 65535 && end >= 1 && end <= 65535 && start < end;
     }
-    
+
     // Port alias
     const aliasRegex = /^[a-zA-Z0-9_]+$/;
     return aliasRegex.test(port);
@@ -186,7 +178,7 @@ export class FirewallRuleResource extends IaCResource {
   conflictsWith(other: FirewallRuleResource): boolean {
     const thisProps = this._properties as FirewallRuleProperties;
     const otherProps = other._properties as FirewallRuleProperties;
-    
+
     // Check for duplicate rules (same interface, direction, source, dest, protocol)
     return (
       thisProps.interface === otherProps.interface &&
@@ -206,7 +198,8 @@ resourceRegistry.register({
   category: 'firewall',
   description: 'Firewall filter rule configuration',
   schema: FirewallRulePropertiesSchema,
-  factory: (id, name, properties) => new FirewallRuleResource(id, name, properties as FirewallRuleProperties),
+  factory: (id, name, properties) =>
+    new FirewallRuleResource(id, name, properties as FirewallRuleProperties),
   examples: [
     {
       name: 'Allow SSH',
@@ -220,8 +213,8 @@ resourceRegistry.register({
         source: 'any',
         destination: 'any',
         destinationPort: '22',
-        description: 'Allow SSH access'
-      }
+        description: 'Allow SSH access',
+      },
     },
     {
       name: 'Block All',
@@ -234,8 +227,8 @@ resourceRegistry.register({
         protocol: 'any',
         source: 'any',
         destination: 'any',
-        description: 'Block all incoming traffic'
-      }
-    }
-  ]
+        description: 'Block all incoming traffic',
+      },
+    },
+  ],
 });

@@ -4,15 +4,15 @@
  * Provides pub/sub event handling for plugin communication
  */
 
-import { EventEmitter } from 'events';
-import { randomUUID } from 'crypto';
+import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import {
-  EventSeverity,
   type Event,
-  type EventType,
   type EventFilter,
-  type EventSubscription,
+  EventSeverity,
   type EventStreamConfig,
+  type EventSubscription,
+  type EventType,
 } from '../types/events.js';
 
 /**
@@ -85,10 +85,7 @@ export class EventBus extends EventEmitter {
   /**
    * Subscribe to events with optional filter
    */
-  public subscribe(
-    handler: (event: Event) => void | Promise<void>,
-    filter?: EventFilter
-  ): string {
+  public subscribe(handler: (event: Event) => void | Promise<void>, filter?: EventFilter): string {
     const subscription: EventSubscription = {
       id: randomUUID(),
       handler,
@@ -114,7 +111,7 @@ export class EventBus extends EventEmitter {
     let events = this.eventHistory;
 
     if (filter) {
-      events = events.filter(event => this.matchesFilter(event, filter));
+      events = events.filter((event) => this.matchesFilter(event, filter));
     }
 
     if (limit) {
@@ -246,9 +243,7 @@ export class EventBus extends EventEmitter {
   private startCleanup(): void {
     setInterval(() => {
       const cutoff = Date.now() - this.config.retention;
-      this.eventHistory = this.eventHistory.filter(
-        event => event.timestamp.getTime() > cutoff
-      );
+      this.eventHistory = this.eventHistory.filter((event) => event.timestamp.getTime() > cutoff);
     }, 60000); // Run every minute
   }
 

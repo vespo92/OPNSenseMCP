@@ -1,14 +1,14 @@
 // VLAN Resource Implementation
-import { OPNSenseAPIClient } from '../api/client.js';
+import type { OPNSenseAPIClient } from '../api/client.js';
 
 export interface VlanConfig {
   uuid?: string;
-  if: string;           // Interface (e.g., 'igc3')
-  tag: string;          // VLAN tag (e.g., '120')
-  descr?: string;       // Description
-  pcp?: string;         // Priority Code Point (default '0')
-  proto?: string;       // Protocol (default '')
-  vlanif?: string;      // Generated VLAN interface name
+  if: string; // Interface (e.g., 'igc3')
+  tag: string; // VLAN tag (e.g., '120')
+  descr?: string; // Description
+  pcp?: string; // Priority Code Point (default '0')
+  proto?: string; // Protocol (default '')
+  vlanif?: string; // Generated VLAN interface name
 }
 
 export class VlanResource {
@@ -42,7 +42,7 @@ export class VlanResource {
    */
   async findByTag(tag: string): Promise<VlanConfig | null> {
     const vlans = await this.list();
-    return vlans.find(v => v.tag === tag) || null;
+    return vlans.find((v) => v.tag === tag) || null;
   }
 
   /**
@@ -61,12 +61,12 @@ export class VlanResource {
       tag: config.tag,
       descr: config.descr || '',
       pcp: config.pcp || '0',
-      proto: config.proto || ''
+      proto: config.proto || '',
     };
 
     // Add the VLAN
     const response = await this.client.addVlan(vlanData);
-    
+
     if (response.uuid) {
       // Apply changes
       await this.client.applyVlanChanges();
@@ -88,7 +88,7 @@ export class VlanResource {
     const updatedData = {
       ...existing,
       ...config,
-      uuid: undefined // Remove UUID from data
+      uuid: undefined, // Remove UUID from data
     };
 
     await this.client.setVlan(uuid, updatedData);
@@ -144,8 +144,8 @@ export class VlanResource {
     if (!config.tag) {
       errors.push('VLAN tag is required');
     } else {
-      const tag = parseInt(config.tag);
-      if (isNaN(tag) || tag < 1 || tag > 4094) {
+      const tag = parseInt(config.tag, 10);
+      if (Number.isNaN(tag) || tag < 1 || tag > 4094) {
         errors.push('VLAN tag must be between 1 and 4094');
       }
     }

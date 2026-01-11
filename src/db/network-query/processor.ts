@@ -1,25 +1,20 @@
 // Natural Language Query Processor
+
+import * as crypto from 'node:crypto';
+import { desc, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
 import { queryIntents as queryIntentDefinitions } from './query-engine';
-import { 
-  devices, 
-  deviceSummaryView, 
-  queryPerformance,
-  queryIntents as queryIntentsTable,
-  queryKeywords
-} from './schema';
-import { eq, sql, and, or, desc } from 'drizzle-orm';
-import * as crypto from 'crypto';
+import { queryPerformance } from './schema';
 
 export class NaturalLanguageQueryProcessor {
   private db: ReturnType<typeof drizzle>;
-  
+
   constructor(connectionString: string) {
     const pool = new Pool({ connectionString });
     this.db = drizzle(pool);
   }
-  
+
   // Main query processing method
   async processQuery(naturalQuery: string): Promise<{
     results: any[];
@@ -28,124 +23,124 @@ export class NaturalLanguageQueryProcessor {
     confidence: number;
   }> {
     const startTime = Date.now();
-    
+
     // 1. Identify intent
     const { intent, confidence, params } = this.identifyIntent(naturalQuery);
-    
+
     if (!intent) {
       throw new Error('Could not understand the query. Please try rephrasing.');
     }
-    
+
     // 2. Build and execute query
-    const intentHandler = queryIntentDefinitions.find(q => q.intent === intent);
+    const intentHandler = queryIntentDefinitions.find((q) => q.intent === intent);
     if (!intentHandler) {
       throw new Error(`No handler found for intent: ${intent}`);
     }
-    
+
     const queryParams = intentHandler.paramExtractor(naturalQuery);
     const query = intentHandler.queryBuilder({ ...params, ...queryParams });
-    
+
     // 3. Execute with performance tracking
     const results = await this.executeOptimizedQuery(query);
     const executionTime = Date.now() - startTime;
-    
+
     // 4. Log performance
     await this.logQueryPerformance(naturalQuery, query, executionTime, results.length);
-    
+
     return {
       results,
       executionTime,
       intent,
-      confidence
+      confidence,
     };
   }
-  
+
   // Intent identification using keyword matching and scoring
-  private identifyIntent(query: string): { 
-    intent: string | null; 
-    confidence: number; 
+  private identifyIntent(query: string): {
+    intent: string | null;
+    confidence: number;
     params: any;
   } {
     const lowerQuery = query.toLowerCase();
     const scores: Map<string, number> = new Map();
-    
+
     // Score each intent based on keyword matches
     for (const intentDef of queryIntentDefinitions) {
       let score = 0;
       let matchedKeywords = 0;
-      
+
       for (const keyword of intentDef.keywords) {
         if (lowerQuery.includes(keyword)) {
           score += keyword.length; // Longer keywords get higher scores
           matchedKeywords++;
         }
       }
-      
+
       // Bonus for multiple keyword matches
       if (matchedKeywords > 1) {
         score *= 1.5;
       }
-      
+
       scores.set(intentDef.intent, score);
     }
-    
+
     // Find highest scoring intent
     let bestIntent: string | null = null;
     let bestScore = 0;
-    
+
     for (const [intent, score] of scores) {
       if (score > bestScore) {
         bestScore = score;
         bestIntent = intent;
       }
     }
-    
+
     // Calculate confidence (0-1)
     const confidence = bestScore > 0 ? Math.min(bestScore / 20, 1) : 0;
-    
+
     return {
       intent: bestIntent,
       confidence,
-      params: {}
+      params: {},
     };
   }
-  
+
   // Execute query with optimizations
   private async executeOptimizedQuery(queryDef: any): Promise<any[]> {
     // Build the actual Drizzle query
     let query: any = this.db.select(queryDef.select);
-    
+
     if (queryDef.from) {
       query = query.from(queryDef.from);
     }
-    
+
     if (queryDef.innerJoin) {
       query = query.innerJoin(queryDef.innerJoin, queryDef.on);
     }
-    
+
     if (queryDef.where) {
       query = query.where(queryDef.where);
     }
-    
+
     if (queryDef.groupBy) {
       query = query.groupBy(...queryDef.groupBy);
     }
-    
+
     if (queryDef.having) {
       query = query.having(queryDef.having);
     }
-    
+
     if (queryDef.orderBy) {
       query = query.orderBy(...queryDef.orderBy);
     }
-    
+
     if (queryDef.limit) {
       query = query.limit(queryDef.limit);
     }
-    
+
     return await query;
   }
-  
+
   // Log query performance for analysis
   private async logQueryPerformance(
     naturalQuery: string,
@@ -153,21 +148,18 @@ export class NaturalLanguageQueryProcessor {
     executionTime: number,
     resultCount: number
   ): Promise<void> {
-    const queryHash = crypto
-      .createHash('md5')
-      .update(naturalQuery)
-      .digest('hex');
-    
+    const queryHash = crypto.createHash('md5').update(naturalQuery).digest('hex');
+
     await this.db.insert(queryPerformance).values({
       queryHash,
       naturalQuery,
       sqlQuery: JSON.stringify(sqlQuery), // Store as JSON for analysis
       executionTime: executionTime.toString(),
       resultCount,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
-  
+
   // Update device summary materialized view
   async updateDeviceSummaryView(): Promise<void> {
     // This would typically be a database trigger or scheduled job
@@ -225,18 +217,18 @@ export class NaturalLanguageQueryProcessor {
         last_updated = NOW()
     `);
   }
-  
+
   // Get query suggestions based on history
   async getQuerySuggestions(partialQuery: string): Promise<string[]> {
     const suggestions = await this.db
       .select({
-        query: queryPerformance.naturalQuery
+        query: queryPerformance.naturalQuery,
       })
       .from(queryPerformance)
-      .where(sql`${queryPerformance.naturalQuery} ILIKE ${partialQuery + '%'}`)
+      .where(sql`${queryPerformance.naturalQuery} ILIKE ${`${partialQuery}%`}`)
       .orderBy(desc(queryPerformance.timestamp))
       .limit(5);
-    
-    return suggestions.map(s => s.query);
+
+    return suggestions.map((s) => s.query);
   }
 }

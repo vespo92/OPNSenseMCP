@@ -1,6 +1,6 @@
 // OPNSense Firewall Rule Resource Implementation
 
-import { Resource, ValidationResult } from '../base.js';
+import { Resource, type ValidationResult } from '../base.js';
 
 /**
  * Firewall rule properties matching OPNSense API
@@ -27,61 +27,61 @@ export class FirewallRule extends Resource {
   constructor(name: string, properties: FirewallRuleProperties) {
     super('opnsense:firewall:rule', name, properties);
   }
-  
+
   validate(): ValidationResult {
     const errors: string[] = [];
     const props = this.properties as FirewallRuleProperties;
-    
+
     // Required fields
     if (!props.interface) {
       errors.push('Interface is required');
     }
-    
+
     if (!props.direction || !['in', 'out'].includes(props.direction)) {
       errors.push('Direction must be "in" or "out"');
     }
-    
+
     if (!props.action || !['pass', 'block', 'reject'].includes(props.action)) {
       errors.push('Action must be "pass", "block", or "reject"');
     }
-    
+
     if (!props.protocol) {
       errors.push('Protocol is required');
     }
-    
+
     // Validate port numbers
     const validatePort = (port: string | undefined, field: string) => {
       if (port && !/^\d+(-\d+)?$/.test(port)) {
         errors.push(`${field} must be a number or range (e.g., "80" or "8080-8090")`);
       }
     };
-    
+
     validatePort(props.sourcePort, 'Source port');
     validatePort(props.destinationPort, 'Destination port');
-    
+
     // Validate IP addresses/networks
     const validateAddress = (addr: string | undefined, field: string) => {
       if (addr && addr !== 'any') {
         // Simple validation - could be enhanced
-        if (!/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(addr) && 
-            !addr.startsWith('$')) { // Allow aliases starting with $
+        if (!/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(addr) && !addr.startsWith('$')) {
+          // Allow aliases starting with $
           errors.push(`${field} must be an IP address, network, or "any"`);
         }
       }
     };
-    
+
     validateAddress(props.source, 'Source');
     validateAddress(props.destination, 'Destination');
-    
+
     return {
       valid: errors.length === 0,
-      errors
+      errors,
     };
   }
-  
+
   toApiPayload(): any {
     const props = this.properties as FirewallRuleProperties;
-    
+
     return {
       rule: {
         enabled: props.enabled !== false ? '1' : '0',
@@ -96,17 +96,17 @@ export class FirewallRule extends Resource {
         destination_port: props.destinationPort || '',
         description: props.description || this.name,
         log: props.log ? '1' : '0',
-        quick: props.quick !== false ? '1' : '0'
-      }
+        quick: props.quick !== false ? '1' : '0',
+      },
     };
   }
-  
+
   fromApiResponse(response: any): void {
     if (response.uuid) {
       this.outputs.uuid = response.uuid;
       this.outputs.sequence = response.sequence;
     }
-    
+
     // Map API response back to properties
     if (response.rule) {
       const rule = response.rule;
@@ -129,10 +129,10 @@ export class FirewallRulePresets {
       protocol: 'tcp',
       source: 'any',
       destinationPort: '80,443',
-      description: 'Allow HTTP and HTTPS traffic'
-    }
+      description: 'Allow HTTP and HTTPS traffic',
+    },
   };
-  
+
   static readonly ALLOW_SSH = {
     name: 'allow-ssh',
     properties: {
@@ -141,10 +141,10 @@ export class FirewallRulePresets {
       protocol: 'tcp',
       source: 'any',
       destinationPort: '22',
-      description: 'Allow SSH access'
-    }
+      description: 'Allow SSH access',
+    },
   };
-  
+
   static readonly ALLOW_MINECRAFT = {
     name: 'allow-minecraft',
     properties: {
@@ -153,10 +153,10 @@ export class FirewallRulePresets {
       protocol: 'tcp',
       source: 'any',
       destinationPort: '25565',
-      description: 'Allow Minecraft server'
-    }
+      description: 'Allow Minecraft server',
+    },
   };
-  
+
   static readonly BLOCK_ALL = {
     name: 'block-all',
     properties: {
@@ -166,10 +166,10 @@ export class FirewallRulePresets {
       source: 'any',
       destination: 'any',
       description: 'Block all traffic',
-      quick: true
-    }
+      quick: true,
+    },
   };
-  
+
   /**
    * Create a firewall rule from a preset
    */
@@ -182,18 +182,18 @@ export class FirewallRulePresets {
       'allow-web': FirewallRulePresets.ALLOW_WEB,
       'allow-ssh': FirewallRulePresets.ALLOW_SSH,
       'allow-minecraft': FirewallRulePresets.ALLOW_MINECRAFT,
-      'block-all': FirewallRulePresets.BLOCK_ALL
+      'block-all': FirewallRulePresets.BLOCK_ALL,
     };
-    
+
     const preset = presets[presetName];
     if (!preset) {
       throw new Error(`Unknown preset: ${presetName}`);
     }
-    
+
     return new FirewallRule(preset.name, {
       ...preset.properties,
       interface: interface_,
-      ...overrides
+      ...overrides,
     });
   }
 }
@@ -212,20 +212,19 @@ export class FirewallAlias extends Resource {
   constructor(name: string, properties: FirewallAliasProperties) {
     super('opnsense:firewall:alias', name, properties);
   }
-  
+
   validate(): ValidationResult {
     const errors: string[] = [];
     const props = this.properties as FirewallAliasProperties;
-    
+
     if (!props.type || !['host', 'network', 'port', 'url'].includes(props.type)) {
       errors.push('Type must be "host", "network", "port", or "url"');
     }
-    
-    if (!props.content || 
-        (Array.isArray(props.content) && props.content.length === 0)) {
+
+    if (!props.content || (Array.isArray(props.content) && props.content.length === 0)) {
       errors.push('Content is required');
     }
-    
+
     // Type-specific validation
     if (props.type === 'port') {
       const ports = Array.isArray(props.content) ? props.content : [props.content];
@@ -235,34 +234,32 @@ export class FirewallAlias extends Resource {
         }
       }
     }
-    
+
     if (props.type === 'url' && !props.updateFreq) {
       errors.push('Update frequency is required for URL aliases');
     }
-    
+
     return {
       valid: errors.length === 0,
-      errors
+      errors,
     };
   }
-  
+
   toApiPayload(): any {
     const props = this.properties as FirewallAliasProperties;
-    const content = Array.isArray(props.content) 
-      ? props.content.join('\n') 
-      : props.content;
-    
+    const content = Array.isArray(props.content) ? props.content.join('\n') : props.content;
+
     return {
       alias: {
         name: this.name,
         type: props.type,
         content,
         description: props.description || this.name,
-        ...(props.type === 'url' && { updatefreq: props.updateFreq })
-      }
+        ...(props.type === 'url' && { updatefreq: props.updateFreq }),
+      },
     };
   }
-  
+
   fromApiResponse(response: any): void {
     if (response.uuid) {
       this.outputs.uuid = response.uuid;

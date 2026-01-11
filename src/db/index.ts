@@ -2,7 +2,9 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pkg from 'pg';
+
 const { Pool } = pkg;
+
 import * as schema from './schema.js';
 
 // Environment variables are provided by Claude Desktop/Code
@@ -24,7 +26,7 @@ export interface DatabaseConfig {
 export function createDbPool(config?: DatabaseConfig) {
   const poolConfig = {
     host: config?.host || process.env.POSTGRES_HOST || 'localhost',
-    port: config?.port || parseInt(process.env.POSTGRES_PORT || '5432'),
+    port: config?.port || parseInt(process.env.POSTGRES_PORT || '5432', 10),
     database: config?.database || process.env.POSTGRES_DB || 'opnsense_mcp',
     user: config?.user || process.env.POSTGRES_USER || 'mcp_user',
     password: config?.password || process.env.POSTGRES_PASSWORD,

@@ -5,9 +5,9 @@
  */
 
 import type { Response } from 'express';
-import type { Event, EventFilter } from '../types/events.js';
-import type { EventBus } from '../event-bus/bus.js';
 import type { Logger } from '../../utils/logger.js';
+import type { EventBus } from '../event-bus/bus.js';
+import type { Event, EventFilter } from '../types/events.js';
 
 /**
  * SSE client connection
@@ -149,10 +149,7 @@ export class EventStreamManager {
   /**
    * Send event to specific client
    */
-  private sendToClient(
-    client: SSEClient,
-    event: { type: string; data: any }
-  ): void {
+  private sendToClient(client: SSEClient, event: { type: string; data: any }): void {
     try {
       // Format SSE message
       const eventId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -253,7 +250,7 @@ export class EventStreamManager {
    * Get client list
    */
   getClients(): Array<{ id: string; connectedAt: Date; filter?: EventFilter }> {
-    return Array.from(this.clients.values()).map(client => ({
+    return Array.from(this.clients.values()).map((client) => ({
       id: client.id,
       connectedAt: client.connectedAt,
       filter: client.filter,
@@ -272,10 +269,11 @@ export class EventStreamManager {
 
     return {
       totalClients: clients.length,
-      clientsByFilter: clients.filter(c => c.filter).length,
-      oldestConnection: clients.length > 0
-        ? new Date(Math.min(...clients.map(c => c.connectedAt.getTime())))
-        : undefined,
+      clientsByFilter: clients.filter((c) => c.filter).length,
+      oldestConnection:
+        clients.length > 0
+          ? new Date(Math.min(...clients.map((c) => c.connectedAt.getTime())))
+          : undefined,
     };
   }
 }

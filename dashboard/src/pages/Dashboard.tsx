@@ -1,8 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
-import { Activity, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
-import { useSSE } from '../hooks/useSSE';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { formatDistanceToNow } from 'date-fns';
+import { Activity, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { useSSE } from '../hooks/useSSE';
 
 export default function Dashboard() {
   const { events } = useSSE('/sse/events');
@@ -27,11 +35,14 @@ export default function Dashboard() {
   });
 
   // Aggregate events for chart
-  const eventData = events.slice(0, 50).reverse().map((e, i) => ({
-    time: i,
-    events: 1,
-    severity: e.severity,
-  }));
+  const eventData = events
+    .slice(0, 50)
+    .reverse()
+    .map((e, i) => ({
+      time: i,
+      events: 1,
+      severity: e.severity,
+    }));
 
   const stats = {
     totalPlugins: pluginStats?.length || 0,
@@ -87,7 +98,13 @@ export default function Dashboard() {
             <XAxis dataKey="time" />
             <YAxis />
             <Tooltip />
-            <Area type="monotone" dataKey="events" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
+            <Area
+              type="monotone"
+              dataKey="events"
+              stroke="#3b82f6"
+              fill="#3b82f6"
+              fillOpacity={0.3}
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -95,7 +112,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Events */}
         <div className="card">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Recent Events</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+            Recent Events
+          </h2>
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {events.slice(0, 10).map((event) => (
               <div
@@ -128,7 +147,9 @@ export default function Dashboard() {
 
         {/* Plugin Status */}
         <div className="card">
-          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Plugin Status</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+            Plugin Status
+          </h2>
           <div className="space-y-2">
             {pluginStats?.slice(0, 10).map((plugin: any) => (
               <div
@@ -140,7 +161,9 @@ export default function Dashboard() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">{plugin.category}</p>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <span className={`badge ${plugin.state === 'running' ? 'badge-success' : 'badge-warning'}`}>
+                  <span
+                    className={`badge ${plugin.state === 'running' ? 'badge-success' : 'badge-warning'}`}
+                  >
                     {plugin.state}
                   </span>
                   {plugin.health?.healthy ? (
@@ -173,7 +196,9 @@ function StatCard({ title, value, icon, trend, color }: any) {
           <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
           <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{value}</p>
           {trend && (
-            <p className="mt-1 text-sm text-green-600 dark:text-green-400">+{trend} from last hour</p>
+            <p className="mt-1 text-sm text-green-600 dark:text-green-400">
+              +{trend} from last hour
+            </p>
           )}
         </div>
         <div className={`p-3 rounded-lg ${colors[color]}`}>{icon}</div>

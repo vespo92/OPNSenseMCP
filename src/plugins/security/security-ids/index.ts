@@ -5,8 +5,14 @@
  */
 
 import { BasePlugin } from '../../../core/plugin-system/base-plugin.js';
-import { PluginCategory, PluginMetadata, MCPTool, MCPResource, MCPPrompt } from '../../../core/types/plugin.js';
-import { EventType, EventSeverity } from '../../../core/types/events.js';
+import { EventSeverity, EventType } from '../../../core/types/events.js';
+import {
+  type MCPPrompt,
+  type MCPResource,
+  type MCPTool,
+  PluginCategory,
+  type PluginMetadata,
+} from '../../../core/types/plugin.js';
 
 export default class IDSPlugin extends BasePlugin {
   readonly metadata: PluginMetadata = {
@@ -194,7 +200,7 @@ export default class IDSPlugin extends BasePlugin {
     return ['core-firewall'];
   }
 
-  private async getStatus(params: {}): Promise<any> {
+  private async getStatus(_params: {}): Promise<any> {
     try {
       const response = await this.api.get('/api/ids/service/status');
       return {
@@ -208,7 +214,7 @@ export default class IDSPlugin extends BasePlugin {
     }
   }
 
-  private async startService(params: {}): Promise<any> {
+  private async startService(_params: {}): Promise<any> {
     try {
       const response = await this.api.post('/api/ids/service/start');
 
@@ -225,7 +231,7 @@ export default class IDSPlugin extends BasePlugin {
     }
   }
 
-  private async stopService(params: {}): Promise<any> {
+  private async stopService(_params: {}): Promise<any> {
     try {
       const response = await this.api.post('/api/ids/service/stop');
 
@@ -242,7 +248,7 @@ export default class IDSPlugin extends BasePlugin {
     }
   }
 
-  private async restartService(params: {}): Promise<any> {
+  private async restartService(_params: {}): Promise<any> {
     try {
       const response = await this.api.post('/api/ids/service/restart');
 
@@ -259,7 +265,11 @@ export default class IDSPlugin extends BasePlugin {
     }
   }
 
-  private async listAlerts(params: { limit?: number; severity?: string; category?: string }): Promise<any> {
+  private async listAlerts(params: {
+    limit?: number;
+    severity?: string;
+    category?: string;
+  }): Promise<any> {
     try {
       // In real implementation, this would call OPNsense IDS alerts API
       const alerts = Array.from(this.alertCache.values());
@@ -267,11 +277,11 @@ export default class IDSPlugin extends BasePlugin {
       let filtered = alerts;
 
       if (params.severity) {
-        filtered = filtered.filter(a => a.severity === params.severity);
+        filtered = filtered.filter((a) => a.severity === params.severity);
       }
 
       if (params.category) {
-        filtered = filtered.filter(a => a.category === params.category);
+        filtered = filtered.filter((a) => a.category === params.category);
       }
 
       if (params.limit) {
@@ -304,7 +314,7 @@ export default class IDSPlugin extends BasePlugin {
     }
   }
 
-  private async updateRules(params: {}): Promise<any> {
+  private async updateRules(_params: {}): Promise<any> {
     try {
       const response = await this.api.post('/api/ids/service/updateRules');
 
@@ -321,7 +331,7 @@ export default class IDSPlugin extends BasePlugin {
     }
   }
 
-  private async listRuleSets(params: {}): Promise<any> {
+  private async listRuleSets(_params: {}): Promise<any> {
     try {
       const response = await this.api.get('/api/ids/settings/searchInstalledRules');
 
@@ -337,7 +347,7 @@ export default class IDSPlugin extends BasePlugin {
 
   private async enableRuleSet(params: { ruleSetId: string }): Promise<any> {
     try {
-      const response = await this.api.post(`/api/ids/settings/toggleRule/${params.ruleSetId}/1`);
+      const _response = await this.api.post(`/api/ids/settings/toggleRule/${params.ruleSetId}/1`);
 
       this.emit('ids.ruleset.enabled', { ruleSetId: params.ruleSetId });
 
@@ -353,7 +363,7 @@ export default class IDSPlugin extends BasePlugin {
 
   private async disableRuleSet(params: { ruleSetId: string }): Promise<any> {
     try {
-      const response = await this.api.post(`/api/ids/settings/toggleRule/${params.ruleSetId}/0`);
+      const _response = await this.api.post(`/api/ids/settings/toggleRule/${params.ruleSetId}/0`);
 
       this.emit('ids.ruleset.disabled', { ruleSetId: params.ruleSetId });
 
@@ -367,7 +377,7 @@ export default class IDSPlugin extends BasePlugin {
     }
   }
 
-  private async getStatistics(params: {}): Promise<any> {
+  private async getStatistics(_params: {}): Promise<any> {
     try {
       // Get statistics from cache and live data
       const alerts = await this.listAlerts({ limit: 1000 });
@@ -404,7 +414,7 @@ export default class IDSPlugin extends BasePlugin {
 
       // Create blocking rule
       const tools = firewallPlugin.getTools();
-      const createRuleTool = tools.find(t => t.name === 'firewall_create_rule');
+      const createRuleTool = tools.find((t) => t.name === 'firewall_create_rule');
 
       if (createRuleTool) {
         await createRuleTool.handler({

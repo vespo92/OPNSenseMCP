@@ -1,19 +1,19 @@
 // Core Resource Model for MCP-based IaC Platform
 // This provides the foundation for all MCP servers to implement IaC patterns
 
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 
 /**
  * Resource states following standard IaC lifecycle
  */
 export enum ResourceState {
-  Pending = 'pending',      // Resource defined but not created
-  Creating = 'creating',    // Resource creation in progress
-  Created = 'created',      // Resource exists and is active
-  Updating = 'updating',    // Resource update in progress
-  Deleting = 'deleting',    // Resource deletion in progress
-  Deleted = 'deleted',      // Resource has been deleted
-  Failed = 'failed'         // Resource operation failed
+  Pending = 'pending', // Resource defined but not created
+  Creating = 'creating', // Resource creation in progress
+  Created = 'created', // Resource exists and is active
+  Updating = 'updating', // Resource update in progress
+  Deleting = 'deleting', // Resource deletion in progress
+  Deleted = 'deleted', // Resource has been deleted
+  Failed = 'failed', // Resource operation failed
 }
 
 /**
@@ -45,7 +45,7 @@ export abstract class Resource {
   public state: ResourceState = ResourceState.Pending;
   public outputs: Record<string, any> = {};
   public metadata: ResourceMetadata;
-  
+
   constructor(
     type: string,
     name: string,
@@ -57,42 +57,43 @@ export abstract class Resource {
     this.name = name;
     this.metadata = {
       version: 1,
-      createdAt: new Date()
+      createdAt: new Date(),
     };
   }
-  
+
   /**
    * Generate unique resource ID
    */
   private generateId(type: string, name: string): string {
-    const hash = crypto.createHash('sha256')
+    const hash = crypto
+      .createHash('sha256')
       .update(`${type}:${name}`)
       .digest('hex')
       .substring(0, 8);
     return `${type}:${name}:${hash}`;
   }
-  
+
   /**
    * Validate resource configuration
    */
   abstract validate(): ValidationResult;
-  
+
   /**
    * Convert to API-specific payload
    */
   abstract toApiPayload(): any;
-  
+
   /**
    * Update resource state from API response
    */
   abstract fromApiResponse(response: any): void;
-  
+
   /**
    * Get resource references (for dependency resolution)
    */
   getReferences(): string[] {
     const refs: string[] = [];
-    
+
     // Scan properties for ${resource.output} patterns
     const scanValue = (value: any): void => {
       if (typeof value === 'string') {
@@ -104,11 +105,11 @@ export abstract class Resource {
         Object.values(value).forEach(scanValue);
       }
     };
-    
+
     Object.values(this.properties).forEach(scanValue);
     return [...new Set(refs)];
   }
-  
+
   /**
    * Resolve references in properties
    */
@@ -134,7 +135,7 @@ export abstract class Resource {
       }
       return value;
     };
-    
+
     // Create new properties object with resolved references
     const resolved: any = {};
     for (const [key, value] of Object.entries(this.properties)) {
@@ -142,23 +143,20 @@ export abstract class Resource {
     }
     this.properties = resolved;
   }
-  
+
   /**
    * Get resource display info
    */
   getDisplayInfo(): string {
     return `${this.type} "${this.name}" [${this.state}]`;
   }
-  
+
   /**
    * Clone resource with new properties
    */
   clone(newProperties?: Partial<Record<string, any>>): Resource {
     const ResourceClass = this.constructor as any;
-    return new ResourceClass(
-      this.name,
-      { ...this.properties, ...newProperties }
-    );
+    return new ResourceClass(this.name, { ...this.properties, ...newProperties });
   }
 }
 
@@ -206,14 +204,14 @@ export interface DeploymentResult {
  */
 export class ResourceRegistry {
   private resources = new Map<string, typeof Resource>();
-  
+
   /**
    * Register a resource type
    */
   register(type: string, resourceClass: typeof Resource): void {
     this.resources.set(type, resourceClass);
   }
-  
+
   /**
    * Create a resource instance
    */
@@ -224,14 +222,14 @@ export class ResourceRegistry {
     }
     return new (ResourceClass as any)(name, properties);
   }
-  
+
   /**
    * Check if resource type is registered
    */
   has(type: string): boolean {
     return this.resources.has(type);
   }
-  
+
   /**
    * Get all registered types
    */
@@ -259,7 +257,7 @@ export function parseCrossMCPReference(ref: string): CrossMCPReference | null {
     return {
       server: match[1],
       resourceId: match[2],
-      outputKey: match[3]
+      outputKey: match[3],
     };
   }
   return null;

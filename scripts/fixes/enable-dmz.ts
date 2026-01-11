@@ -1,6 +1,7 @@
+import * as dotenv from 'dotenv';
 import { OPNSenseAPIClient } from '../../src/api/client.js';
 import { FirewallRuleResource } from '../../src/resources/firewall/rule.js';
-import * as dotenv from 'dotenv';
+
 dotenv.config();
 
 async function enableDMZRouting() {
@@ -8,11 +9,11 @@ async function enableDMZRouting() {
     host: process.env.OPNSENSE_HOST!,
     apiKey: process.env.OPNSENSE_API_KEY!,
     apiSecret: process.env.OPNSENSE_API_SECRET!,
-    verifySsl: true
+    verifySsl: true,
   });
 
   const firewall = new FirewallRuleResource(client);
-  
+
   console.log('🔥 Creating Inter-VLAN Routing Rules for DMZ <-> LAN');
   console.log('====================================================');
   console.log('DMZ Network: 10.0.6.0/24 (opt8)');
@@ -24,25 +25,25 @@ async function enableDMZRouting() {
     {
       enabled: '1',
       action: 'pass',
-      interface: 'lan',  // Apply on LAN interface
+      interface: 'lan', // Apply on LAN interface
       direction: 'in',
       ipprotocol: 'inet',
       protocol: 'any',
-      source_net: '10.0.6.0/24',  // From DMZ
-      destination_net: '10.0.0.14',  // To TrueNAS only
-      description: 'Allow DMZ to TrueNAS - All protocols'
+      source_net: '10.0.6.0/24', // From DMZ
+      destination_net: '10.0.0.14', // To TrueNAS only
+      description: 'Allow DMZ to TrueNAS - All protocols',
     },
     // Allow return traffic from TrueNAS to DMZ
     {
       enabled: '1',
       action: 'pass',
-      interface: 'opt8',  // Apply on DMZ interface
+      interface: 'opt8', // Apply on DMZ interface
       direction: 'in',
       ipprotocol: 'inet',
       protocol: 'any',
-      source_net: '10.0.0.14',  // From TrueNAS
-      destination_net: '10.0.6.0/24',  // To DMZ network
-      description: 'Allow TrueNAS to DMZ - Return traffic'
+      source_net: '10.0.0.14', // From TrueNAS
+      destination_net: '10.0.6.0/24', // To DMZ network
+      description: 'Allow TrueNAS to DMZ - Return traffic',
     },
     // Allow DMZ to reach gateway for routing
     {
@@ -53,8 +54,8 @@ async function enableDMZRouting() {
       ipprotocol: 'inet',
       protocol: 'icmp',
       source_net: '10.0.6.0/24',
-      destination_net: '10.0.6.1',  // DMZ gateway
-      description: 'Allow DMZ to gateway - ICMP'
+      destination_net: '10.0.6.1', // DMZ gateway
+      description: 'Allow DMZ to gateway - ICMP',
     },
     // Allow DMZ to main K8s node
     {
@@ -66,9 +67,9 @@ async function enableDMZRouting() {
       protocol: 'tcp',
       source_net: '10.0.6.0/24',
       destination_net: '10.0.0.2',
-      destination_port: '6443',  // Kubernetes API
-      description: 'Allow DMZ to K8s master - API access'
-    }
+      destination_port: '6443', // Kubernetes API
+      description: 'Allow DMZ to K8s master - API access',
+    },
   ];
 
   const createdRules: string[] = [];
@@ -77,11 +78,11 @@ async function enableDMZRouting() {
     try {
       console.log(`📝 Creating rule: ${rule.description}`);
       const result = await firewall.create(rule);
-      
+
       if (result.uuid) {
         createdRules.push(result.uuid);
         console.log(`   ✅ Created with UUID: ${result.uuid}`);
-        
+
         // Verify it was created
         const verification = await firewall.get(result.uuid);
         if (verification) {
@@ -102,7 +103,7 @@ async function enableDMZRouting() {
 
   console.log('\n📊 Summary:');
   console.log(`Created ${createdRules.length} of ${rules.length} rules`);
-  
+
   if (createdRules.length === rules.length) {
     console.log('\n✅ Inter-VLAN routing rules created successfully!');
     console.log('\n⚠️  IMPORTANT: You may also need to:');

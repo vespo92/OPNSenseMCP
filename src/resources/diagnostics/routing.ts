@@ -1,8 +1,8 @@
 // Routing Diagnostics Resource Implementation
 // Provides comprehensive diagnostics and fixes for inter-VLAN routing issues
-import { OPNSenseAPIClient } from '../../api/client.js';
-import { InterfaceConfigResource } from '../network/interfaces.js';
+import type { OPNSenseAPIClient } from '../../api/client.js';
 import { FirewallRuleResource } from '../firewall/rule.js';
+import { InterfaceConfigResource } from '../network/interfaces.js';
 import SystemSettingsResource from '../system/settings.js';
 
 export interface RoutingDiagnosticResult {
@@ -45,7 +45,8 @@ export class RoutingDiagnosticsResource {
   private interfaceResource: InterfaceConfigResource;
   private firewallResource: FirewallRuleResource;
   private systemResource: SystemSettingsResource;
-  private debugMode: boolean = process.env.MCP_DEBUG === 'true' || process.env.DEBUG_ROUTING === 'true';
+  private debugMode: boolean =
+    process.env.MCP_DEBUG === 'true' || process.env.DEBUG_ROUTING === 'true';
 
   constructor(client: OPNSenseAPIClient) {
     this.client = client;
@@ -57,7 +58,10 @@ export class RoutingDiagnosticsResource {
   /**
    * Run comprehensive routing diagnostics
    */
-  async runDiagnostics(sourceNetwork?: string, destNetwork?: string): Promise<RoutingDiagnosticResult> {
+  async runDiagnostics(
+    sourceNetwork?: string,
+    destNetwork?: string
+  ): Promise<RoutingDiagnosticResult> {
     console.log('\n========================================');
     console.log('  OPNsense Inter-VLAN Routing Diagnostics');
     console.log('========================================\n');
@@ -97,16 +101,17 @@ export class RoutingDiagnosticsResource {
     this.generateRecommendations(issues, recommendations);
 
     // Determine if auto-fix is possible
-    const canAutoFix = issues.some(i => i.fixAvailable);
+    const canAutoFix = issues.some((i) => i.fixAvailable);
 
     // Generate summary
-    const criticalCount = issues.filter(i => i.severity === 'critical').length;
-    const warningCount = issues.filter(i => i.severity === 'warning').length;
-    const summary = criticalCount > 0 
-      ? `Found ${criticalCount} critical issues blocking inter-VLAN routing`
-      : warningCount > 0
-      ? `Found ${warningCount} warnings that may affect routing`
-      : 'No major routing issues detected';
+    const criticalCount = issues.filter((i) => i.severity === 'critical').length;
+    const warningCount = issues.filter((i) => i.severity === 'warning').length;
+    const summary =
+      criticalCount > 0
+        ? `Found ${criticalCount} critical issues blocking inter-VLAN routing`
+        : warningCount > 0
+          ? `Found ${warningCount} warnings that may affect routing`
+          : 'No major routing issues detected';
 
     console.log('\n========================================');
     console.log('  Diagnostic Summary');
@@ -120,7 +125,7 @@ export class RoutingDiagnosticsResource {
       issues,
       recommendations,
       canAutoFix,
-      summary
+      summary,
     };
   }
 
@@ -133,14 +138,14 @@ export class RoutingDiagnosticsResource {
     try {
       // Get all interfaces
       const interfaces = await this.interfaceResource.listOverview();
-      
+
       for (const iface of interfaces) {
         // Skip WAN interfaces
         if (iface.name.toLowerCase().includes('wan')) continue;
 
         // Get detailed config
         const config = await this.interfaceResource.getInterfaceConfig(iface.name);
-        
+
         if (config) {
           const blockPriv = config.blockpriv === '1' || config.blockpriv === 'yes';
           const blockBogons = config.blockbogons === '1' || config.blockbogons === 'yes';
@@ -154,13 +159,15 @@ export class RoutingDiagnosticsResource {
                 interface: iface.name,
                 ipaddr: iface.ipaddr,
                 blockPrivateNetworks: blockPriv,
-                blockBogons: blockBogons
+                blockBogons: blockBogons,
               },
               fixAvailable: true,
-              fixCommand: `enable_intervlan_routing_on_interface("${iface.name}")`
+              fixCommand: `enable_intervlan_routing_on_interface("${iface.name}")`,
             });
 
-            console.log(`  ❌ ${iface.name}: Blocking private networks (blockpriv=${blockPriv}, blockbogons=${blockBogons})`);
+            console.log(
+              `  ❌ ${iface.name}: Blocking private networks (blockpriv=${blockPriv}, blockbogons=${blockBogons})`
+            );
           } else {
             console.log(`  ✅ ${iface.name}: Not blocking private networks`);
           }
@@ -175,7 +182,7 @@ export class RoutingDiagnosticsResource {
         component: 'Interface',
         issue: 'Unable to check interface blocking settings',
         details: { error: String(error) },
-        fixAvailable: false
+        fixAvailable: false,
       });
     }
 
@@ -190,7 +197,7 @@ export class RoutingDiagnosticsResource {
 
     try {
       const settings = await this.systemResource.getAllSettings();
-      
+
       if (settings.firewall) {
         const blockPriv = settings.firewall.blockprivatenetworks === '1';
         const blockBogons = settings.firewall.blockbogons === '1';
@@ -204,10 +211,10 @@ export class RoutingDiagnosticsResource {
             details: {
               blockPrivateNetworks: blockPriv,
               blockBogons: blockBogons,
-              allowInterLanTraffic: allowInterLan
+              allowInterLanTraffic: allowInterLan,
             },
             fixAvailable: true,
-            fixCommand: 'enable_system_intervlan_routing()'
+            fixCommand: 'enable_system_intervlan_routing()',
           });
           console.log(`  ❌ System: Blocking private networks at system level`);
         } else {
@@ -221,7 +228,7 @@ export class RoutingDiagnosticsResource {
             issue: 'Inter-LAN traffic may be restricted',
             details: { allowInterLanTraffic: false },
             fixAvailable: true,
-            fixCommand: 'enable_system_intervlan_routing()'
+            fixCommand: 'enable_system_intervlan_routing()',
           });
           console.log(`  ⚠️  System: Inter-LAN traffic not explicitly allowed`);
         }
@@ -233,7 +240,7 @@ export class RoutingDiagnosticsResource {
         component: 'System',
         issue: 'Unable to check system settings',
         details: { error: String(error) },
-        fixAvailable: false
+        fixAvailable: false,
       });
     }
 
@@ -243,20 +250,25 @@ export class RoutingDiagnosticsResource {
   /**
    * Check firewall rules between networks
    */
-  private async checkFirewallRules(sourceNetwork: string, destNetwork: string): Promise<RoutingIssue[]> {
+  private async checkFirewallRules(
+    sourceNetwork: string,
+    destNetwork: string
+  ): Promise<RoutingIssue[]> {
     const issues: RoutingIssue[] = [];
 
     try {
       const rules = await this.firewallResource.list();
-      
+
       // Look for allow rules between the networks
-      const hasAllowRule = rules.some(rule => {
-        const matchesSource = rule.source_net === sourceNetwork || 
-                             rule.source_net === 'any' || 
-                             rule.source_net?.includes(sourceNetwork.split('/')[0]);
-        const matchesDest = rule.destination_net === destNetwork || 
-                           rule.destination_net === 'any' || 
-                           rule.destination_net?.includes(destNetwork.split('/')[0]);
+      const hasAllowRule = rules.some((rule) => {
+        const matchesSource =
+          rule.source_net === sourceNetwork ||
+          rule.source_net === 'any' ||
+          rule.source_net?.includes(sourceNetwork.split('/')[0]);
+        const matchesDest =
+          rule.destination_net === destNetwork ||
+          rule.destination_net === 'any' ||
+          rule.destination_net?.includes(destNetwork.split('/')[0]);
         return rule.action === 'pass' && matchesSource && matchesDest && rule.enabled === '1';
       });
 
@@ -268,10 +280,10 @@ export class RoutingDiagnosticsResource {
           details: {
             source: sourceNetwork,
             destination: destNetwork,
-            rulesChecked: rules.length
+            rulesChecked: rules.length,
           },
           fixAvailable: true,
-          fixCommand: `create_intervlan_rule("${sourceNetwork}", "${destNetwork}")`
+          fixCommand: `create_intervlan_rule("${sourceNetwork}", "${destNetwork}")`,
         });
         console.log(`  ❌ Firewall: No allow rule from ${sourceNetwork} to ${destNetwork}`);
       } else {
@@ -279,11 +291,13 @@ export class RoutingDiagnosticsResource {
       }
 
       // Check for blocking rules
-      const blockingRule = rules.find(rule => {
-        const matchesSource = rule.source_net === sourceNetwork || 
-                             rule.source_net?.includes(sourceNetwork.split('/')[0]);
-        const matchesDest = rule.destination_net === destNetwork || 
-                           rule.destination_net?.includes(destNetwork.split('/')[0]);
+      const blockingRule = rules.find((rule) => {
+        const matchesSource =
+          rule.source_net === sourceNetwork ||
+          rule.source_net?.includes(sourceNetwork.split('/')[0]);
+        const matchesDest =
+          rule.destination_net === destNetwork ||
+          rule.destination_net?.includes(destNetwork.split('/')[0]);
         return rule.action === 'block' && matchesSource && matchesDest && rule.enabled === '1';
       });
 
@@ -294,11 +308,13 @@ export class RoutingDiagnosticsResource {
           issue: `Blocking rule found that prevents traffic from ${sourceNetwork} to ${destNetwork}`,
           details: {
             ruleId: blockingRule.uuid,
-            description: blockingRule.description
+            description: blockingRule.description,
           },
-          fixAvailable: false
+          fixAvailable: false,
         });
-        console.log(`  ❌ Firewall: Blocking rule preventing traffic (${blockingRule.description})`);
+        console.log(
+          `  ❌ Firewall: Blocking rule preventing traffic (${blockingRule.description})`
+        );
       }
     } catch (error) {
       console.error('Error checking firewall rules:', error);
@@ -307,7 +323,7 @@ export class RoutingDiagnosticsResource {
         component: 'Firewall',
         issue: 'Unable to check firewall rules',
         details: { error: String(error) },
-        fixAvailable: false
+        fixAvailable: false,
       });
     }
 
@@ -323,19 +339,21 @@ export class RoutingDiagnosticsResource {
     try {
       // Try to get routing table via API
       const response = await this.client.get('/diagnostics/interface/getRoutes');
-      
-      if (response && response.rows) {
+
+      if (response?.rows) {
         const routes = response.rows as RouteTableEntry[];
-        
+
         // Check for default route
-        const hasDefaultRoute = routes.some(r => r.destination === 'default' || r.destination === '0.0.0.0/0');
+        const hasDefaultRoute = routes.some(
+          (r) => r.destination === 'default' || r.destination === '0.0.0.0/0'
+        );
         if (!hasDefaultRoute) {
           issues.push({
             severity: 'warning',
             component: 'Routing',
             issue: 'No default route found',
             details: { routes: routes.length },
-            fixAvailable: false
+            fixAvailable: false,
           });
           console.log(`  ⚠️  Routing: No default route found`);
         } else {
@@ -345,13 +363,13 @@ export class RoutingDiagnosticsResource {
         // Check for routes to private networks
         const privateNetworks = ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'];
         for (const network of privateNetworks) {
-          const hasRoute = routes.some(r => r.destination.startsWith(network.split('/')[0]));
+          const hasRoute = routes.some((r) => r.destination.startsWith(network.split('/')[0]));
           if (!hasRoute && network.startsWith('10.')) {
             console.log(`  ⚠️  Routing: No explicit route for ${network}`);
           }
         }
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(`  ℹ️  Routing: Unable to retrieve routing table via API`);
       // This is not critical as routing table might not be available via API
     }
@@ -368,15 +386,17 @@ export class RoutingDiagnosticsResource {
     try {
       // Try to get NAT rules
       const response = await this.client.get('/firewall/nat/get');
-      
-      if (response && response.outbound) {
+
+      if (response?.outbound) {
         const rules = response.outbound.rule || [];
-        
+
         // Check for rules that might NAT internal traffic
         const problematicNAT = rules.find((rule: any) => {
-          return rule.source?.network?.includes('10.0.') && 
-                 rule.destination?.network?.includes('10.0.') &&
-                 rule.target !== 'no-nat';
+          return (
+            rule.source?.network?.includes('10.0.') &&
+            rule.destination?.network?.includes('10.0.') &&
+            rule.target !== 'no-nat'
+          );
         });
 
         if (problematicNAT) {
@@ -386,16 +406,16 @@ export class RoutingDiagnosticsResource {
             issue: 'NAT rule may be translating internal traffic',
             details: {
               source: problematicNAT.source,
-              destination: problematicNAT.destination
+              destination: problematicNAT.destination,
             },
-            fixAvailable: false
+            fixAvailable: false,
           });
           console.log(`  ⚠️  NAT: Rule may be translating internal traffic`);
         } else {
           console.log(`  ✅ NAT: No problematic NAT rules found`);
         }
       }
-    } catch (error) {
+    } catch (_error) {
       console.log(`  ℹ️  NAT: Unable to check NAT rules`);
       // Not critical - NAT might not be the issue
     }
@@ -407,13 +427,21 @@ export class RoutingDiagnosticsResource {
    * Generate recommendations based on issues found
    */
   private generateRecommendations(issues: RoutingIssue[], recommendations: string[]): void {
-    const hasCritical = issues.some(i => i.severity === 'critical');
-    const hasInterfaceBlocking = issues.some(i => i.component === 'Interface' && i.severity === 'critical');
-    const hasSystemBlocking = issues.some(i => i.component === 'System' && i.severity === 'critical');
-    const hasFirewallIssue = issues.some(i => i.component === 'Firewall' && i.severity === 'critical');
+    const hasCritical = issues.some((i) => i.severity === 'critical');
+    const hasInterfaceBlocking = issues.some(
+      (i) => i.component === 'Interface' && i.severity === 'critical'
+    );
+    const hasSystemBlocking = issues.some(
+      (i) => i.component === 'System' && i.severity === 'critical'
+    );
+    const hasFirewallIssue = issues.some(
+      (i) => i.component === 'Firewall' && i.severity === 'critical'
+    );
 
     if (hasInterfaceBlocking) {
-      recommendations.push('1. Disable "Block private networks" on internal interfaces (especially DMZ/opt8)');
+      recommendations.push(
+        '1. Disable "Block private networks" on internal interfaces (especially DMZ/opt8)'
+      );
       recommendations.push('   Run: fix_intervlan_routing() to automatically fix this');
     }
 
@@ -509,16 +537,19 @@ export class RoutingDiagnosticsResource {
       '/firewall/filter/reconfigure',
       '/interfaces/reconfigure',
       '/system/firmware/configctl',
-      '/system/firmware/reconfigure'
+      '/system/firmware/reconfigure',
     ];
 
     for (const endpoint of endpoints) {
       try {
-        await this.client.post(endpoint, endpoint.includes('configctl') ? { action: 'filter reload' } : {});
+        await this.client.post(
+          endpoint,
+          endpoint.includes('configctl') ? { action: 'filter reload' } : {}
+        );
         if (this.debugMode) {
           console.log(`Applied changes via ${endpoint}`);
         }
-      } catch (error) {
+      } catch (_error) {
         // Some endpoints might not exist, that's OK
         if (this.debugMode) {
           console.log(`${endpoint} not available`);
@@ -527,13 +558,17 @@ export class RoutingDiagnosticsResource {
     }
 
     // Wait for changes to propagate
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
 
   /**
    * Create specific inter-VLAN routing rules
    */
-  async createInterVLANRules(sourceNetwork: string, destNetwork: string, bidirectional: boolean = true): Promise<boolean> {
+  async createInterVLANRules(
+    sourceNetwork: string,
+    destNetwork: string,
+    bidirectional: boolean = true
+  ): Promise<boolean> {
     console.log(`\nCreating inter-VLAN rules between ${sourceNetwork} and ${destNetwork}...`);
 
     try {
@@ -542,13 +577,13 @@ export class RoutingDiagnosticsResource {
         enabled: '1',
         action: 'pass',
         quick: '1',
-        interface: 'lan',  // Adjust based on your setup
+        interface: 'lan', // Adjust based on your setup
         direction: 'in',
         ipprotocol: 'inet',
         protocol: 'any',
         source_net: sourceNetwork,
         destination_net: destNetwork,
-        description: `Allow ${sourceNetwork} to ${destNetwork}`
+        description: `Allow ${sourceNetwork} to ${destNetwork}`,
       });
 
       if (forwardRule) {
@@ -561,13 +596,13 @@ export class RoutingDiagnosticsResource {
           enabled: '1',
           action: 'pass',
           quick: '1',
-          interface: 'lan',  // Adjust based on your setup
+          interface: 'lan', // Adjust based on your setup
           direction: 'in',
           ipprotocol: 'inet',
           protocol: 'any',
           source_net: destNetwork,
           destination_net: sourceNetwork,
-          description: `Allow ${destNetwork} to ${sourceNetwork}`
+          description: `Allow ${destNetwork} to ${sourceNetwork}`,
         });
 
         if (reverseRule) {
@@ -597,40 +632,40 @@ export class RoutingDiagnosticsResource {
     // 1. Fix opt8 (DMZ) interface
     console.log('1. Configuring DMZ interface (opt8)...');
     const dmzFixed = await this.interfaceResource.configureDMZInterface('opt8');
-    
+
     // 2. Fix system settings
     console.log('2. Enabling system inter-VLAN routing...');
     const systemFixed = await this.systemResource.enableInterVLANRouting();
-    
+
     // 3. Create firewall rules
     console.log('3. Creating DMZ to LAN firewall rules...');
     const rulesCreated = await this.createInterVLANRules('10.0.6.0/24', '10.0.0.0/24');
-    
+
     // 4. Create NFS-specific rules
     console.log('4. Creating NFS access rules...');
     const nfsRules = await this.firewallResource.createNFSRules({
       interface: 'opt8',
       sourceNetwork: '10.0.6.0/24',
-      truenasIP: '10.0.0.14'
+      truenasIP: '10.0.0.14',
     });
-    
+
     // 5. Apply all changes
     console.log('5. Applying all changes...');
     await this.applyAllChanges();
-    
+
     const success = dmzFixed && systemFixed && rulesCreated && (!!nfsRules?.tcp || !!nfsRules?.udp);
-    
+
     console.log('\n========================================');
     console.log(success ? '✅ DMZ routing fix completed!' : '⚠️  Some fixes failed');
     console.log('========================================');
-    
+
     if (success) {
       console.log('\nTest connectivity from DMZ (10.0.6.2):');
       console.log('  ping 10.0.0.14          # Test basic connectivity');
       console.log('  showmount -e 10.0.0.14  # Test NFS access');
       console.log('  mount -t nfs 10.0.0.14:/mnt/tank/kubernetes /mnt/test');
     }
-    
+
     return success;
   }
 }

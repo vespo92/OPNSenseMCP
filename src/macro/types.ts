@@ -81,9 +81,9 @@ export interface ToolDefinition {
 
 export interface MacroAnalysis {
   patterns: {
-    creates?: string[];  // Resource types created
-    reads?: string[];    // Resource types read
-    updates?: string[];  // Resource types updated
+    creates?: string[]; // Resource types created
+    reads?: string[]; // Resource types read
+    updates?: string[]; // Resource types updated
     deletes?: string[]; // Resource types deleted
   };
   dependencies: string[]; // Other macros or tools this depends on
@@ -99,7 +99,7 @@ export interface RecorderState {
   startTime?: number;
 }
 
-export type RecorderEvent = 
+export type RecorderEvent =
   | { type: 'START_RECORDING'; name: string; description: string }
   | { type: 'STOP_RECORDING' }
   | { type: 'API_CALL'; call: APICall }
@@ -115,24 +115,24 @@ export interface IMacroRecorder {
   pauseRecording(): void;
   resumeRecording(): void;
   clearRecording(): void;
-  
+
   // Recording state
   isRecording(): boolean;
   getCurrentRecording(): MacroRecording | null;
-  
+
   // API call recording
   recordAPICall(call: Omit<APICall, 'id' | 'timestamp'>): void;
-  
+
   // Macro management
   saveMacro(recording: MacroRecording): Promise<void>;
   loadMacro(id: string): Promise<MacroRecording | null>;
   listMacros(): Promise<MacroRecording[]>;
   deleteMacro(id: string): Promise<void>;
-  
+
   // Analysis and generation
   analyzeMacro(recording: MacroRecording): MacroAnalysis;
   generateTool(recording: MacroRecording): ToolDefinition;
-  
+
   // Playback
   playMacro(id: string, options?: MacroPlaybackOptions): Promise<any[]>;
 }
@@ -142,9 +142,5 @@ export interface IMacroStorage {
   load(id: string): Promise<MacroRecording | null>;
   list(): Promise<MacroRecording[]>;
   delete(id: string): Promise<void>;
-  search(query: {
-    name?: string;
-    tags?: string[];
-    category?: string;
-  }): Promise<MacroRecording[]>;
+  search(query: { name?: string; tags?: string[]; category?: string }): Promise<MacroRecording[]>;
 }

@@ -2,7 +2,7 @@
 // Provides CLI command execution capabilities for advanced configuration
 // that is not available through the standard API
 
-import { OPNSenseAPIClient, OPNSenseAPIError } from '../../api/client.js';
+import type { OPNSenseAPIClient } from '../../api/client.js';
 import { logger } from '../../utils/logger.js';
 
 export interface CLIExecuteResult {
@@ -30,7 +30,7 @@ export interface InterfaceBlockingConfig {
 export class CLIExecutorResource {
   private client: OPNSenseAPIClient;
   private debugMode: boolean = process.env.MCP_DEBUG === 'true' || process.env.DEBUG_CLI === 'true';
-  
+
   // Whitelist of safe commands for security
   private readonly SAFE_COMMANDS = [
     'configctl',
@@ -46,7 +46,7 @@ export class CLIExecutorResource {
     'cat /conf/config.xml',
     'grep',
     'sed',
-    'awk'
+    'awk',
   ];
 
   constructor(client: OPNSenseAPIClient) {
@@ -60,7 +60,7 @@ export class CLIExecutorResource {
   async execute(command: CLICommand): Promise<CLIExecuteResult> {
     const timestamp = new Date().toISOString();
     const fullCommand = this.buildCommand(command);
-    
+
     if (this.debugMode) {
       logger.info(`[CLI] Executing: ${fullCommand}`);
     }
@@ -71,7 +71,7 @@ export class CLIExecutorResource {
         success: false,
         error: 'Command not in whitelist',
         executed: fullCommand,
-        timestamp
+        timestamp,
       };
     }
 
@@ -80,7 +80,7 @@ export class CLIExecutorResource {
       '/diagnostics/command/execute',
       '/diagnostics/shell/exec',
       '/core/system/exec',
-      '/system/console/exec'
+      '/system/console/exec',
     ];
 
     for (const endpoint of endpoints) {
@@ -92,7 +92,7 @@ export class CLIExecutorResource {
             output: response.output || response.result || response.data,
             exitCode: response.exitCode || 0,
             executed: fullCommand,
-            timestamp
+            timestamp,
           };
         }
       } catch (error) {
@@ -110,22 +110,29 @@ export class CLIExecutorResource {
   /**
    * Try to execute command via API endpoint
    */
-  private async tryExecuteViaAPI(endpoint: string, command: string, timeout?: number): Promise<any> {
+  private async tryExecuteViaAPI(
+    endpoint: string,
+    command: string,
+    timeout?: number
+  ): Promise<any> {
     try {
       const payload = {
         command,
-        timeout: timeout || 30000
+        timeout: timeout || 30000,
       };
-      
+
       const response = await this.client.post(endpoint, payload);
-      
+
       // Check if response indicates success
-      if (response && (response.status === 'ok' || response.result === 'success' || response.output)) {
+      if (
+        response &&
+        (response.status === 'ok' || response.result === 'success' || response.output)
+      ) {
         return response;
       }
-      
+
       return null;
-    } catch (error) {
+    } catch (_error) {
       // API endpoint doesn't exist or failed
       return null;
     }
@@ -138,7 +145,7 @@ export class CLIExecutorResource {
     try {
       // Try to use configctl system command execution
       const response = await this.client.post('/firewall/filter/reconfigure', {
-        command: command
+        command: command,
       });
 
       if (response && response.status === 'ok') {
@@ -146,7 +153,7 @@ export class CLIExecutorResource {
           success: true,
           output: 'Command executed via configctl',
           executed: command,
-          timestamp
+          timestamp,
         };
       }
 
@@ -154,14 +161,14 @@ export class CLIExecutorResource {
         success: false,
         error: 'No CLI execution endpoint available',
         executed: command,
-        timestamp
+        timestamp,
       };
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
         executed: command,
-        timestamp
+        timestamp,
       };
     }
   }
@@ -172,10 +179,10 @@ export class CLIExecutorResource {
   private buildCommand(command: CLICommand): string {
     let cmd = command.command;
     if (command.args && command.args.length > 0) {
-      cmd += ' ' + command.args.join(' ');
+      cmd += ` ${command.args.join(' ')}`;
     }
     if (command.sudo) {
-      cmd = 'sudo ' + cmd;
+      cmd = `sudo ${cmd}`;
     }
     return cmd;
   }
@@ -185,7 +192,7 @@ export class CLIExecutorResource {
    */
   private isCommandSafe(command: string): boolean {
     // Check against whitelist
-    return this.SAFE_COMMANDS.some(safe => command.startsWith(safe));
+    return this.SAFE_COMMANDS.some((safe) => command.startsWith(safe));
   }
 
   // ===== HIGH-LEVEL CLI OPERATIONS =====
@@ -195,25 +202,25 @@ export class CLIExecutorResource {
    */
   async disableInterfaceBlocking(interfaceName: string): Promise<CLIExecuteResult> {
     logger.info(`[CLI] Disabling blocking on interface ${interfaceName}`);
-    
+
     // Method 1: Try configctl
     const commands = [
       {
         command: 'configctl',
-        args: ['interface', 'set', 'blockpriv', interfaceName, '0']
+        args: ['interface', 'set', 'blockpriv', interfaceName, '0'],
       },
       {
         command: 'configctl',
-        args: ['interface', 'set', 'blockbogons', interfaceName, '0']
+        args: ['interface', 'set', 'blockbogons', interfaceName, '0'],
       },
       {
         command: 'configctl',
-        args: ['interface', 'reconfigure', interfaceName]
-      }
+        args: ['interface', 'reconfigure', interfaceName],
+      },
     ];
 
     let allSuccess = true;
-    let outputs: string[] = [];
+    const outputs: string[] = [];
 
     for (const cmd of commands) {
       const result = await this.execute(cmd);
@@ -236,7 +243,7 @@ export class CLIExecutorResource {
       success: allSuccess,
       output: outputs.join('\n'),
       executed: 'disable_interface_blocking',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -248,27 +255,37 @@ export class CLIExecutorResource {
       // Backup config first
       {
         command: 'cp',
-        args: ['/conf/config.xml', '/conf/config.xml.bak']
+        args: ['/conf/config.xml', '/conf/config.xml.bak'],
       },
       // Remove blockpriv for the interface
       {
         command: 'sed',
-        args: ['-i', '', `'/<${interfaceName}>.*<\\/${interfaceName}>/,/<\\/${interfaceName}>/ s/<blockpriv>1<\\/blockpriv>/<blockpriv>0<\\/blockpriv>/g'`, '/conf/config.xml']
+        args: [
+          '-i',
+          '',
+          `'/<${interfaceName}>.*<\\/${interfaceName}>/,/<\\/${interfaceName}>/ s/<blockpriv>1<\\/blockpriv>/<blockpriv>0<\\/blockpriv>/g'`,
+          '/conf/config.xml',
+        ],
       },
       // Remove blockbogons for the interface
       {
         command: 'sed',
-        args: ['-i', '', `'/<${interfaceName}>.*<\\/${interfaceName}>/,/<\\/${interfaceName}>/ s/<blockbogons>1<\\/blockbogons>/<blockbogons>0<\\/blockbogons>/g'`, '/conf/config.xml']
+        args: [
+          '-i',
+          '',
+          `'/<${interfaceName}>.*<\\/${interfaceName}>/,/<\\/${interfaceName}>/ s/<blockbogons>1<\\/blockbogons>/<blockbogons>0<\\/blockbogons>/g'`,
+          '/conf/config.xml',
+        ],
       },
       // Reload configuration
       {
         command: 'configctl',
-        args: ['firmware', 'reload']
-      }
+        args: ['firmware', 'reload'],
+      },
     ];
 
     let allSuccess = true;
-    let outputs: string[] = [];
+    const outputs: string[] = [];
 
     for (const cmd of commands) {
       const result = await this.execute(cmd);
@@ -284,7 +301,7 @@ export class CLIExecutorResource {
       success: allSuccess,
       output: outputs.join('\n'),
       executed: 'modify_config_xml',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -293,11 +310,11 @@ export class CLIExecutorResource {
    */
   async reloadFirewall(): Promise<CLIExecuteResult> {
     logger.info('[CLI] Reloading firewall rules');
-    
+
     const commands = [
       { command: 'configctl', args: ['filter', 'reload'] },
       { command: 'pfctl', args: ['-f', '/tmp/rules.debug'] },
-      { command: 'configctl', args: ['filter', 'sync'] }
+      { command: 'configctl', args: ['filter', 'sync'] },
     ];
 
     for (const cmd of commands) {
@@ -311,7 +328,7 @@ export class CLIExecutorResource {
       success: false,
       error: 'Failed to reload firewall',
       executed: 'reload_firewall',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -320,10 +337,10 @@ export class CLIExecutorResource {
    */
   async getRoutingTable(): Promise<CLIExecuteResult> {
     logger.info('[CLI] Getting routing table');
-    
+
     const result = await this.execute({
       command: 'netstat',
-      args: ['-rn']
+      args: ['-rn'],
     });
 
     if (result.success && result.output) {
@@ -331,7 +348,7 @@ export class CLIExecutorResource {
       const routes = this.parseRoutingTable(result.output);
       return {
         ...result,
-        output: JSON.stringify(routes, null, 2)
+        output: JSON.stringify(routes, null, 2),
       };
     }
 
@@ -351,7 +368,7 @@ export class CLIExecutorResource {
         headerFound = true;
         continue;
       }
-      
+
       if (headerFound && line.trim()) {
         const parts = line.trim().split(/\s+/);
         if (parts.length >= 4) {
@@ -359,7 +376,7 @@ export class CLIExecutorResource {
             destination: parts[0],
             gateway: parts[1],
             flags: parts[2],
-            interface: parts[3]
+            interface: parts[3],
           });
         }
       }
@@ -373,26 +390,26 @@ export class CLIExecutorResource {
    */
   async fixDMZRoutingCLI(): Promise<CLIExecuteResult> {
     logger.info('[CLI] Fixing DMZ routing via CLI');
-    
+
     const commands = [
       // Disable blocking on DMZ interface (opt8)
       { command: 'configctl', args: ['interface', 'set', 'blockpriv', 'opt8', '0'] },
       { command: 'configctl', args: ['interface', 'set', 'blockbogons', 'opt8', '0'] },
-      
+
       // Reconfigure interface
       { command: 'configctl', args: ['interface', 'reconfigure', 'opt8'] },
-      
+
       // Add static route if needed
       { command: 'route', args: ['add', '-net', '10.0.0.0/24', '10.0.6.1'] },
-      
+
       // Reload firewall
       { command: 'configctl', args: ['filter', 'reload'] },
-      
+
       // Sync filter
-      { command: 'configctl', args: ['filter', 'sync'] }
+      { command: 'configctl', args: ['filter', 'sync'] },
     ];
 
-    let outputs: string[] = [];
+    const outputs: string[] = [];
     let allSuccess = true;
 
     for (const cmd of commands) {
@@ -409,7 +426,7 @@ export class CLIExecutorResource {
       success: allSuccess,
       output: outputs.join('\n'),
       executed: 'fix_dmz_routing',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -418,17 +435,17 @@ export class CLIExecutorResource {
    */
   async checkNFSConnectivity(truenasIP: string = '10.0.0.14'): Promise<CLIExecuteResult> {
     logger.info(`[CLI] Checking NFS connectivity to ${truenasIP}`);
-    
+
     const result = await this.execute({
       command: 'showmount',
-      args: ['-e', truenasIP]
+      args: ['-e', truenasIP],
     });
 
     if (result.success && result.output) {
       const exports = this.parseNFSExports(result.output);
       return {
         ...result,
-        output: JSON.stringify(exports, null, 2)
+        output: JSON.stringify(exports, null, 2),
       };
     }
 
@@ -441,14 +458,14 @@ export class CLIExecutorResource {
   private parseNFSExports(output: string): any[] {
     const lines = output.split('\n');
     const exports = [];
-    
+
     for (const line of lines) {
       if (line.includes('/')) {
         const parts = line.trim().split(/\s+/);
         if (parts.length >= 2) {
           exports.push({
             path: parts[0],
-            allowed: parts.slice(1).join(' ')
+            allowed: parts.slice(1).join(' '),
           });
         }
       }
@@ -462,10 +479,10 @@ export class CLIExecutorResource {
    */
   async getInterfaceConfigCLI(interfaceName: string): Promise<CLIExecuteResult> {
     logger.info(`[CLI] Getting config for interface ${interfaceName}`);
-    
+
     const result = await this.execute({
       command: 'grep',
-      args: [`-A20`, `"<${interfaceName}>"`, '/conf/config.xml']
+      args: [`-A20`, `"<${interfaceName}>"`, '/conf/config.xml'],
     });
 
     if (result.success && result.output) {
@@ -473,7 +490,7 @@ export class CLIExecutorResource {
       const config = this.parseInterfaceConfig(result.output, interfaceName);
       return {
         ...result,
-        output: JSON.stringify(config, null, 2)
+        output: JSON.stringify(config, null, 2),
       };
     }
 
@@ -488,7 +505,7 @@ export class CLIExecutorResource {
       interface: interfaceName,
       blockpriv: false,
       blockbogons: false,
-      enable: true
+      enable: true,
     };
 
     // Extract blockpriv setting
@@ -529,15 +546,15 @@ export class CLIExecutorResource {
    */
   async applyAllChanges(): Promise<CLIExecuteResult> {
     logger.info('[CLI] Applying all configuration changes');
-    
+
     const commands = [
       { command: 'configctl', args: ['filter', 'reload'] },
       { command: 'configctl', args: ['interface', 'reload'] },
       { command: 'configctl', args: ['service', 'reload', 'all'] },
-      { command: 'configctl', args: ['firmware', 'sync'] }
+      { command: 'configctl', args: ['firmware', 'sync'] },
     ];
 
-    let outputs: string[] = [];
+    const outputs: string[] = [];
     let allSuccess = true;
 
     for (const cmd of commands) {
@@ -553,7 +570,7 @@ export class CLIExecutorResource {
       success: allSuccess,
       output: outputs.join('\n'),
       executed: 'apply_all_changes',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -562,31 +579,31 @@ export class CLIExecutorResource {
    */
   async runComprehensiveDMZFix(): Promise<CLIExecuteResult> {
     logger.info('[CLI] Running comprehensive DMZ fix');
-    
+
     const steps = [
       // Step 1: Disable blocking on DMZ interface
       () => this.disableInterfaceBlocking('opt8'),
-      
+
       // Step 2: Reload firewall
       () => this.reloadFirewall(),
-      
+
       // Step 3: Check routing table
       () => this.getRoutingTable(),
-      
+
       // Step 4: Test NFS connectivity
       () => this.checkNFSConnectivity('10.0.0.14'),
-      
+
       // Step 5: Apply all changes
-      () => this.applyAllChanges()
+      () => this.applyAllChanges(),
     ];
 
-    let outputs: string[] = [];
+    const outputs: string[] = [];
     let allSuccess = true;
 
     for (let i = 0; i < steps.length; i++) {
       logger.info(`[CLI] Step ${i + 1} of ${steps.length}`);
       const result = await steps[i]();
-      
+
       if (result.success) {
         outputs.push(`✅ Step ${i + 1}: Success`);
         if (result.output) {
@@ -602,7 +619,7 @@ export class CLIExecutorResource {
       success: allSuccess,
       output: outputs.join('\n\n'),
       executed: 'comprehensive_dmz_fix',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 }

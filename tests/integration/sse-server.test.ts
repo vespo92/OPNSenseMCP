@@ -2,7 +2,7 @@
  * Integration Tests for SSE Server
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EventBus } from '../../src/core/event-bus/bus.js';
 import { PluginRegistry } from '../../src/core/plugin-system/registry.js';
 import { SSEServer } from '../../src/core/sse/server.js';

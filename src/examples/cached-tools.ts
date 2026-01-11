@@ -1,7 +1,8 @@
 // Example: Using Enhanced Cache Manager in MCP Tools
-import { OPNSenseAPIClient } from '../api/client.js';
-import { EnhancedCacheManager } from '../cache/enhanced-manager.js';
+
 import { z } from 'zod';
+import type { OPNSenseAPIClient } from '../api/client.js';
+import { EnhancedCacheManager } from '../cache/enhanced-manager.js';
 
 // Example schemas for type safety
 const FirewallRuleSchema = z.object({
@@ -50,35 +51,32 @@ export class CachedOPNSenseTools {
       performance: {
         maxConcurrency: 10,
         batchSize: 100,
-      }
+      },
     });
   }
 
   /**
    * Get firewall rules with intelligent caching
    */
-  async getFirewallRules(options?: {
-    forceFetch?: boolean;
-    includeDisabled?: boolean;
-  }) {
+  async getFirewallRules(options?: { forceFetch?: boolean; includeDisabled?: boolean }) {
     const cacheKey = `cache:firewall:rules:${options?.includeDisabled ? 'all' : 'enabled'}`;
-    
+
     const result = await this.cache.get(
       cacheKey,
       async () => {
         const response = await this.client.searchFirewallRules();
         const rules = Object.values(response.rows || {});
-        
+
         // Filter and validate
         const validRules = rules
           .filter((rule: any) => options?.includeDisabled || rule.enabled === '1')
-          .map(rule => FirewallRuleSchema.parse(rule));
-        
+          .map((rule) => FirewallRuleSchema.parse(rule));
+
         return validRules;
       },
       {
         ttl: 300, // 5 minutes for firewall rules
-        pattern: 'cache:firewall:rules:*'
+        pattern: 'cache:firewall:rules:*',
       }
     );
 
@@ -94,7 +92,7 @@ export class CachedOPNSenseTools {
       async () => {
         const response = await this.client.searchVlans();
         const vlans = Object.values(response.rows || {});
-        return vlans.map(vlan => VlanSchema.parse(vlan));
+        return vlans.map((vlan) => VlanSchema.parse(vlan));
       },
       {
         ttl: 600, // 10 minutes for VLANs (less frequently changed)
@@ -111,11 +109,11 @@ export class CachedOPNSenseTools {
     try {
       // Create the rule
       const result = await this.client.addFirewallRule(rule);
-      
+
       // Invalidate related caches
       await this.cache.invalidate('cache:firewall:*', {
         cascade: true,
-        reason: 'firewall_rule_created'
+        reason: 'firewall_rule_created',
       });
 
       return result;
@@ -133,27 +131,27 @@ export class CachedOPNSenseTools {
       {
         key: 'cache:firewall:rules:enabled',
         fetcher: () => this.getEnabledFirewallRules(),
-        ttl: 300
+        ttl: 300,
       },
       {
         key: 'cache:network:vlans',
         fetcher: () => this.client.searchVlans(),
-        ttl: 600
+        ttl: 600,
       },
       {
         key: 'cache:network:interfaces',
         fetcher: () => this.client.get('/interfaces/overview/export'),
-        ttl: 1800
+        ttl: 1800,
       },
       {
         key: 'cache:system:info',
         fetcher: () => this.client.get('/core/system/status'),
-        ttl: 60
-      }
+        ttl: 60,
+      },
     ];
 
     const results = await this.cache.getBatch(requests);
-    
+
     return {
       firewallRules: results.get('cache:firewall:rules:enabled'),
       vlans: results.get('cache:network:vlans'),
@@ -174,7 +172,7 @@ export class CachedOPNSenseTools {
    */
   async warmCache() {
     console.log('🔥 Pre-warming cache...');
-    
+
     // Pre-fetch critical data in parallel
     await Promise.all([
       this.getFirewallRules(),
@@ -189,8 +187,7 @@ export class CachedOPNSenseTools {
   // Private helper methods
   private async getEnabledFirewallRules() {
     const response = await this.client.searchFirewallRules();
-    return Object.values(response.rows || {})
-      .filter((rule: any) => rule.enabled === '1');
+    return Object.values(response.rows || {}).filter((rule: any) => rule.enabled === '1');
   }
 
   private async getInterfaces() {
@@ -220,11 +217,12 @@ export function createCachedFirewallTools(client: OPNSenseAPIClient) {
           rules: result.data,
           metadata: result.metadata,
           cached: result.metadata.source === 'cache',
-          cacheAge: result.metadata.source === 'cache' 
-            ? Date.now() - result.metadata.timestamp.getTime() 
-            : 0
+          cacheAge:
+            result.metadata.source === 'cache'
+              ? Date.now() - result.metadata.timestamp.getTime()
+              : 0,
         };
-      }
+      },
     },
 
     // Get dashboard data with batch caching
@@ -238,10 +236,10 @@ export function createCachedFirewallTools(client: OPNSenseAPIClient) {
           summary: {
             totalRules: data.firewallRules?.data.length || 0,
             totalVlans: data.vlans?.data.rows ? Object.keys(data.vlans.data.rows).length : 0,
-            cacheHits: Object.values(data).filter(d => d?.metadata.source === 'cache').length,
-          }
+            cacheHits: Object.values(data).filter((d) => d?.metadata.source === 'cache').length,
+          },
         };
-      }
+      },
     },
 
     // Get cache performance metrics
@@ -250,7 +248,7 @@ export function createCachedFirewallTools(client: OPNSenseAPIClient) {
       parameters: z.object({}),
       execute: async () => {
         return tools.getCacheStats();
-      }
+      },
     },
 
     // Warm cache
@@ -260,8 +258,8 @@ export function createCachedFirewallTools(client: OPNSenseAPIClient) {
       execute: async () => {
         await tools.warmCache();
         return { success: true, message: 'Cache warmed successfully' };
-      }
-    }
+      },
+    },
   };
 }
 

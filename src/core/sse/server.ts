@@ -4,14 +4,14 @@
  * Provides HTTP endpoints for SSE event streaming and MCP communication
  */
 
-import express, { type Request, type Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import cors from 'cors';
-import { randomUUID } from 'crypto';
-import type { EventBus } from '../event-bus/bus.js';
+import express, { type Request, type Response } from 'express';
 import type { Logger } from '../../utils/logger.js';
+import type { EventBus } from '../event-bus/bus.js';
 import type { PluginRegistry } from '../plugin-system/registry.js';
-import { EventStreamManager } from './event-stream.js';
 import { EventSeverity, EventType } from '../types/events.js';
+import { EventStreamManager } from './event-stream.js';
 
 /**
  * SSE server configuration
@@ -69,7 +69,7 @@ export class SSEServer {
     this.app.use(express.json());
 
     // Request logging
-    this.app.use((req, res, next) => {
+    this.app.use((req, _res, next) => {
       this.logger.debug(`${req.method} ${req.path}`);
       next();
     });
@@ -109,7 +109,7 @@ export class SSEServer {
   /**
    * Handle health check
    */
-  private handleHealth(req: Request, res: Response): void {
+  private handleHealth(_req: Request, res: Response): void {
     res.json({
       status: 'healthy',
       timestamp: new Date(),
@@ -150,7 +150,7 @@ export class SSEServer {
   /**
    * Handle metrics stream
    */
-  private handleMetricsStream(req: Request, res: Response): void {
+  private handleMetricsStream(_req: Request, res: Response): void {
     const clientId = randomUUID();
 
     const filter = {
@@ -165,7 +165,7 @@ export class SSEServer {
   /**
    * Handle log stream
    */
-  private handleLogStream(req: Request, res: Response): void {
+  private handleLogStream(_req: Request, res: Response): void {
     const clientId = randomUUID();
 
     // Stream all events as logs
@@ -181,15 +181,11 @@ export class SSEServer {
     const filter: any = {};
 
     if (req.query.types) {
-      filter.types = Array.isArray(req.query.types)
-        ? req.query.types
-        : [req.query.types];
+      filter.types = Array.isArray(req.query.types) ? req.query.types : [req.query.types];
     }
 
     if (req.query.plugins) {
-      filter.pluginIds = Array.isArray(req.query.plugins)
-        ? req.query.plugins
-        : [req.query.plugins];
+      filter.pluginIds = Array.isArray(req.query.plugins) ? req.query.plugins : [req.query.plugins];
     }
 
     if (req.query.severity) {
@@ -204,8 +200,8 @@ export class SSEServer {
   /**
    * Handle list plugins
    */
-  private handleListPlugins(req: Request, res: Response): void {
-    const plugins = this.registry.getAllEntries().map(entry => ({
+  private handleListPlugins(_req: Request, res: Response): void {
+    const plugins = this.registry.getAllEntries().map((entry) => ({
       id: entry.plugin.metadata.id,
       name: entry.plugin.metadata.name,
       version: entry.plugin.metadata.version,
@@ -238,11 +234,11 @@ export class SSEServer {
       loadedAt: entry.loadedAt,
       health: entry.health,
       config: entry.config,
-      tools: entry.plugin.getTools().map(t => ({
+      tools: entry.plugin.getTools().map((t) => ({
         name: t.name,
         description: t.description,
       })),
-      resources: entry.plugin.getResources().map(r => ({
+      resources: entry.plugin.getResources().map((r) => ({
         uri: r.uri,
         name: r.name,
         description: r.description,
@@ -279,7 +275,7 @@ export class SSEServer {
    * Handle event history
    */
   private handleEventHistory(req: Request, res: Response): void {
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
     const filter = this.parseEventFilter(req);
 
     const events = this.eventBus.getHistory(filter, limit);
@@ -290,7 +286,7 @@ export class SSEServer {
   /**
    * Handle event stats
    */
-  private handleEventStats(req: Request, res: Response): void {
+  private handleEventStats(_req: Request, res: Response): void {
     const stats = this.eventBus.getStats();
     res.json(stats);
   }
@@ -298,15 +294,15 @@ export class SSEServer {
   /**
    * Handle system status
    */
-  private async handleSystemStatus(req: Request, res: Response): Promise<void> {
+  private async handleSystemStatus(_req: Request, res: Response): Promise<void> {
     const pluginHealth = await this.registry.healthCheckAll();
 
     const status = {
-      healthy: Array.from(pluginHealth.values()).every(h => h.healthy),
+      healthy: Array.from(pluginHealth.values()).every((h) => h.healthy),
       plugins: {
         total: this.registry.getPluginIds().length,
-        healthy: Array.from(pluginHealth.values()).filter(h => h.healthy).length,
-        unhealthy: Array.from(pluginHealth.values()).filter(h => !h.healthy).length,
+        healthy: Array.from(pluginHealth.values()).filter((h) => h.healthy).length,
+        unhealthy: Array.from(pluginHealth.values()).filter((h) => !h.healthy).length,
       },
       events: this.eventBus.getStats(),
       sse: this.streamManager.getStats(),
@@ -320,7 +316,7 @@ export class SSEServer {
   /**
    * Handle system stats
    */
-  private handleSystemStats(req: Request, res: Response): void {
+  private handleSystemStats(_req: Request, res: Response): void {
     const stats = {
       plugins: this.registry.getStats(),
       events: this.eventBus.getStats(),
@@ -335,7 +331,7 @@ export class SSEServer {
   /**
    * Handle list SSE clients
    */
-  private handleListClients(req: Request, res: Response): void {
+  private handleListClients(_req: Request, res: Response): void {
     const clients = this.streamManager.getClients();
     res.json({ clients, count: clients.length });
   }
@@ -343,7 +339,7 @@ export class SSEServer {
   /**
    * Handle SSE stats
    */
-  private handleSSEStats(req: Request, res: Response): void {
+  private handleSSEStats(_req: Request, res: Response): void {
     const stats = this.streamManager.getStats();
     res.json(stats);
   }

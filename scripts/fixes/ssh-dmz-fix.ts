@@ -1,13 +1,13 @@
 #!/usr/bin/env tsx
-import { SSHExecutor } from '../../src/resources/ssh/executor.js';
 import * as dotenv from 'dotenv';
+import { SSHExecutor } from '../../src/resources/ssh/executor.js';
 
 dotenv.config();
 
 async function fixDMZNow() {
   console.log('🚀 SSH-Based DMZ Routing Fix');
   console.log('=============================\n');
-  
+
   // Check for SSH credentials
   if (!process.env.OPNSENSE_SSH_HOST || !process.env.OPNSENSE_SSH_USERNAME) {
     console.log('❌ SSH credentials not configured!');
@@ -22,11 +22,11 @@ async function fixDMZNow() {
 
   const ssh = new SSHExecutor({
     host: process.env.OPNSENSE_SSH_HOST,
-    port: parseInt(process.env.OPNSENSE_SSH_PORT || '22'),
+    port: parseInt(process.env.OPNSENSE_SSH_PORT || '22', 10),
     username: process.env.OPNSENSE_SSH_USERNAME,
     password: process.env.OPNSENSE_SSH_PASSWORD,
     privateKeyPath: process.env.OPNSENSE_SSH_KEY_PATH,
-    passphrase: process.env.OPNSENSE_SSH_PASSPHRASE
+    passphrase: process.env.OPNSENSE_SSH_PASSPHRASE,
   });
 
   try {
@@ -42,14 +42,14 @@ async function fixDMZNow() {
     console.log('  4. Apply all changes\n');
 
     const result = await ssh.quickDMZFix();
-    
+
     if (result.success) {
       console.log('\n✅ DMZ Fix Applied Successfully!');
       console.log('\nActions completed:');
-      result.actions.forEach(action => {
+      result.actions.forEach((action) => {
         console.log(`  ✓ ${action}`);
       });
-      
+
       console.log('\n🧪 Test from DMZ node (10.0.6.2):');
       console.log('  ping 10.0.0.14         # Should work now!');
       console.log('  nc -zv 10.0.0.14 2049  # Test NFS port');
@@ -57,17 +57,16 @@ async function fixDMZNow() {
     } else {
       console.log('\n⚠️  Some issues occurred:');
       if (result.errors && result.errors.length > 0) {
-        result.errors.forEach(error => {
+        result.errors.forEach((error) => {
           console.log(`  ❌ ${error}`);
         });
       }
     }
 
     await ssh.disconnect();
-    
   } catch (error: any) {
     console.error('\n❌ Error:', error.message);
-    
+
     if (error.message.includes('ENOTFOUND')) {
       console.log('\n📝 Check your SSH settings in .env:');
       console.log(`  OPNSENSE_SSH_HOST=${process.env.OPNSENSE_SSH_HOST}`);

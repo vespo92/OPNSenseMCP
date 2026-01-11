@@ -1,6 +1,6 @@
 // System Settings Resource Implementation
 // Manages OPNsense system-level settings including inter-VLAN routing
-import { OPNSenseAPIClient } from '../../api/client.js';
+import type { OPNSenseAPIClient } from '../../api/client.js';
 
 export interface SystemSettings {
   firewall?: FirewallSettings;
@@ -29,9 +29,9 @@ export interface FirewallSettings {
   aliasesresolveinterval?: string;
   checkaliasesurlcert?: string;
   // Inter-VLAN routing specific settings
-  blockprivatenetworks?: string;  // '0' to allow inter-VLAN routing
-  blockbogons?: string;           // '0' to allow routing
-  allowinterlantraffic?: string;  // '1' to enable inter-VLAN routing
+  blockprivatenetworks?: string; // '0' to allow inter-VLAN routing
+  blockbogons?: string; // '0' to allow routing
+  allowinterlantraffic?: string; // '1' to enable inter-VLAN routing
 }
 
 export interface RoutingSettings {
@@ -54,7 +54,8 @@ export interface GeneralSettings {
 
 export class SystemSettingsResource {
   private client: OPNSenseAPIClient;
-  private debugMode: boolean = process.env.MCP_DEBUG === 'true' || process.env.DEBUG_SYSTEM === 'true';
+  private debugMode: boolean =
+    process.env.MCP_DEBUG === 'true' || process.env.DEBUG_SYSTEM === 'true';
 
   constructor(client: OPNSenseAPIClient) {
     this.client = client;
@@ -73,18 +74,18 @@ export class SystemSettingsResource {
       const endpoints = [
         '/firewall/settings/get',
         '/firewall/settings/advanced',
-        '/system/settings/get'
+        '/system/settings/get',
       ];
 
       for (const endpoint of endpoints) {
         try {
           const response = await this.client.get(endpoint);
-          
+
           if (this.debugMode) {
             console.log(`[SystemSettings] ${endpoint} response:`, {
               hasSettings: !!response?.settings,
               hasFirewall: !!response?.firewall,
-              keys: Object.keys(response || {})
+              keys: Object.keys(response || {}),
             });
           }
 
@@ -119,14 +120,14 @@ export class SystemSettingsResource {
       const endpoints = [
         { path: '/firewall/settings/set', wrapper: 'settings' },
         { path: '/firewall/settings/advanced/set', wrapper: 'advanced' },
-        { path: '/system/settings/set', wrapper: 'firewall' }
+        { path: '/system/settings/set', wrapper: 'firewall' },
       ];
 
       for (const endpoint of endpoints) {
         try {
           const payload = endpoint.wrapper ? { [endpoint.wrapper]: settings } : settings;
           const response = await this.client.post(endpoint.path, payload);
-          
+
           if (this.debugMode) {
             console.log(`[SystemSettings] ${endpoint.path} response:`, response);
           }
@@ -159,22 +160,22 @@ export class SystemSettingsResource {
     try {
       // Get current settings
       const currentSettings = await this.getFirewallSettings();
-      
+
       if (this.debugMode) {
         console.log('[SystemSettings] Current settings:', currentSettings);
       }
 
       // Update settings to enable inter-VLAN routing
       const updatedSettings: Partial<FirewallSettings> = {
-        blockprivatenetworks: '0',    // Don't block private networks
-        blockbogons: '0',              // Don't block bogons (for internal routing)
-        allowinterlantraffic: '1',     // Allow inter-LAN traffic
-        bypassstaticroutes: '1',       // Bypass firewall for static routes
-        disablereplyto: '1'            // Disable reply-to for proper routing
+        blockprivatenetworks: '0', // Don't block private networks
+        blockbogons: '0', // Don't block bogons (for internal routing)
+        allowinterlantraffic: '1', // Allow inter-LAN traffic
+        bypassstaticroutes: '1', // Bypass firewall for static routes
+        disablereplyto: '1', // Disable reply-to for proper routing
       };
 
       const success = await this.updateFirewallSettings(updatedSettings);
-      
+
       if (success) {
         console.log('[SystemSettings] Inter-VLAN routing enabled successfully');
       } else {
@@ -215,7 +216,7 @@ export class SystemSettingsResource {
 
     try {
       const response = await this.client.post('/routing/settings/set', { settings });
-      
+
       if (response?.result === 'saved' || response?.status === 'ok') {
         await this.applySettings();
         return true;
@@ -234,13 +235,13 @@ export class SystemSettingsResource {
     const [firewall, routing, general] = await Promise.all([
       this.getFirewallSettings(),
       this.getRoutingSettings(),
-      this.getGeneralSettings()
+      this.getGeneralSettings(),
     ]);
 
     return {
       firewall: firewall || undefined,
       routing: routing || undefined,
-      general: general || undefined
+      general: general || undefined,
     };
   }
 
@@ -268,7 +269,7 @@ export class SystemSettingsResource {
     const applyEndpoints = [
       '/firewall/filter/reconfigure',
       '/routing/service/reconfigure',
-      '/system/settings/reconfigure'
+      '/system/settings/reconfigure',
     ];
 
     for (const endpoint of applyEndpoints) {
@@ -285,7 +286,7 @@ export class SystemSettingsResource {
     }
 
     // Add delay for changes to propagate
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
   /**
@@ -302,7 +303,7 @@ export class SystemSettingsResource {
       '/system/settings/advanced',
       '/routing/settings/get',
       '/routing/general/get',
-      '/interfaces/settings/get'
+      '/interfaces/settings/get',
     ];
 
     for (const endpoint of testEndpoints) {
@@ -313,17 +314,18 @@ export class SystemSettingsResource {
           keys: Object.keys(response || {}),
           hasSettings: !!response?.settings,
           hasFirewall: !!response?.firewall,
-          hasAdvanced: !!response?.advanced
+          hasAdvanced: !!response?.advanced,
         });
-        
+
         // Log specific settings if found
         if (response?.settings || response?.firewall || response?.advanced) {
           const settings = response.settings || response.firewall || response.advanced;
-          const relevantKeys = Object.keys(settings).filter(key => 
-            key.includes('block') || 
-            key.includes('route') || 
-            key.includes('vlan') ||
-            key.includes('inter')
+          const relevantKeys = Object.keys(settings).filter(
+            (key) =>
+              key.includes('block') ||
+              key.includes('route') ||
+              key.includes('vlan') ||
+              key.includes('inter')
           );
           if (relevantKeys.length > 0) {
             console.log('  Relevant settings found:', relevantKeys);

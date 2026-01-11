@@ -1,7 +1,7 @@
+import { format, formatDistanceToNow } from 'date-fns';
+import { AlertTriangle, Download, Filter, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useSSE } from '../hooks/useSSE';
-import { AlertTriangle, Filter, Download, Trash2 } from 'lucide-react';
-import { formatDistanceToNow, format } from 'date-fns';
 
 export default function Events() {
   const [filter, setFilter] = useState<{ severity?: string[] }>({});
@@ -10,7 +10,7 @@ export default function Events() {
 
   const toggleSeverity = (severity: string) => {
     const newSelected = selectedSeverity.includes(severity)
-      ? selectedSeverity.filter(s => s !== severity)
+      ? selectedSeverity.filter((s) => s !== severity)
       : [...selectedSeverity, severity];
 
     setSelectedSeverity(newSelected);
@@ -20,14 +20,16 @@ export default function Events() {
   const exportEvents = () => {
     const csv = [
       ['Timestamp', 'Type', 'Plugin', 'Severity', 'Source', 'Data'].join(','),
-      ...events.map(e => [
-        format(e.timestamp, 'yyyy-MM-dd HH:mm:ss'),
-        e.type,
-        e.pluginId,
-        e.severity,
-        e.source || '',
-        JSON.stringify(e.data),
-      ].join(',')),
+      ...events.map((e) =>
+        [
+          format(e.timestamp, 'yyyy-MM-dd HH:mm:ss'),
+          e.type,
+          e.pluginId,
+          e.severity,
+          e.source || '',
+          JSON.stringify(e.data),
+        ].join(',')
+      ),
     ].join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -48,9 +50,11 @@ export default function Events() {
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <div className={`flex items-center space-x-2 px-3 py-1 rounded-full ${
-            connected ? 'bg-green-100 dark:bg-green-900/20' : 'bg-red-100 dark:bg-red-900/20'
-          }`}>
+          <div
+            className={`flex items-center space-x-2 px-3 py-1 rounded-full ${
+              connected ? 'bg-green-100 dark:bg-green-900/20' : 'bg-red-100 dark:bg-red-900/20'
+            }`}
+          >
             <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
             <span className="text-sm font-medium">{connected ? 'Connected' : 'Disconnected'}</span>
           </div>
@@ -72,10 +76,7 @@ export default function Events() {
               <Download className="w-4 h-4" />
               <span>Export</span>
             </button>
-            <button
-              onClick={clearEvents}
-              className="btn btn-secondary flex items-center space-x-2"
-            >
+            <button onClick={clearEvents} className="btn btn-secondary flex items-center space-x-2">
               <Trash2 className="w-4 h-4" />
               <span>Clear</span>
             </button>
@@ -83,7 +84,7 @@ export default function Events() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {['debug', 'info', 'warning', 'error', 'critical'].map(severity => (
+          {['debug', 'info', 'warning', 'error', 'critical'].map((severity) => (
             <button
               key={severity}
               onClick={() => toggleSeverity(severity)}
@@ -118,15 +119,14 @@ export default function Events() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {event.type}
-                  </p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{event.type}</p>
                   <span className={`badge ${getSeverityBadge(event.severity)}`}>
                     {event.severity}
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                  {event.pluginId} • {event.source} • {formatDistanceToNow(event.timestamp, { addSuffix: true })}
+                  {event.pluginId} • {event.source} •{' '}
+                  {formatDistanceToNow(event.timestamp, { addSuffix: true })}
                 </p>
                 {Object.keys(event.data).length > 0 && (
                   <details className="text-xs">
