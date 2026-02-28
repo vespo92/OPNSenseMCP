@@ -1,5 +1,6 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { TransportType, TransportOptions } from "./types.js";
 import { SSETransportServer } from "./SSETransportServer.js";
@@ -17,6 +18,13 @@ export class TransportManager {
 
       case "sse":
         // For SSE, we return the server itself which will handle connections
+        // Also supports Streamable HTTP via /mcp endpoint for backward compatibility
+        this.sseServer = new SSETransportServer(options);
+        await this.sseServer.start();
+        return this.sseServer;
+
+      case "streamable-http":
+        // For Streamable HTTP, we reuse SSETransportServer which now supports both
         this.sseServer = new SSETransportServer(options);
         await this.sseServer.start();
         return this.sseServer;
@@ -32,7 +40,7 @@ export class TransportManager {
 
     if (transportIndex !== -1 && args[transportIndex + 1]) {
       const transport = args[transportIndex + 1] as TransportType;
-      if (transport === "stdio" || transport === "sse") {
+      if (transport === "stdio" || transport === "sse" || transport === "streamable-http") {
         return transport;
       }
     }
