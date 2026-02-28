@@ -1,5 +1,6 @@
 import { createServer, Server, IncomingMessage, ServerResponse } from "http";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { TransportOptions } from "./types.js";
 
@@ -14,6 +15,8 @@ export class SSETransportServer {
   private host: string;
   private corsOrigin: string;
   private connections: Map<string, SSEConnection> = new Map();
+  private streamableTransports: Map<string, StreamableHTTPServerTransport> =
+    new Map();
   private onConnectionCallback:
     | ((transport: Transport) => Promise<void>)
     | null = null;
@@ -29,8 +32,15 @@ export class SSETransportServer {
       this.server = createServer(async (req, res) => {
         // Set CORS headers
         res.setHeader("Access-Control-Allow-Origin", this.corsOrigin);
-        res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+        res.setHeader(
+          "Access-Control-Allow-Methods",
+          "GET, POST, DELETE, OPTIONS",
+        );
+        res.setHeader(
+          "Access-Control-Allow-Headers",
+          "Content-Type, mcp-session-id",
+        );
+        res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
 
         // Handle preflight
         if (req.method === "OPTIONS") {
@@ -41,11 +51,15 @@ export class SSETransportServer {
 
         const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
-        // Handle SSE connection establishment
-        if (req.method === "GET" && url.pathname === "/sse") {
+        // Handle Streamable HTTP endpoint (MCP 2025-03-26 spec)
+        if (url.pathname === "/mcp") {
+          await this.handleStreamableHTTP(req, res);
+        }
+        // Handle SSE connection establishment (legacy, still supported)
+        else if (req.method === "GET" && url.pathname === "/sse") {
           await this.handleSSEConnection(req, res);
         }
-        // Handle message posts
+        // Handle message posts (SSE transport)
         else if (req.method === "POST" && url.pathname === "/messages") {
           await this.handlePostMessage(req, res);
         }
@@ -55,9 +69,10 @@ export class SSETransportServer {
           res.end(
             JSON.stringify({
               status: "healthy",
-              transport: "sse",
+              transport: "sse+streamable-http",
               port: this.port,
-              connections: this.connections.size,
+              sseConnections: this.connections.size,
+              streamableSessions: this.streamableTransports.size,
             }),
           );
         } else {
@@ -69,7 +84,10 @@ export class SSETransportServer {
       this.server.on("error", reject);
       this.server.listen(this.port, this.host, () => {
         console.log(
-          `SSE MCP Server listening on http://${this.host}:${this.port}`,
+          `MCP Server listening on http://${this.host}:${this.port}`,
+        );
+        console.log(
+          `- Streamable HTTP endpoint: http://${this.host}:${this.port}/mcp`,
         );
         console.log(`- SSE endpoint: http://${this.host}:${this.port}/sse`);
         console.log(
@@ -78,6 +96,115 @@ export class SSETransportServer {
         console.log(`- Health check: http://${this.host}:${this.port}/health`);
         resolve();
       });
+    });
+  }
+
+  /**
+   * Handle Streamable HTTP requests on /mcp
+   * Supports POST (client requests), GET (SSE stream for server notifications), DELETE (session termination)
+   */
+  private async handleStreamableHTTP(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+    try {
+      if (req.method === "POST") {
+        // Parse the request body
+        const body = await this.readRequestBody(req);
+        const jsonBody = JSON.parse(body);
+
+        let transport: StreamableHTTPServerTransport;
+
+        if (sessionId && this.streamableTransports.has(sessionId)) {
+          // Existing session
+          transport = this.streamableTransports.get(sessionId)!;
+        } else {
+          // New session - create a new transport
+          transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => crypto.randomUUID(),
+          });
+
+          // Notify that a new connection is ready
+          if (this.onConnectionCallback) {
+            await this.onConnectionCallback(transport);
+          }
+
+          // Extract and store session ID after connection
+          const newSessionId = (transport as any).sessionId;
+          if (newSessionId) {
+            this.streamableTransports.set(newSessionId, transport);
+
+            // Clean up on transport close
+            transport.onclose = () => {
+              if (newSessionId) {
+                this.streamableTransports.delete(newSessionId);
+                console.log(
+                  `Streamable HTTP session closed: ${newSessionId}`,
+                );
+              }
+            };
+
+            console.log(
+              `New Streamable HTTP session established: ${newSessionId}`,
+            );
+          }
+        }
+
+        await transport.handleRequest(req, res, jsonBody);
+      } else if (req.method === "GET") {
+        // SSE stream for server-initiated notifications
+        if (sessionId && this.streamableTransports.has(sessionId)) {
+          const transport = this.streamableTransports.get(sessionId)!;
+          await transport.handleRequest(req, res);
+        } else {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: "Missing or invalid mcp-session-id header",
+            }),
+          );
+        }
+      } else if (req.method === "DELETE") {
+        // Session termination
+        if (sessionId && this.streamableTransports.has(sessionId)) {
+          const transport = this.streamableTransports.get(sessionId)!;
+          await transport.handleRequest(req, res);
+          this.streamableTransports.delete(sessionId);
+          console.log(`Streamable HTTP session terminated: ${sessionId}`);
+        } else {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              error: "Missing or invalid mcp-session-id header",
+            }),
+          );
+        }
+      } else {
+        res.writeHead(405, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Method not allowed" }));
+      }
+    } catch (error) {
+      console.error("Error handling Streamable HTTP request:", error);
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Internal server error" }));
+      }
+    }
+  }
+
+  /**
+   * Read the full request body as a string
+   */
+  private readRequestBody(req: IncomingMessage): Promise<string> {
+    return new Promise((resolve, reject) => {
+      let body = "";
+      req.on("data", (chunk) => {
+        body += chunk.toString();
+      });
+      req.on("end", () => resolve(body));
+      req.on("error", reject);
     });
   }
 
@@ -184,20 +311,32 @@ export class SSETransportServer {
 
   async stop(): Promise<void> {
     return new Promise((resolve) => {
-      // Close all active connections
+      // Close all SSE connections
       for (const connection of this.connections.values()) {
         try {
-          // The transport will close the SSE stream
           (connection.transport as any).close();
         } catch (error) {
-          console.error("Error closing connection:", error);
+          console.error("Error closing SSE connection:", error);
         }
       }
       this.connections.clear();
 
+      // Close all Streamable HTTP sessions
+      for (const [sessionId, transport] of this.streamableTransports.entries()) {
+        try {
+          transport.close();
+        } catch (error) {
+          console.error(
+            `Error closing Streamable HTTP session ${sessionId}:`,
+            error,
+          );
+        }
+      }
+      this.streamableTransports.clear();
+
       if (this.server) {
         this.server.close(() => {
-          console.log("SSE MCP Server stopped");
+          console.log("MCP Server stopped");
           resolve();
         });
       } else {

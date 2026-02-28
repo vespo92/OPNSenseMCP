@@ -54,15 +54,17 @@ export class InterfaceConfigResource {
 
   /**
    * List all interfaces with their overview
+   * Uses fallback endpoints for compatibility with OPNsense 25.7+
    */
   async listOverview(): Promise<InterfaceOverview[]> {
     if (this.debugMode) {
       console.log('[InterfaceConfig] Getting interface overview');
     }
 
+    // Try primary endpoint first (works on older OPNsense versions)
     try {
       const response = await this.client.get('/interfaces/overview/list');
-      
+
       if (this.debugMode) {
         console.log('[InterfaceConfig] Overview response:', {
           isArray: Array.isArray(response),
@@ -71,24 +73,142 @@ export class InterfaceConfigResource {
         });
       }
 
-      // Handle different response formats
-      if (Array.isArray(response)) {
-        return response;
-      }
-      
-      if (response?.rows && Array.isArray(response.rows)) {
-        return response.rows;
-      }
-
-      // Convert object format to array
-      if (response && typeof response === 'object') {
-        return Object.entries(response).map(([name, config]: [string, any]) => ({
-          name,
-          ...config
-        }));
+      const result = this.parseInterfaceResponse(response);
+      if (result.length > 0) {
+        return result;
       }
     } catch (error) {
-      console.error('Error listing interface overview:', error);
+      if (this.debugMode) {
+        console.log('[InterfaceConfig] /interfaces/overview/list failed, trying fallback endpoints');
+      }
+    }
+
+    // Fallback: Use diagnostics endpoints (OPNsense 25.7+)
+    try {
+      return await this.listOverviewFromDiagnostics();
+    } catch (error) {
+      if (this.debugMode) {
+        console.log('[InterfaceConfig] Diagnostics fallback failed:', error);
+      }
+    }
+
+    return [];
+  }
+
+  /**
+   * Fallback interface discovery using diagnostics endpoints
+   * Compatible with OPNsense 25.7+ where /interfaces/overview/list is removed
+   */
+  private async listOverviewFromDiagnostics(): Promise<InterfaceOverview[]> {
+    if (this.debugMode) {
+      console.log('[InterfaceConfig] Fetching interfaces via diagnostics endpoints');
+    }
+
+    // Get interface names
+    let interfaceNames: Record<string, string> = {};
+    try {
+      const namesResponse = await this.client.get('/diagnostics/interface/getInterfaceNames');
+      if (namesResponse && typeof namesResponse === 'object') {
+        interfaceNames = namesResponse;
+      }
+    } catch (error) {
+      if (this.debugMode) {
+        console.log('[InterfaceConfig] getInterfaceNames failed:', error);
+      }
+    }
+
+    // Get interface statistics for additional details
+    let interfaceStats: Record<string, any> = {};
+    try {
+      const statsResponse = await this.client.get('/diagnostics/interface/getInterfaceStatistics');
+      if (statsResponse && typeof statsResponse === 'object') {
+        interfaceStats = statsResponse;
+      }
+    } catch (error) {
+      if (this.debugMode) {
+        console.log('[InterfaceConfig] getInterfaceStatistics failed:', error);
+      }
+    }
+
+    // Also try to get interface config details for IPs
+    let interfaceConfig: Record<string, any> = {};
+    try {
+      const configResponse = await this.client.get('/diagnostics/interface/getInterfaceConfig');
+      if (configResponse && typeof configResponse === 'object') {
+        interfaceConfig = configResponse;
+      }
+    } catch (error) {
+      if (this.debugMode) {
+        console.log('[InterfaceConfig] getInterfaceConfig failed:', error);
+      }
+    }
+
+    // Merge data from all sources
+    const interfaces: InterfaceOverview[] = [];
+    const allDevices = new Set([
+      ...Object.keys(interfaceNames),
+      ...Object.keys(interfaceStats),
+      ...Object.keys(interfaceConfig)
+    ]);
+
+    for (const device of allDevices) {
+      const name = interfaceNames[device] || device;
+      const stats = interfaceStats[device] || {};
+      const config = interfaceConfig[device] || {};
+
+      interfaces.push({
+        name: name,
+        device: device,
+        status: config.status || stats.status || (stats['packets received'] ? 'up' : 'unknown'),
+        ipaddr: config.ipaddr || config.addr || config.ipv4?.[0]?.ipaddr,
+        subnet: config.subnet || config.subnetbits || config.ipv4?.[0]?.subnetbits,
+        gateway: config.gateway,
+        media: config.media || stats.media,
+        statistics: stats ? {
+          packets_in: parseInt(stats['packets received'] || stats.inpkts || '0', 10),
+          packets_out: parseInt(stats['packets transmitted'] || stats.outpkts || '0', 10),
+          bytes_in: parseInt(stats['bytes received'] || stats.inbytes || '0', 10),
+          bytes_out: parseInt(stats['bytes transmitted'] || stats.outbytes || '0', 10),
+          errors_in: parseInt(stats['input errors'] || stats.inerrs || '0', 10),
+          errors_out: parseInt(stats['output errors'] || stats.outerrs || '0', 10)
+        } : undefined
+      });
+    }
+
+    if (this.debugMode) {
+      console.log(`[InterfaceConfig] Diagnostics fallback found ${interfaces.length} interfaces`);
+    }
+
+    return interfaces;
+  }
+
+  /**
+   * Parse various interface response formats into a consistent array
+   */
+  private parseInterfaceResponse(response: any): InterfaceOverview[] {
+    if (!response) return [];
+
+    // Handle array format
+    if (Array.isArray(response)) {
+      return response;
+    }
+
+    // Handle rows format
+    if (response.rows && Array.isArray(response.rows)) {
+      return response.rows;
+    }
+
+    // Convert object format to array
+    if (typeof response === 'object') {
+      const entries = Object.entries(response);
+      // Check if this looks like an "Endpoint not found" error or empty response
+      if (entries.length === 0 || (entries.length === 1 && response.message)) {
+        return [];
+      }
+      return entries.map(([name, config]: [string, any]) => ({
+        name,
+        ...config
+      }));
     }
 
     return [];
@@ -395,16 +515,32 @@ export class InterfaceConfigResource {
   }
 
   /**
-   * Get interface statistics
+   * Get interface statistics with fallback for OPNsense 25.7+
    */
   async getInterfaceStatistics(interfaceName: string): Promise<any> {
+    // Try the legacy endpoint first
     try {
       const response = await this.client.get(`/interfaces/overview/getInterface/${interfaceName}`);
-      return response?.statistics || response;
+      if (response?.statistics || (response && !response.message)) {
+        return response?.statistics || response;
+      }
+    } catch (error) {
+      if (this.debugMode) {
+        console.log(`[InterfaceConfig] Legacy stats endpoint failed for ${interfaceName}, trying diagnostics`);
+      }
+    }
+
+    // Fallback to diagnostics endpoint
+    try {
+      const response = await this.client.get('/diagnostics/interface/getInterfaceStatistics');
+      if (response && response[interfaceName]) {
+        return response[interfaceName];
+      }
     } catch (error) {
       console.error(`Error getting statistics for ${interfaceName}:`, error);
-      return null;
     }
+
+    return null;
   }
 }
 

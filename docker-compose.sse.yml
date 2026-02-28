@@ -1,7 +1,8 @@
 version: '3.8'
 
-# SSE Deployment Configuration for OPNSense MCP Server
-# This file configures the MCP server to run with SSE transport
+# HTTP Deployment Configuration for OPNSense MCP Server
+# This file configures the MCP server to run with SSE + Streamable HTTP transport
+# Both /sse (legacy) and /mcp (Streamable HTTP) endpoints are available
 # Use with: docker-compose -f docker-compose.sse.yml up
 
 services:

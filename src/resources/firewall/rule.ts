@@ -36,47 +36,74 @@ export class FirewallRuleResource {
 
   /**
    * List all firewall rules
-   * PRIMARY METHOD: Uses getAllRules() which reliably fetches from filter.rules.rule
+   * Uses getAllRules() for API/automation rules and falls back to legacy pf rules
+   * to ensure GUI-configured rules are also returned (OPNsense 25.7+ compatibility)
    */
   async list(): Promise<FirewallRule[]> {
     if (this.debugMode) {
       console.log('[FirewallRuleResource] Starting list() operation');
     }
-    
+
     try {
-      // ALWAYS use getAllRules() as the primary method
-      // The searchRule endpoint is unreliable and often returns 0 results
+      // Fetch automation/API rules
       const allRules = await this.getAllRules();
-      
+
       if (this.debugMode) {
         console.log(`[FirewallRuleResource] getAllRules() returned ${allRules.length} rules`);
       }
-      
+
+      // If no rules found from the automation API, try legacy pf rule stats
+      // Many users configure rules via the GUI which only creates legacy pf rules
+      if (allRules.length === 0) {
+        if (this.debugMode) {
+          console.log('[FirewallRuleResource] No automation rules found, trying legacy pf rules');
+        }
+        const legacyRules = await this.getLegacyRules();
+        if (legacyRules.length > 0) {
+          if (this.debugMode) {
+            console.log(`[FirewallRuleResource] Found ${legacyRules.length} legacy pf rules`);
+          }
+          return legacyRules;
+        }
+      }
+
       // Update cache with fetched rules
       allRules.forEach(rule => {
         if (rule.uuid) {
           this.rulesCache.set(rule.uuid, rule);
         }
       });
-      
+
       // Sort rules by sequence if available
       allRules.sort((a, b) => {
         const seqA = parseInt(a.sequence || '0', 10);
         const seqB = parseInt(b.sequence || '0', 10);
         return seqA - seqB;
       });
-      
+
       return allRules;
     } catch (error) {
       console.error('Error listing firewall rules:', error);
-      
+
+      // Try legacy rules as fallback
+      try {
+        const legacyRules = await this.getLegacyRules();
+        if (legacyRules.length > 0) {
+          return legacyRules;
+        }
+      } catch (legacyError) {
+        if (this.debugMode) {
+          console.log('[FirewallRuleResource] Legacy rules fallback also failed:', legacyError);
+        }
+      }
+
       // Return cached rules as last resort
       if (this.rulesCache.size > 0) {
         console.log('Returning cached rules due to API error');
         return Array.from(this.rulesCache.values());
       }
     }
-    
+
     return [];
   }
 
@@ -202,6 +229,103 @@ export class FirewallRuleResource {
     }
     
     return [];
+  }
+
+  /**
+   * Get legacy pf rules via filter_util endpoint
+   * These are rules configured through the standard OPNsense GUI (not the automation API)
+   * Essential for OPNsense 25.7+ where most users have GUI-configured rules
+   */
+  async getLegacyRules(): Promise<FirewallRule[]> {
+    if (this.debugMode) {
+      console.log('[FirewallRuleResource] Fetching legacy pf rules');
+    }
+
+    const rules: FirewallRule[] = [];
+
+    // Try /firewall/filter_util/ruleStats for active pf rule statistics
+    try {
+      const statsResponse = await this.client.get('/firewall/filter_util/ruleStats');
+      if (statsResponse && typeof statsResponse === 'object') {
+        const ruleEntries = Array.isArray(statsResponse) ? statsResponse :
+                           statsResponse.rows ? statsResponse.rows :
+                           Object.values(statsResponse);
+
+        for (const entry of ruleEntries) {
+          if (typeof entry !== 'object' || !entry) continue;
+
+          rules.push({
+            uuid: entry.uuid || entry.id || `pf-${rules.length}`,
+            enabled: entry.enabled ?? '1',
+            sequence: entry.seq || entry.sequence || String(rules.length),
+            action: entry.action || entry.type || 'pass',
+            quick: entry.quick || '1',
+            interface: entry.interface || entry.intf || '',
+            direction: entry.direction || entry.dir || 'in',
+            ipprotocol: entry.ipprotocol || entry.af || 'inet',
+            protocol: entry.protocol || entry.proto || 'any',
+            source_net: entry.source || entry.source_net || entry.src || 'any',
+            source_port: entry.source_port || entry.src_port || '',
+            destination_net: entry.destination || entry.destination_net || entry.dst || 'any',
+            destination_port: entry.destination_port || entry.dst_port || '',
+            gateway: entry.gateway || '',
+            log: entry.log || '0',
+            description: entry.description || entry.label || entry.descr || '',
+            category: entry.category || ''
+          });
+        }
+      }
+    } catch (error) {
+      if (this.debugMode) {
+        console.log('[FirewallRuleResource] filter_util/ruleStats failed:', error);
+      }
+    }
+
+    // Also try searchRule with pagination as another fallback
+    if (rules.length === 0) {
+      try {
+        const searchResponse = await this.client.post('/firewall/filter/searchRule', {
+          current: 1,
+          rowCount: 10000,
+          sort: {},
+          searchPhrase: ''
+        });
+
+        if (searchResponse?.rows && Array.isArray(searchResponse.rows)) {
+          for (const row of searchResponse.rows) {
+            rules.push({
+              uuid: row.uuid || `search-${rules.length}`,
+              enabled: row.enabled || '1',
+              sequence: row.sequence || String(rules.length),
+              action: row.action || 'pass',
+              quick: row.quick || '1',
+              interface: row.interface || '',
+              direction: row.direction || 'in',
+              ipprotocol: row.ipprotocol || 'inet',
+              protocol: row.protocol || 'any',
+              source_net: row.source_net || 'any',
+              source_port: row.source_port || '',
+              destination_net: row.destination_net || 'any',
+              destination_port: row.destination_port || '',
+              gateway: row.gateway || '',
+              log: row.log || '0',
+              description: row.description || '',
+              category: row.category || ''
+            });
+          }
+        }
+      } catch (error) {
+        if (this.debugMode) {
+          console.log('[FirewallRuleResource] searchRule fallback also failed:', error);
+        }
+      }
+    }
+
+    if (this.debugMode) {
+      console.log(`[FirewallRuleResource] Legacy rules: found ${rules.length} total`);
+    }
+
+    return rules;
   }
 
   /**
