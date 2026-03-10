@@ -640,6 +640,80 @@ export class OPNSenseAPIClient {
     return this.post(`/unbound/settings/delAcl/${uuid}`);
   }
 
+  // ===== ACME CLIENT METHODS =====
+
+  /**
+   * Get all ACME client settings (settings, accounts, certificates, validations, actions)
+   */
+  async getAcmeSettings(): Promise<any> {
+    return this.get('/acmeclient/settings/get');
+  }
+
+  /**
+   * Update ACME settings using the full nested path (the only reliable write endpoint).
+   * Auto-wraps in { acmeclient: ... } — callers should pass the inner structure, e.g.:
+   * { certificates: { certificate: { "uuid": { renewInterval: "30" } } } }
+   */
+  async setAcmeSettings(data: Record<string, unknown>): Promise<any> {
+    return this.post('/acmeclient/settings/set', { acmeclient: data });
+  }
+
+  /**
+   * Get ACME service status
+   */
+  async getAcmeServiceStatus(): Promise<any> {
+    return this.get('/acmeclient/service/status');
+  }
+
+  /**
+   * Apply ACME configuration changes
+   */
+  async applyAcmeChanges(): Promise<any> {
+    return this.post('/acmeclient/service/reconfigure');
+  }
+
+  /**
+   * Get action template/schema for creating new actions
+   */
+  async getAcmeActionSchema(): Promise<any> {
+    return this.get('/acmeclient/actions/get');
+  }
+
+  /**
+   * Add a new ACME automation action
+   */
+  async addAcmeAction(data: Record<string, unknown>): Promise<any> {
+    return this.post('/acmeclient/actions/add', { action: data });
+  }
+
+  /**
+   * Delete an ACME automation action
+   */
+  async delAcmeAction(uuid: string): Promise<any> {
+    return this.post(`/acmeclient/actions/del/${uuid}`);
+  }
+
+  /**
+   * Trigger renewal of a specific certificate
+   */
+  async renewAcmeCertificate(uuid: string): Promise<any> {
+    return this.post(`/acmeclient/service/renewCert/${uuid}`);
+  }
+
+  /**
+   * Trigger signing/issuing of a specific certificate
+   */
+  async signAcmeCertificate(uuid: string): Promise<any> {
+    return this.post(`/acmeclient/service/signCert/${uuid}`);
+  }
+
+  /**
+   * Revoke a certificate
+   */
+  async revokeAcmeCertificate(uuid: string): Promise<any> {
+    return this.post(`/acmeclient/service/revokeCert/${uuid}`);
+  }
+
   // ===== MONIT METHODS =====
 
   /**

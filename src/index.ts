@@ -40,6 +40,7 @@ import RoutingDiagnosticsResource from './resources/diagnostics/routing.js';
 import CLIExecutorResource from './resources/cli/executor.js';
 import SSHExecutor from './resources/ssh/executor.js';
 import { MonitResource } from './resources/services/monitoring/monit.js';
+import { AcmeClientResource } from './resources/services/acme/client.js';
 
 // Import IaC components
 import { resourceRegistry } from './resources/registry.js';
@@ -78,6 +79,7 @@ class OPNSenseMCPServer {
   private cliExecutor: CLIExecutorResource | null = null;
   private sshExecutor: SSHExecutor | null = null;
   private monitResource: MonitResource | null = null;
+  private acmeResource: AcmeClientResource | null = null;
 
   // IaC components
   private planner: DeploymentPlanner | null = null;
@@ -158,6 +160,7 @@ class OPNSenseMCPServer {
       this.routingDiagnosticsResource = new RoutingDiagnosticsResource(this.client);
       this.cliExecutor = new CLIExecutorResource(this.client);
       this.monitResource = new MonitResource(this.client);
+      this.acmeResource = new AcmeClientResource(this.client);
 
       // Initialize SSH executor for direct CLI access
       this.sshExecutor = new SSHExecutor();
@@ -880,6 +883,93 @@ class OPNSenseMCPServer {
             type: 'object',
             properties: {
               uuid: { type: 'string', description: 'UUID of the alert to delete' }
+            },
+            required: ['uuid']
+          }
+        },
+
+        // ACME Certificate Management Tools
+        {
+          name: 'acme_get_settings',
+          description: 'Get full ACME/Let\'s Encrypt configuration — certificates, accounts, validations, automation actions',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'acme_update_certificate',
+          description: 'Update certificate settings (renewal interval, restart actions, enable/disable, description)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the certificate to update' },
+              renew_interval: { type: 'string', description: 'Renewal interval in days (e.g. "30")' },
+              restart_actions: { type: 'array', items: { type: 'string' }, description: 'UUIDs of automation actions to run after renewal' },
+              auto_renewal: { type: 'boolean', description: 'Enable or disable auto-renewal' },
+              enabled: { type: 'boolean', description: 'Enable or disable the certificate' },
+              description: { type: 'string', description: 'Certificate description' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'acme_renew_certificate',
+          description: 'Trigger manual renewal of a specific certificate',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the certificate to renew' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'acme_sign_certificate',
+          description: 'Issue/sign a certificate (initial creation or re-issue)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the certificate to sign' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'acme_revoke_certificate',
+          description: 'Revoke a certificate',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the certificate to revoke' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'acme_add_action',
+          description: 'Create a new ACME automation action (restart HAProxy, restart web UI, SFTP upload, SSH command, etc.)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Action name' },
+              type: {
+                type: 'string',
+                description: 'Action type (e.g. configd_restart_haproxy, configd_restart_gui, configd_restart_nginx, configd_reload_caddy, configd_upload_sftp, configd_remote_ssh, configd_generic)'
+              },
+              enabled: { type: 'boolean', description: 'Enable the action (default: true)', default: true },
+              description: { type: 'string', description: 'Action description' }
+            },
+            required: ['name', 'type']
+          }
+        },
+        {
+          name: 'acme_delete_action',
+          description: 'Delete an ACME automation action',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the action to delete' }
             },
             required: ['uuid']
           }
@@ -3612,10 +3702,124 @@ class OPNSenseMCPServer {
           }
         }
 
+        // ACME Certificate Management
+        case 'acme_get_settings': {
+          await this.ensureInitialized();
+          try {
+            const overview = await this.acmeResource!.getOverview();
+            return {
+              content: [{ type: 'text', text: JSON.stringify(overview, null, 2) }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InternalError, `Failed to get ACME settings: ${error.message}`);
+          }
+        }
+
+        case 'acme_update_certificate': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            await this.acmeResource!.updateCertificate(args.uuid as string, {
+              renewInterval: args.renew_interval as string | undefined,
+              restartActions: args.restart_actions as string[] | undefined,
+              autoRenewal: args.auto_renewal as boolean | undefined,
+              enabled: args.enabled as boolean | undefined,
+              description: args.description as string | undefined,
+            });
+            return {
+              content: [{ type: 'text', text: `Certificate ${args.uuid} updated` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'acme_renew_certificate': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            const result = await this.acmeResource!.renewCertificate(args.uuid as string);
+            return {
+              content: [{ type: 'text', text: `Certificate renewal triggered. Status: ${result.status}` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'acme_sign_certificate': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            const result = await this.acmeResource!.signCertificate(args.uuid as string);
+            return {
+              content: [{ type: 'text', text: `Certificate signing triggered. Status: ${result.status}` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'acme_revoke_certificate': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            const result = await this.acmeResource!.revokeCertificate(args.uuid as string);
+            return {
+              content: [{ type: 'text', text: `Certificate revocation triggered. Status: ${result.status}` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'acme_add_action': {
+          await this.ensureInitialized();
+          if (!args?.name || !args?.type) {
+            throw new McpError(ErrorCode.InvalidRequest, 'name and type are required');
+          }
+          try {
+            const result = await this.acmeResource!.addAction({
+              name: args.name as string,
+              type: args.type as string,
+              enabled: args.enabled as boolean | undefined,
+              description: args.description as string | undefined,
+            });
+            return {
+              content: [{ type: 'text', text: `ACME action created: ${result.uuid}` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'acme_delete_action': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            await this.acmeResource!.deleteAction(args.uuid as string);
+            return {
+              content: [{ type: 'text', text: `ACME action ${args.uuid} deleted` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
         // System Settings Management
         case 'system_get_settings': {
           await this.ensureInitialized();
-          
+
           try {
             const settings = await this.systemSettingsResource!.getAllSettings();
             
