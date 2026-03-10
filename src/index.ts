@@ -3154,8 +3154,9 @@ class OPNSenseMCPServer {
           
           try {
             const results = await this.dnsBlocklistResource!.searchBlocklist(args.pattern as string);
-            
-            if (results.length === 0) {
+            const totalResults = results.subscriptions.length + results.manualBlocks.length;
+
+            if (totalResults === 0) {
               return {
                 content: [{
                   type: 'text',
@@ -3163,15 +3164,28 @@ class OPNSenseMCPServer {
                 }]
               };
             }
-            
+
+            const lines: string[] = [];
+            if (results.subscriptions.length > 0) {
+              lines.push('DNSBL Subscriptions:');
+              for (const sub of results.subscriptions) {
+                lines.push(`• ${sub.selectedLists.join(', ')} ${sub.enabled ? '(enabled)' : '(disabled)'}` +
+                  (sub.description ? ` - ${sub.description}` : ''));
+              }
+            }
+            if (results.manualBlocks.length > 0) {
+              if (lines.length > 0) lines.push('');
+              lines.push('Manual Blocks:');
+              for (const entry of results.manualBlocks) {
+                lines.push(`• ${entry.host} ${entry.enabled ? '(enabled)' : '(disabled)'}` +
+                  (entry.description ? ` - ${entry.description}` : ''));
+              }
+            }
+
             return {
               content: [{
                 type: 'text',
-                text: `Found ${results.length} blocklist entries:\n\n` +
-                      results.map(entry => 
-                        `• ${entry.host} ${entry.enabled ? '(enabled)' : '(disabled)'}` +
-                        (entry.description ? ` - ${entry.description}` : '')
-                      ).join('\n')
+                text: `Found ${totalResults} blocklist entries:\n\n${lines.join('\n')}`
               }]
             };
           } catch (error: any) {
