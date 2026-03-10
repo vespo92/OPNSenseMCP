@@ -133,10 +133,11 @@ export class DnsBlocklistResource {
           if (typeof host === 'object' && host !== null) {
             const hostData = host as any;
             if (hostData.server === '0.0.0.0') {
+              const hostname = hostData.hostname || '';
               manualBlocks.push({
                 uuid,
                 enabled: hostData.enabled === '1',
-                host: `${hostData.host}.${hostData.domain}`,
+                host: hostname ? `${hostname}.${hostData.domain}` : hostData.domain,
                 description: hostData.description || ''
               });
             }
@@ -177,8 +178,9 @@ export class DnsBlocklistResource {
 
       const hostData: any = {
         enabled: '1',
-        host: host,
+        hostname: host,
         domain: domainPart,
+        rr: 'A',
         server: '0.0.0.0',  // Block by pointing to 0.0.0.0
         description: description || `Blocked: ${domain}`
       };
