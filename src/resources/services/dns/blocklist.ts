@@ -10,7 +10,7 @@ export interface DnsBlocklistItem {
 }
 
 /**
- * DNS blocklist configuration
+ * DNS blocklist configuration (individual blocked domain)
  */
 export interface DnsBlocklistConfig {
   uuid?: string;
@@ -20,43 +20,131 @@ export interface DnsBlocklistConfig {
 }
 
 /**
+ * DNSBL subscription blocklist entry (e.g. OISD, Hagezi, Steven Black)
+ */
+export interface DnsblSubscription {
+  uuid: string;
+  enabled: boolean;
+  selectedLists: string[];
+  customLists: string[];
+  allowlists: string[];
+  wildcards: string[];
+  address: string;
+  nxdomain: boolean;
+  cacheTtl: string;
+  description: string;
+}
+
+/**
+ * Combined DNS blocklist result
+ */
+export interface DnsBlocklistResult {
+  subscriptions: DnsblSubscription[];
+  manualBlocks: DnsBlocklistConfig[];
+}
+
+/**
  * OPNSense DNS Blocklist Resource for managing Unbound DNS blocklists
  */
 export class DnsBlocklistResource {
   constructor(private client: OPNSenseAPIClient) {}
 
   /**
-   * List all DNS blocklist entries
+   * List all DNS blocklist entries (both DNSBL subscriptions and manual blocks)
    */
-  async list(): Promise<DnsBlocklistConfig[]> {
+  async list(): Promise<DnsBlocklistResult> {
     try {
       // Get all Unbound settings
       const response = await this.client.getUnboundSettings();
-      
-      if (!response?.unbound?.hosts) {
-        return [];
-      }
 
-      // Extract host overrides that act as blocklist entries (pointing to 0.0.0.0)
-      const hosts = response.unbound.hosts;
-      const blocklist: DnsBlocklistConfig[] = [];
+      const subscriptions: DnsblSubscription[] = [];
+      const manualBlocks: DnsBlocklistConfig[] = [];
 
-      for (const [uuid, host] of Object.entries(hosts)) {
-        if (typeof host === 'object' && host !== null) {
-          const hostData = host as any;
-          // Check if this is a blocklist entry (points to 0.0.0.0)
-          if (hostData.server === '0.0.0.0') {
-            blocklist.push({
+      // Parse DNSBL subscription blocklists (e.g. OISD, Hagezi, Steven Black)
+      const dnsblBlocklist = response?.unbound?.dnsbl?.blocklist;
+      if (dnsblBlocklist && typeof dnsblBlocklist === 'object') {
+        for (const [uuid, entry] of Object.entries(dnsblBlocklist)) {
+          if (typeof entry === 'object' && entry !== null) {
+            const entryData = entry as any;
+
+            // Extract selected list names from the type field
+            const selectedLists: string[] = [];
+            if (entryData.type && typeof entryData.type === 'object') {
+              for (const [key, typeInfo] of Object.entries(entryData.type)) {
+                if (typeof typeInfo === 'object' && typeInfo !== null && (typeInfo as any).selected === 1) {
+                  selectedLists.push((typeInfo as any).value || key);
+                }
+              }
+            }
+
+            // Extract custom lists
+            const customLists: string[] = [];
+            if (entryData.lists && typeof entryData.lists === 'object') {
+              for (const [, listInfo] of Object.entries(entryData.lists)) {
+                if (typeof listInfo === 'object' && listInfo !== null) {
+                  const val = (listInfo as any).value;
+                  if (val) customLists.push(val);
+                }
+              }
+            }
+
+            // Extract allowlists
+            const allowlists: string[] = [];
+            if (entryData.allowlists && typeof entryData.allowlists === 'object') {
+              for (const [, listInfo] of Object.entries(entryData.allowlists)) {
+                if (typeof listInfo === 'object' && listInfo !== null) {
+                  const val = (listInfo as any).value;
+                  if (val) allowlists.push(val);
+                }
+              }
+            }
+
+            // Extract wildcards
+            const wildcards: string[] = [];
+            if (entryData.wildcards && typeof entryData.wildcards === 'object') {
+              for (const [, listInfo] of Object.entries(entryData.wildcards)) {
+                if (typeof listInfo === 'object' && listInfo !== null) {
+                  const val = (listInfo as any).value;
+                  if (val) wildcards.push(val);
+                }
+              }
+            }
+
+            subscriptions.push({
               uuid,
-              enabled: hostData.enabled === '1',
-              host: `${hostData.host}.${hostData.domain}`,
-              description: hostData.description || ''
+              enabled: entryData.enabled === '1',
+              selectedLists,
+              customLists,
+              allowlists,
+              wildcards,
+              address: entryData.address || '',
+              nxdomain: entryData.nxdomain === '1',
+              cacheTtl: entryData.cache_ttl || '',
+              description: entryData.description || ''
             });
           }
         }
       }
 
-      return blocklist;
+      // Parse manual host override blocks (pointing to 0.0.0.0)
+      const hosts = response?.unbound?.hosts?.host;
+      if (hosts && typeof hosts === 'object') {
+        for (const [uuid, host] of Object.entries(hosts)) {
+          if (typeof host === 'object' && host !== null) {
+            const hostData = host as any;
+            if (hostData.server === '0.0.0.0') {
+              manualBlocks.push({
+                uuid,
+                enabled: hostData.enabled === '1',
+                host: `${hostData.host}.${hostData.domain}`,
+                description: hostData.description || ''
+              });
+            }
+          }
+        }
+      }
+
+      return { subscriptions, manualBlocks };
     } catch (error: any) {
       console.error('Failed to list DNS blocklist:', error);
       throw new Error(`Failed to list DNS blocklist: ${error.message}`);
@@ -116,9 +204,9 @@ export class DnsBlocklistResource {
    */
   async unblockDomain(domain: string): Promise<void> {
     try {
-      // Find the entry
+      // Find the entry in manual blocks
       const blocklist = await this.list();
-      const entry = blocklist.find(item => item.host === domain);
+      const entry = blocklist.manualBlocks.find(item => item.host === domain);
       
       if (!entry || !entry.uuid) {
         throw new Error(`Domain ${domain} not found in blocklist`);
@@ -159,13 +247,13 @@ export class DnsBlocklistResource {
    * Get blocklist entries for a specific interface
    * Note: This requires domain-based access control lists which may need additional configuration
    */
-  async getInterfaceBlocklist(interfaceName: string): Promise<DnsBlocklistConfig[]> {
+  async getInterfaceBlocklist(interfaceName: string): Promise<DnsBlocklistResult> {
     // For now, return all blocklist entries with a note about interface filtering
     const allBlocked = await this.list();
-    
+
     // In a full implementation, this would filter based on ACLs
     console.warn(`Interface-specific filtering for ${interfaceName} requires ACL configuration`);
-    
+
     return allBlocked;
   }
 
@@ -228,16 +316,23 @@ export class DnsBlocklistResource {
   }
 
   /**
-   * Search blocklist entries
+   * Search blocklist entries (searches both subscriptions and manual blocks)
    */
-  async searchBlocklist(pattern: string): Promise<DnsBlocklistConfig[]> {
-    const allEntries = await this.list();
+  async searchBlocklist(pattern: string): Promise<DnsBlocklistResult> {
+    const result = await this.list();
     const searchLower = pattern.toLowerCase();
-    
-    return allEntries.filter(entry => 
+
+    const subscriptions = result.subscriptions.filter(entry =>
+      entry.selectedLists.some(l => l.toLowerCase().includes(searchLower)) ||
+      entry.description.toLowerCase().includes(searchLower)
+    );
+
+    const manualBlocks = result.manualBlocks.filter(entry =>
       entry.host.toLowerCase().includes(searchLower) ||
       (entry.description && entry.description.toLowerCase().includes(searchLower))
     );
+
+    return { subscriptions, manualBlocks };
   }
 
   /**
