@@ -606,6 +606,34 @@ export class OPNSenseAPIClient {
   }
 
   /**
+   * Get a specific DNSBL entry
+   */
+  async getDnsbl(uuid: string): Promise<any> {
+    return this.get(`/unbound/settings/getDnsbl/${uuid}`);
+  }
+
+  /**
+   * Add a DNSBL subscription entry
+   */
+  async addDnsbl(data: Record<string, unknown>): Promise<any> {
+    return this.post('/unbound/settings/addDnsbl', { blocklist: data });
+  }
+
+  /**
+   * Update a DNSBL subscription entry
+   */
+  async setDnsbl(uuid: string, data: Record<string, unknown>): Promise<any> {
+    return this.post(`/unbound/settings/setDnsbl/${uuid}`, { blocklist: data });
+  }
+
+  /**
+   * Delete a DNSBL subscription entry
+   */
+  async delDnsbl(uuid: string): Promise<any> {
+    return this.post(`/unbound/settings/delDnsbl/${uuid}`);
+  }
+
+  /**
    * Apply Unbound configuration changes
    */
   async applyUnboundChanges(): Promise<any> {
