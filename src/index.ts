@@ -39,6 +39,7 @@ import InterfaceConfigResource from './resources/network/interfaces.js';
 import RoutingDiagnosticsResource from './resources/diagnostics/routing.js';
 import CLIExecutorResource from './resources/cli/executor.js';
 import SSHExecutor from './resources/ssh/executor.js';
+import { MonitResource } from './resources/services/monitoring/monit.js';
 
 // Import IaC components
 import { resourceRegistry } from './resources/registry.js';
@@ -76,7 +77,8 @@ class OPNSenseMCPServer {
   private routingDiagnosticsResource: RoutingDiagnosticsResource | null = null;
   private cliExecutor: CLIExecutorResource | null = null;
   private sshExecutor: SSHExecutor | null = null;
-  
+  private monitResource: MonitResource | null = null;
+
   // IaC components
   private planner: DeploymentPlanner | null = null;
   private engine: ExecutionEngine | null = null;
@@ -155,7 +157,8 @@ class OPNSenseMCPServer {
       this.interfaceConfigResource = new InterfaceConfigResource(this.client);
       this.routingDiagnosticsResource = new RoutingDiagnosticsResource(this.client);
       this.cliExecutor = new CLIExecutorResource(this.client);
-      
+      this.monitResource = new MonitResource(this.client);
+
       // Initialize SSH executor for direct CLI access
       this.sshExecutor = new SSHExecutor();
       
@@ -715,6 +718,170 @@ class OPNSenseMCPServer {
               }
             },
             required: ['action']
+          }
+        },
+
+        // Monit Monitoring Tools
+        {
+          name: 'monit_status',
+          description: 'Get Monit live status — shows if Monit is running and the state of all monitored services',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'monit_get_settings',
+          description: 'Get full Monit configuration (general settings, services, tests, alerts)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'monit_add_service',
+          description: 'Add a new Monit monitored service (process, host, custom script, filesystem, network, etc.)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Service name' },
+              type: {
+                type: 'string',
+                description: 'Service type',
+                enum: ['process', 'file', 'fifo', 'filesystem', 'directory', 'host', 'system', 'custom', 'network']
+              },
+              enabled: { type: 'boolean', description: 'Enable the service (default: true)', default: true },
+              description: { type: 'string', description: 'Service description' },
+              address: { type: 'string', description: 'Remote host address (for host type)' },
+              path: { type: 'string', description: 'Path to file, directory, or script' },
+              tests: { type: 'array', items: { type: 'string' }, description: 'Test UUIDs to attach' },
+              depends: { type: 'array', items: { type: 'string' }, description: 'Service UUIDs this depends on' }
+            },
+            required: ['name', 'type']
+          }
+        },
+        {
+          name: 'monit_update_service',
+          description: 'Update an existing Monit service',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the service to update' },
+              enabled: { type: 'boolean', description: 'Enable or disable the service' },
+              description: { type: 'string', description: 'Updated description' },
+              address: { type: 'string', description: 'Updated address' },
+              path: { type: 'string', description: 'Updated path' },
+              tests: { type: 'array', items: { type: 'string' }, description: 'Replace test UUIDs' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'monit_delete_service',
+          description: 'Delete a Monit monitored service',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the service to delete' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'monit_add_test',
+          description: 'Add a new Monit test condition (CPU, memory, disk, custom, etc.)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Test name' },
+              type: {
+                type: 'string',
+                description: 'Test type (e.g. SystemResource, SpaceUsage, ProgramStatus, NetworkPing, Connection, Custom, etc.)'
+              },
+              condition: { type: 'string', description: 'Monit condition expression (e.g. "cpu usage is greater than 75%")' },
+              action: {
+                type: 'string',
+                description: 'Action on failure',
+                enum: ['alert', 'restart', 'start', 'stop', 'exec', 'unmonitor'],
+                default: 'alert'
+              },
+              path: { type: 'string', description: 'Path for exec action' }
+            },
+            required: ['name', 'type', 'condition']
+          }
+        },
+        {
+          name: 'monit_update_test',
+          description: 'Update an existing Monit test',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the test to update' },
+              condition: { type: 'string', description: 'Updated condition expression' },
+              action: { type: 'string', description: 'Updated action', enum: ['alert', 'restart', 'start', 'stop', 'exec', 'unmonitor'] },
+              path: { type: 'string', description: 'Updated path for exec action' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'monit_delete_test',
+          description: 'Delete a Monit test',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the test to delete' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'monit_add_alert',
+          description: 'Add a new Monit alert recipient (email address for notifications)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              recipient: { type: 'string', description: 'Email address for alerts' },
+              enabled: { type: 'boolean', description: 'Enable the alert (default: true)', default: true },
+              events: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Event types to alert on (e.g. connection, resource, status, timeout). Empty = all events.'
+              },
+              not_on: { type: 'boolean', description: 'If true, alert on everything EXCEPT the listed events', default: false },
+              format: { type: 'string', description: 'Alert subject format (supports $SERVICE, $HOST, $EVENT)' },
+              reminder: { type: 'string', description: 'Reminder interval in cycles (e.g. "10")' },
+              description: { type: 'string', description: 'Alert description' }
+            },
+            required: ['recipient']
+          }
+        },
+        {
+          name: 'monit_update_alert',
+          description: 'Update an existing Monit alert recipient',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the alert to update' },
+              enabled: { type: 'boolean', description: 'Enable or disable the alert' },
+              events: { type: 'array', items: { type: 'string' }, description: 'Replace event types' },
+              not_on: { type: 'boolean', description: 'If true, alert on everything EXCEPT the listed events' },
+              format: { type: 'string', description: 'Updated subject format' },
+              reminder: { type: 'string', description: 'Updated reminder interval' },
+              description: { type: 'string', description: 'Updated description' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'monit_delete_alert',
+          description: 'Delete a Monit alert recipient',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'UUID of the alert to delete' }
+            },
+            required: ['uuid']
           }
         },
 
@@ -3242,6 +3409,206 @@ class OPNSenseMCPServer {
               ErrorCode.InternalError,
               error.message
             );
+          }
+        }
+
+        // Monit Monitoring
+        case 'monit_status': {
+          await this.ensureInitialized();
+          try {
+            const status = await this.monitResource!.getStatus();
+            return {
+              content: [{ type: 'text', text: JSON.stringify(status, null, 2) }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InternalError, `Failed to get Monit status: ${error.message}`);
+          }
+        }
+
+        case 'monit_get_settings': {
+          await this.ensureInitialized();
+          try {
+            const overview = await this.monitResource!.getOverview();
+            return {
+              content: [{ type: 'text', text: JSON.stringify(overview, null, 2) }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InternalError, `Failed to get Monit settings: ${error.message}`);
+          }
+        }
+
+        case 'monit_add_service': {
+          await this.ensureInitialized();
+          if (!args?.name || !args?.type) {
+            throw new McpError(ErrorCode.InvalidRequest, 'name and type are required');
+          }
+          try {
+            const result = await this.monitResource!.addService({
+              name: args.name as string,
+              type: args.type as string,
+              enabled: args.enabled as boolean | undefined,
+              description: args.description as string | undefined,
+              address: args.address as string | undefined,
+              path: args.path as string | undefined,
+              tests: args.tests as string[] | undefined,
+              depends: args.depends as string[] | undefined,
+            });
+            return {
+              content: [{ type: 'text', text: `Monit service created: ${result.uuid}` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'monit_update_service': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            await this.monitResource!.updateService(args.uuid as string, {
+              enabled: args.enabled as boolean | undefined,
+              description: args.description as string | undefined,
+              address: args.address as string | undefined,
+              path: args.path as string | undefined,
+              tests: args.tests as string[] | undefined,
+            });
+            return {
+              content: [{ type: 'text', text: `Monit service ${args.uuid} updated` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'monit_delete_service': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            await this.monitResource!.deleteService(args.uuid as string);
+            return {
+              content: [{ type: 'text', text: `Monit service ${args.uuid} deleted` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'monit_add_test': {
+          await this.ensureInitialized();
+          if (!args?.name || !args?.type || !args?.condition) {
+            throw new McpError(ErrorCode.InvalidRequest, 'name, type, and condition are required');
+          }
+          try {
+            const result = await this.monitResource!.addTest({
+              name: args.name as string,
+              type: args.type as string,
+              condition: args.condition as string,
+              action: args.action as string | undefined,
+              path: args.path as string | undefined,
+            });
+            return {
+              content: [{ type: 'text', text: `Monit test created: ${result.uuid}` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'monit_update_test': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            await this.monitResource!.updateTest(args.uuid as string, {
+              condition: args.condition as string | undefined,
+              action: args.action as string | undefined,
+              path: args.path as string | undefined,
+            });
+            return {
+              content: [{ type: 'text', text: `Monit test ${args.uuid} updated` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'monit_delete_test': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            await this.monitResource!.deleteTest(args.uuid as string);
+            return {
+              content: [{ type: 'text', text: `Monit test ${args.uuid} deleted` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'monit_add_alert': {
+          await this.ensureInitialized();
+          if (!args?.recipient) {
+            throw new McpError(ErrorCode.InvalidRequest, 'recipient is required');
+          }
+          try {
+            const result = await this.monitResource!.addAlert({
+              recipient: args.recipient as string,
+              enabled: args.enabled as boolean | undefined,
+              events: args.events as string[] | undefined,
+              notOn: args.not_on as boolean | undefined,
+              format: args.format as string | undefined,
+              reminder: args.reminder as string | undefined,
+              description: args.description as string | undefined,
+            });
+            return {
+              content: [{ type: 'text', text: `Monit alert created: ${result.uuid}` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'monit_update_alert': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            await this.monitResource!.updateAlert(args.uuid as string, {
+              enabled: args.enabled as boolean | undefined,
+              events: args.events as string[] | undefined,
+              notOn: args.not_on as boolean | undefined,
+              format: args.format as string | undefined,
+              reminder: args.reminder as string | undefined,
+              description: args.description as string | undefined,
+            });
+            return {
+              content: [{ type: 'text', text: `Monit alert ${args.uuid} updated` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'monit_delete_alert': {
+          await this.ensureInitialized();
+          if (!args?.uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'uuid is required');
+          }
+          try {
+            await this.monitResource!.deleteAlert(args.uuid as string);
+            return {
+              content: [{ type: 'text', text: `Monit alert ${args.uuid} deleted` }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
           }
         }
 

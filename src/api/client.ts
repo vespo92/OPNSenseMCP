@@ -640,6 +640,120 @@ export class OPNSenseAPIClient {
     return this.post(`/unbound/settings/delAcl/${uuid}`);
   }
 
+  // ===== MONIT METHODS =====
+
+  /**
+   * Get all Monit settings (general, alerts, services, tests)
+   */
+  async getMonitSettings(): Promise<any> {
+    return this.get('/monit/settings/get');
+  }
+
+  /**
+   * Get Monit live status (running services and their states)
+   */
+  async getMonitStatus(): Promise<any> {
+    return this.get('/monit/status/get');
+  }
+
+  /**
+   * Get Monit service runtime status
+   */
+  async getMonitServiceStatus(): Promise<any> {
+    return this.get('/monit/service/status');
+  }
+
+  /**
+   * Get a specific Monit service by UUID
+   */
+  async getMonitService(uuid: string): Promise<any> {
+    return this.get(`/monit/settings/getService/${uuid}`);
+  }
+
+  /**
+   * Add a Monit service
+   */
+  async addMonitService(data: Record<string, unknown>): Promise<any> {
+    return this.post('/monit/settings/addService', { service: data });
+  }
+
+  /**
+   * Update a Monit service
+   */
+  async setMonitService(uuid: string, data: Record<string, unknown>): Promise<any> {
+    return this.post(`/monit/settings/setService/${uuid}`, { service: data });
+  }
+
+  /**
+   * Delete a Monit service
+   */
+  async delMonitService(uuid: string): Promise<any> {
+    return this.post(`/monit/settings/delService/${uuid}`);
+  }
+
+  /**
+   * Get a specific Monit test by UUID
+   */
+  async getMonitTest(uuid: string): Promise<any> {
+    return this.get(`/monit/settings/getTest/${uuid}`);
+  }
+
+  /**
+   * Add a Monit test
+   */
+  async addMonitTest(data: Record<string, unknown>): Promise<any> {
+    return this.post('/monit/settings/addTest', { test: data });
+  }
+
+  /**
+   * Update a Monit test
+   */
+  async setMonitTest(uuid: string, data: Record<string, unknown>): Promise<any> {
+    return this.post(`/monit/settings/setTest/${uuid}`, { test: data });
+  }
+
+  /**
+   * Delete a Monit test
+   */
+  async delMonitTest(uuid: string): Promise<any> {
+    return this.post(`/monit/settings/delTest/${uuid}`);
+  }
+
+  /**
+   * Get a specific Monit alert by UUID
+   */
+  async getMonitAlert(uuid: string): Promise<any> {
+    return this.get(`/monit/settings/getAlert/${uuid}`);
+  }
+
+  /**
+   * Add a Monit alert recipient
+   */
+  async addMonitAlert(data: Record<string, unknown>): Promise<any> {
+    return this.post('/monit/settings/addAlert', { alert: data });
+  }
+
+  /**
+   * Update a Monit alert recipient
+   */
+  async setMonitAlert(uuid: string, data: Record<string, unknown>): Promise<any> {
+    return this.post(`/monit/settings/setAlert/${uuid}`, { alert: data });
+  }
+
+  /**
+   * Delete a Monit alert recipient
+   */
+  async delMonitAlert(uuid: string): Promise<any> {
+    return this.post(`/monit/settings/delAlert/${uuid}`);
+  }
+
+  /**
+   * Apply Monit configuration changes (reconfigure)
+   */
+  async applyMonitChanges(): Promise<any> {
+    return this.post('/monit/service/reconfigure');
+  }
+
   // ===== ARP TABLE METHODS =====
 
   /**
