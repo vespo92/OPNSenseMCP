@@ -1,12 +1,42 @@
 import { OPNSenseAPIClient } from '../../../api/client.js';
 
 /**
- * DNS blocklist item interface
+ * OPNsense API response shapes for Unbound DNSBL / host override data.
+ * These mirror the JSON structure returned by the OPNsense REST API.
  */
-export interface DnsBlocklistItem {
+interface OPNsenseTypeEntry {
+  value: string;
+  selected: 0 | 1;
+}
+
+interface OPNsenseSelectableList {
+  value: string;
+  selected: 0 | 1;
+}
+
+interface OPNsenseDnsblEntry {
   enabled: '0' | '1';
-  host: string;
-  description?: string;
+  type: Record<string, OPNsenseTypeEntry>;
+  lists: Record<string, OPNsenseSelectableList>;
+  allowlists: Record<string, OPNsenseSelectableList>;
+  wildcards: Record<string, OPNsenseSelectableList>;
+  address: string;
+  nxdomain: '0' | '1';
+  cache_ttl: string;
+  description: string;
+}
+
+interface OPNsenseHostOverride {
+  enabled: '0' | '1';
+  hostname: string;
+  domain: string;
+  server: string;
+  description: string;
+  rr: Record<string, OPNsenseSelectableList>;
+}
+
+interface OPNsenseDnsblGetResponse {
+  blocklist: OPNsenseDnsblEntry;
 }
 
 /**
@@ -50,97 +80,100 @@ export class DnsBlocklistResource {
   constructor(private client: OPNSenseAPIClient) {}
 
   /**
+   * Extract selected keys from an OPNsense type map (entries where selected === 1).
+   */
+  private static extractSelectedKeys(typeMap: Record<string, OPNsenseTypeEntry>): string[] {
+    const keys: string[] = [];
+    for (const [key, entry] of Object.entries(typeMap)) {
+      if (entry?.selected === 1) {
+        keys.push(key);
+      }
+    }
+    return keys;
+  }
+
+  /**
+   * Extract selected display names from an OPNsense type map.
+   */
+  private static extractSelectedNames(typeMap: Record<string, OPNsenseTypeEntry>): string[] {
+    const names: string[] = [];
+    for (const entry of Object.values(typeMap)) {
+      if (entry?.selected === 1) {
+        names.push(entry.value || '');
+      }
+    }
+    return names;
+  }
+
+  /**
+   * Extract non-empty values from an OPNsense selectable list map.
+   */
+  private static extractListValues(listMap: Record<string, OPNsenseSelectableList>): string[] {
+    const values: string[] = [];
+    for (const entry of Object.values(listMap)) {
+      if (entry?.value) {
+        values.push(entry.value);
+      }
+    }
+    return values;
+  }
+
+  /**
    * List all DNS blocklist entries (both DNSBL subscriptions and manual blocks)
    */
   async list(): Promise<DnsBlocklistResult> {
     try {
-      // Get all Unbound settings
       const response = await this.client.getUnboundSettings();
 
       const subscriptions: DnsblSubscription[] = [];
       const manualBlocks: DnsBlocklistConfig[] = [];
 
       // Parse DNSBL subscription blocklists (e.g. OISD, Hagezi, Steven Black)
-      const dnsblBlocklist = response?.unbound?.dnsbl?.blocklist;
+      const dnsblBlocklist = response?.unbound?.dnsbl?.blocklist as
+        Record<string, OPNsenseDnsblEntry> | undefined;
+
       if (dnsblBlocklist && typeof dnsblBlocklist === 'object') {
         for (const [uuid, entry] of Object.entries(dnsblBlocklist)) {
-          if (typeof entry === 'object' && entry !== null) {
-            const entryData = entry as any;
+          if (!entry || typeof entry !== 'object') continue;
 
-            // Extract selected list names from the type field
-            const selectedLists: string[] = [];
-            if (entryData.type && typeof entryData.type === 'object') {
-              for (const [key, typeInfo] of Object.entries(entryData.type)) {
-                if (typeof typeInfo === 'object' && typeInfo !== null && (typeInfo as any).selected === 1) {
-                  selectedLists.push((typeInfo as any).value || key);
-                }
-              }
-            }
-
-            // Extract custom lists
-            const customLists: string[] = [];
-            if (entryData.lists && typeof entryData.lists === 'object') {
-              for (const [, listInfo] of Object.entries(entryData.lists)) {
-                if (typeof listInfo === 'object' && listInfo !== null) {
-                  const val = (listInfo as any).value;
-                  if (val) customLists.push(val);
-                }
-              }
-            }
-
-            // Extract allowlists
-            const allowlists: string[] = [];
-            if (entryData.allowlists && typeof entryData.allowlists === 'object') {
-              for (const [, listInfo] of Object.entries(entryData.allowlists)) {
-                if (typeof listInfo === 'object' && listInfo !== null) {
-                  const val = (listInfo as any).value;
-                  if (val) allowlists.push(val);
-                }
-              }
-            }
-
-            // Extract wildcards
-            const wildcards: string[] = [];
-            if (entryData.wildcards && typeof entryData.wildcards === 'object') {
-              for (const [, listInfo] of Object.entries(entryData.wildcards)) {
-                if (typeof listInfo === 'object' && listInfo !== null) {
-                  const val = (listInfo as any).value;
-                  if (val) wildcards.push(val);
-                }
-              }
-            }
-
-            subscriptions.push({
-              uuid,
-              enabled: entryData.enabled === '1',
-              selectedLists,
-              customLists,
-              allowlists,
-              wildcards,
-              address: entryData.address || '',
-              nxdomain: entryData.nxdomain === '1',
-              cacheTtl: entryData.cache_ttl || '',
-              description: entryData.description || ''
-            });
-          }
+          subscriptions.push({
+            uuid,
+            enabled: entry.enabled === '1',
+            selectedLists: entry.type
+              ? DnsBlocklistResource.extractSelectedNames(entry.type)
+              : [],
+            customLists: entry.lists
+              ? DnsBlocklistResource.extractListValues(entry.lists)
+              : [],
+            allowlists: entry.allowlists
+              ? DnsBlocklistResource.extractListValues(entry.allowlists)
+              : [],
+            wildcards: entry.wildcards
+              ? DnsBlocklistResource.extractListValues(entry.wildcards)
+              : [],
+            address: entry.address || '',
+            nxdomain: entry.nxdomain === '1',
+            cacheTtl: entry.cache_ttl || '',
+            description: entry.description || '',
+          });
         }
       }
 
       // Parse manual host override blocks (pointing to 0.0.0.0)
-      const hosts = response?.unbound?.hosts?.host;
+      const hosts = response?.unbound?.hosts?.host as
+        Record<string, OPNsenseHostOverride> | undefined;
+
       if (hosts && typeof hosts === 'object') {
-        for (const [uuid, host] of Object.entries(hosts)) {
-          if (typeof host === 'object' && host !== null) {
-            const hostData = host as any;
-            if (hostData.server === '0.0.0.0') {
-              const hostname = hostData.hostname || '';
-              manualBlocks.push({
-                uuid,
-                enabled: hostData.enabled === '1',
-                host: hostname ? `${hostname}.${hostData.domain}` : hostData.domain,
-                description: hostData.description || ''
-              });
-            }
+        for (const [uuid, hostData] of Object.entries(hosts)) {
+          if (!hostData || typeof hostData !== 'object') continue;
+          if (hostData.server === '0.0.0.0') {
+            const hostname = hostData.hostname || '';
+            manualBlocks.push({
+              uuid,
+              enabled: hostData.enabled === '1',
+              host: hostname ? `${hostname}.${hostData.domain}` : hostData.domain,
+              description: hostData.description || '',
+            });
           }
         }
       }
@@ -157,16 +190,13 @@ export class DnsBlocklistResource {
    */
   async blockDomain(domain: string, description?: string): Promise<{ uuid: string }> {
     try {
-      // Parse domain into host and domain parts
       const parts = domain.split('.');
       let host = '';
       let domainPart = '';
-      
+
       if (parts.length >= 2) {
-        // For subdomains like ads.example.com, host=ads, domain=example.com
-        // For domains like example.com, host=@, domain=example.com
         if (parts.length === 2) {
-          host = '@';  // Special case for root domain
+          host = '@';
           domainPart = domain;
         } else {
           host = parts[0];
@@ -176,24 +206,22 @@ export class DnsBlocklistResource {
         throw new Error('Invalid domain format');
       }
 
-      const hostData: any = {
+      const hostData = {
         enabled: '1',
         hostname: host,
         domain: domainPart,
         rr: 'A',
-        server: '0.0.0.0',  // Block by pointing to 0.0.0.0
-        description: description || `Blocked: ${domain}`
+        server: '0.0.0.0',
+        description: description || `Blocked: ${domain}`,
       };
 
-      // Add the host override
       const response = await this.client.addUnboundHost(hostData);
-      
+
       if (response?.uuid) {
-        // Apply changes
         await this.applyChanges();
         return { uuid: response.uuid };
       }
-      
+
       throw new Error('Failed to add domain to blocklist');
     } catch (error: any) {
       console.error('Failed to block domain:', error);
@@ -206,18 +234,14 @@ export class DnsBlocklistResource {
    */
   async unblockDomain(domain: string): Promise<void> {
     try {
-      // Find the entry in manual blocks
       const blocklist = await this.list();
       const entry = blocklist.manualBlocks.find(item => item.host === domain);
-      
+
       if (!entry || !entry.uuid) {
         throw new Error(`Domain ${domain} not found in blocklist`);
       }
 
-      // Delete the entry
       await this.client.delUnboundHost(entry.uuid);
-      
-      // Apply changes
       await this.applyChanges();
     } catch (error: any) {
       console.error('Failed to unblock domain:', error);
@@ -250,12 +274,8 @@ export class DnsBlocklistResource {
    * Note: This requires domain-based access control lists which may need additional configuration
    */
   async getInterfaceBlocklist(interfaceName: string): Promise<DnsBlocklistResult> {
-    // For now, return all blocklist entries with a note about interface filtering
     const allBlocked = await this.list();
-
-    // In a full implementation, this would filter based on ACLs
     console.warn(`Interface-specific filtering for ${interfaceName} requires ACL configuration`);
-
     return allBlocked;
   }
 
@@ -288,7 +308,6 @@ export class DnsBlocklistResource {
     const malwareDomains = [
       'malware-test.com',
       'phishing-test.com',
-      // Add more known malware domains
     ];
 
     return this.blockMultipleDomains(malwareDomains, 'Malware Block');
@@ -343,22 +362,21 @@ export class DnsBlocklistResource {
    */
   async getAvailableDnsblLists(): Promise<Record<string, string>> {
     const response = await this.client.getUnboundSettings();
-    const dnsblBlocklist = response?.unbound?.dnsbl?.blocklist;
+    const dnsblBlocklist = response?.unbound?.dnsbl?.blocklist as
+      Record<string, OPNsenseDnsblEntry> | undefined;
+
     if (!dnsblBlocklist || typeof dnsblBlocklist !== 'object') {
       return {};
     }
 
-    // Use the first entry's type field to get available lists
-    const firstEntry = Object.values(dnsblBlocklist)[0] as any;
+    const firstEntry = Object.values(dnsblBlocklist)[0];
     if (!firstEntry?.type || typeof firstEntry.type !== 'object') {
       return {};
     }
 
     const available: Record<string, string> = {};
     for (const [key, info] of Object.entries(firstEntry.type)) {
-      if (typeof info === 'object' && info !== null) {
-        available[key] = (info as any).value || key;
-      }
+      available[key] = info.value || key;
     }
     return available;
   }
@@ -369,7 +387,6 @@ export class DnsBlocklistResource {
    * @param targetUuid - Optional UUID of existing entry to modify. If omitted, creates a new entry.
    */
   async addDnsblSubscription(listKey: string, targetUuid?: string): Promise<{ uuid: string; selectedLists: string[] }> {
-    // Validate the list key
     const available = await this.getAvailableDnsblLists();
     if (!available[listKey]) {
       const validKeys = Object.entries(available)
@@ -379,20 +396,12 @@ export class DnsBlocklistResource {
     }
 
     if (targetUuid) {
-      // Add to existing entry - get current selected types and append
-      const current = await this.client.getDnsbl(targetUuid);
+      const current = await this.client.getDnsbl(targetUuid) as OPNsenseDnsblGetResponse | undefined;
       if (!current?.blocklist) {
         throw new Error(`DNSBL entry ${targetUuid} not found`);
       }
 
-      const currentTypes: string[] = [];
-      if (current.blocklist.type && typeof current.blocklist.type === 'object') {
-        for (const [key, info] of Object.entries(current.blocklist.type)) {
-          if (typeof info === 'object' && info !== null && (info as any).selected === 1) {
-            currentTypes.push(key);
-          }
-        }
-      }
+      const currentTypes = DnsBlocklistResource.extractSelectedKeys(current.blocklist.type);
 
       if (currentTypes.includes(listKey)) {
         throw new Error(`List "${available[listKey]}" is already active on this entry`);
@@ -414,7 +423,6 @@ export class DnsBlocklistResource {
         selectedLists: currentTypes.map(k => available[k] || k),
       };
     } else {
-      // Create a new DNSBL entry
       const response = await this.client.addDnsbl({
         enabled: '1',
         type: listKey,
@@ -439,21 +447,13 @@ export class DnsBlocklistResource {
    * @param targetUuid - UUID of the DNSBL entry to modify.
    */
   async removeDnsblSubscription(listKey: string, targetUuid: string): Promise<{ deleted: boolean; remainingLists: string[] }> {
-    const current = await this.client.getDnsbl(targetUuid);
+    const current = await this.client.getDnsbl(targetUuid) as OPNsenseDnsblGetResponse | undefined;
     if (!current?.blocklist) {
       throw new Error(`DNSBL entry ${targetUuid} not found`);
     }
 
     const available = await this.getAvailableDnsblLists();
-
-    const currentTypes: string[] = [];
-    if (current.blocklist.type && typeof current.blocklist.type === 'object') {
-      for (const [key, info] of Object.entries(current.blocklist.type)) {
-        if (typeof info === 'object' && info !== null && (info as any).selected === 1) {
-          currentTypes.push(key);
-        }
-      }
-    }
+    const currentTypes = DnsBlocklistResource.extractSelectedKeys(current.blocklist.type);
 
     if (!currentTypes.includes(listKey)) {
       throw new Error(`List "${available[listKey] || listKey}" is not active on this entry`);
@@ -462,7 +462,6 @@ export class DnsBlocklistResource {
     const remaining = currentTypes.filter(k => k !== listKey);
 
     if (remaining.length === 0) {
-      // No lists left — delete the entire entry
       const response = await this.client.delDnsbl(targetUuid);
       if (response?.result !== 'deleted') {
         throw new Error('Failed to delete DNSBL entry: ' + JSON.stringify(response));
@@ -470,7 +469,6 @@ export class DnsBlocklistResource {
       await this.applyChanges();
       return { deleted: true, remainingLists: [] };
     } else {
-      // Update entry with remaining lists
       const response = await this.client.setDnsbl(targetUuid, {
         enabled: current.blocklist.enabled || '1',
         type: remaining.join(','),
@@ -493,7 +491,7 @@ export class DnsBlocklistResource {
     targetUuid: string,
     options: { listKeys?: string[]; enabled?: boolean; description?: string }
   ): Promise<{ uuid: string; selectedLists: string[] }> {
-    const current = await this.client.getDnsbl(targetUuid);
+    const current = await this.client.getDnsbl(targetUuid) as OPNsenseDnsblGetResponse | undefined;
     if (!current?.blocklist) {
       throw new Error(`DNSBL entry ${targetUuid} not found`);
     }
@@ -502,7 +500,6 @@ export class DnsBlocklistResource {
     const update: Record<string, unknown> = {};
 
     if (options.listKeys !== undefined) {
-      // Validate all keys
       for (const key of options.listKeys) {
         if (!available[key]) {
           throw new Error(`Unknown DNSBL list key "${key}"`);
@@ -533,16 +530,10 @@ export class DnsBlocklistResource {
 
     await this.applyChanges();
 
-    // Read back the updated state
-    const updated = await this.client.getDnsbl(targetUuid);
-    const selectedLists: string[] = [];
-    if (updated?.blocklist?.type && typeof updated.blocklist.type === 'object') {
-      for (const [key, info] of Object.entries(updated.blocklist.type)) {
-        if (typeof info === 'object' && info !== null && (info as any).selected === 1) {
-          selectedLists.push(available[key] || key);
-        }
-      }
-    }
+    const updated = await this.client.getDnsbl(targetUuid) as OPNsenseDnsblGetResponse;
+    const selectedLists = updated?.blocklist?.type
+      ? DnsBlocklistResource.extractSelectedKeys(updated.blocklist.type).map(k => available[k] || k)
+      : [];
 
     return { uuid: targetUuid, selectedLists };
   }
@@ -566,10 +557,10 @@ export class DnsBlocklistResource {
     switch (category) {
       case 'adult':
         return this.blockAdultContent();
-      
+
       case 'malware':
         return this.blockMalware();
-      
+
       case 'ads': {
         const adDomains = [
           'doubleclick.net',
@@ -581,7 +572,7 @@ export class DnsBlocklistResource {
         ];
         return this.blockMultipleDomains(adDomains, 'Ad Block');
       }
-      
+
       case 'social': {
         const socialDomains = [
           'facebook.com',
@@ -595,7 +586,7 @@ export class DnsBlocklistResource {
         ];
         return this.blockMultipleDomains(socialDomains, 'Social Media Block');
       }
-      
+
       default:
         throw new Error(`Unknown category: ${category}`);
     }
