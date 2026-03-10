@@ -338,6 +338,216 @@ export class DnsBlocklistResource {
   }
 
   /**
+   * Get available DNSBL list types from the API.
+   * Returns a map of list key to display name (e.g. { atf: "Abuse.ch - ThreatFox IOC database", ... })
+   */
+  async getAvailableDnsblLists(): Promise<Record<string, string>> {
+    const response = await this.client.getUnboundSettings();
+    const dnsblBlocklist = response?.unbound?.dnsbl?.blocklist;
+    if (!dnsblBlocklist || typeof dnsblBlocklist !== 'object') {
+      return {};
+    }
+
+    // Use the first entry's type field to get available lists
+    const firstEntry = Object.values(dnsblBlocklist)[0] as any;
+    if (!firstEntry?.type || typeof firstEntry.type !== 'object') {
+      return {};
+    }
+
+    const available: Record<string, string> = {};
+    for (const [key, info] of Object.entries(firstEntry.type)) {
+      if (typeof info === 'object' && info !== null) {
+        available[key] = (info as any).value || key;
+      }
+    }
+    return available;
+  }
+
+  /**
+   * Add a DNSBL subscription list to an existing entry, or create a new entry.
+   * @param listKey - The list key (e.g. "atf", "oisd1", "hgz003")
+   * @param targetUuid - Optional UUID of existing entry to modify. If omitted, creates a new entry.
+   */
+  async addDnsblSubscription(listKey: string, targetUuid?: string): Promise<{ uuid: string; selectedLists: string[] }> {
+    // Validate the list key
+    const available = await this.getAvailableDnsblLists();
+    if (!available[listKey]) {
+      const validKeys = Object.entries(available)
+        .map(([k, v]) => `  ${k}: ${v}`)
+        .join('\n');
+      throw new Error(`Unknown DNSBL list key "${listKey}". Valid keys:\n${validKeys}`);
+    }
+
+    if (targetUuid) {
+      // Add to existing entry - get current selected types and append
+      const current = await this.client.getDnsbl(targetUuid);
+      if (!current?.blocklist) {
+        throw new Error(`DNSBL entry ${targetUuid} not found`);
+      }
+
+      const currentTypes: string[] = [];
+      if (current.blocklist.type && typeof current.blocklist.type === 'object') {
+        for (const [key, info] of Object.entries(current.blocklist.type)) {
+          if (typeof info === 'object' && info !== null && (info as any).selected === 1) {
+            currentTypes.push(key);
+          }
+        }
+      }
+
+      if (currentTypes.includes(listKey)) {
+        throw new Error(`List "${available[listKey]}" is already active on this entry`);
+      }
+
+      currentTypes.push(listKey);
+      const response = await this.client.setDnsbl(targetUuid, {
+        enabled: current.blocklist.enabled || '1',
+        type: currentTypes.join(','),
+      });
+
+      if (response?.result !== 'saved') {
+        throw new Error('API returned unexpected result: ' + JSON.stringify(response));
+      }
+
+      await this.applyChanges();
+      return {
+        uuid: targetUuid,
+        selectedLists: currentTypes.map(k => available[k] || k),
+      };
+    } else {
+      // Create a new DNSBL entry
+      const response = await this.client.addDnsbl({
+        enabled: '1',
+        type: listKey,
+      });
+
+      if (!response?.uuid) {
+        throw new Error('Failed to create DNSBL entry: ' + JSON.stringify(response));
+      }
+
+      await this.applyChanges();
+      return {
+        uuid: response.uuid,
+        selectedLists: [available[listKey]],
+      };
+    }
+  }
+
+  /**
+   * Remove a DNSBL subscription list from an entry.
+   * If the entry has only one list, deletes the entire entry.
+   * @param listKey - The list key to remove (e.g. "atf", "oisd1")
+   * @param targetUuid - UUID of the DNSBL entry to modify.
+   */
+  async removeDnsblSubscription(listKey: string, targetUuid: string): Promise<{ deleted: boolean; remainingLists: string[] }> {
+    const current = await this.client.getDnsbl(targetUuid);
+    if (!current?.blocklist) {
+      throw new Error(`DNSBL entry ${targetUuid} not found`);
+    }
+
+    const available = await this.getAvailableDnsblLists();
+
+    const currentTypes: string[] = [];
+    if (current.blocklist.type && typeof current.blocklist.type === 'object') {
+      for (const [key, info] of Object.entries(current.blocklist.type)) {
+        if (typeof info === 'object' && info !== null && (info as any).selected === 1) {
+          currentTypes.push(key);
+        }
+      }
+    }
+
+    if (!currentTypes.includes(listKey)) {
+      throw new Error(`List "${available[listKey] || listKey}" is not active on this entry`);
+    }
+
+    const remaining = currentTypes.filter(k => k !== listKey);
+
+    if (remaining.length === 0) {
+      // No lists left — delete the entire entry
+      const response = await this.client.delDnsbl(targetUuid);
+      if (response?.result !== 'deleted') {
+        throw new Error('Failed to delete DNSBL entry: ' + JSON.stringify(response));
+      }
+      await this.applyChanges();
+      return { deleted: true, remainingLists: [] };
+    } else {
+      // Update entry with remaining lists
+      const response = await this.client.setDnsbl(targetUuid, {
+        enabled: current.blocklist.enabled || '1',
+        type: remaining.join(','),
+      });
+      if (response?.result !== 'saved') {
+        throw new Error('Failed to update DNSBL entry: ' + JSON.stringify(response));
+      }
+      await this.applyChanges();
+      return {
+        deleted: false,
+        remainingLists: remaining.map(k => available[k] || k),
+      };
+    }
+  }
+
+  /**
+   * Update a DNSBL subscription entry (replace all selected lists, enable/disable, change settings).
+   */
+  async updateDnsblSubscription(
+    targetUuid: string,
+    options: { listKeys?: string[]; enabled?: boolean; description?: string }
+  ): Promise<{ uuid: string; selectedLists: string[] }> {
+    const current = await this.client.getDnsbl(targetUuid);
+    if (!current?.blocklist) {
+      throw new Error(`DNSBL entry ${targetUuid} not found`);
+    }
+
+    const available = await this.getAvailableDnsblLists();
+    const update: Record<string, unknown> = {};
+
+    if (options.listKeys !== undefined) {
+      // Validate all keys
+      for (const key of options.listKeys) {
+        if (!available[key]) {
+          throw new Error(`Unknown DNSBL list key "${key}"`);
+        }
+      }
+      if (options.listKeys.length === 0) {
+        throw new Error('Cannot set empty list — use remove to delete the entry instead');
+      }
+      update.type = options.listKeys.join(',');
+    }
+
+    if (options.enabled !== undefined) {
+      update.enabled = options.enabled ? '1' : '0';
+    }
+
+    if (options.description !== undefined) {
+      update.description = options.description;
+    }
+
+    if (Object.keys(update).length === 0) {
+      throw new Error('No update options provided');
+    }
+
+    const response = await this.client.setDnsbl(targetUuid, update);
+    if (response?.result !== 'saved') {
+      throw new Error('Failed to update DNSBL entry: ' + JSON.stringify(response));
+    }
+
+    await this.applyChanges();
+
+    // Read back the updated state
+    const updated = await this.client.getDnsbl(targetUuid);
+    const selectedLists: string[] = [];
+    if (updated?.blocklist?.type && typeof updated.blocklist.type === 'object') {
+      for (const [key, info] of Object.entries(updated.blocklist.type)) {
+        if (typeof info === 'object' && info !== null && (info as any).selected === 1) {
+          selectedLists.push(available[key] || key);
+        }
+      }
+    }
+
+    return { uuid: targetUuid, selectedLists };
+  }
+
+  /**
    * Apply DNS configuration changes
    */
   private async applyChanges(): Promise<void> {
