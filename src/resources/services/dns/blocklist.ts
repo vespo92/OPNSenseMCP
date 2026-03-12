@@ -1,16 +1,46 @@
 import { OPNSenseAPIClient } from '../../../api/client.js';
 
 /**
- * DNS blocklist item interface
+ * OPNsense API response shapes for Unbound DNSBL / host override data.
+ * These mirror the JSON structure returned by the OPNsense REST API.
  */
-export interface DnsBlocklistItem {
+interface OPNsenseTypeEntry {
+  value: string;
+  selected: 0 | 1;
+}
+
+interface OPNsenseSelectableList {
+  value: string;
+  selected: 0 | 1;
+}
+
+interface OPNsenseDnsblEntry {
   enabled: '0' | '1';
-  host: string;
-  description?: string;
+  type: Record<string, OPNsenseTypeEntry>;
+  lists: Record<string, OPNsenseSelectableList>;
+  allowlists: Record<string, OPNsenseSelectableList>;
+  wildcards: Record<string, OPNsenseSelectableList>;
+  address: string;
+  nxdomain: '0' | '1';
+  cache_ttl: string;
+  description: string;
+}
+
+interface OPNsenseHostOverride {
+  enabled: '0' | '1';
+  hostname: string;
+  domain: string;
+  server: string;
+  description: string;
+  rr: Record<string, OPNsenseSelectableList>;
+}
+
+interface OPNsenseDnsblGetResponse {
+  blocklist: OPNsenseDnsblEntry;
 }
 
 /**
- * DNS blocklist configuration
+ * DNS blocklist configuration (individual blocked domain)
  */
 export interface DnsBlocklistConfig {
   uuid?: string;
@@ -20,43 +50,135 @@ export interface DnsBlocklistConfig {
 }
 
 /**
+ * DNSBL subscription blocklist entry (e.g. OISD, Hagezi, Steven Black)
+ */
+export interface DnsblSubscription {
+  uuid: string;
+  enabled: boolean;
+  selectedLists: string[];
+  customLists: string[];
+  allowlists: string[];
+  wildcards: string[];
+  address: string;
+  nxdomain: boolean;
+  cacheTtl: string;
+  description: string;
+}
+
+/**
+ * Combined DNS blocklist result
+ */
+export interface DnsBlocklistResult {
+  subscriptions: DnsblSubscription[];
+  manualBlocks: DnsBlocklistConfig[];
+}
+
+/**
  * OPNSense DNS Blocklist Resource for managing Unbound DNS blocklists
  */
 export class DnsBlocklistResource {
   constructor(private client: OPNSenseAPIClient) {}
 
   /**
-   * List all DNS blocklist entries
+   * Extract selected keys from an OPNsense type map (entries where selected === 1).
    */
-  async list(): Promise<DnsBlocklistConfig[]> {
+  private static extractSelectedKeys(typeMap: Record<string, OPNsenseTypeEntry>): string[] {
+    const keys: string[] = [];
+    for (const [key, entry] of Object.entries(typeMap)) {
+      if (entry?.selected === 1) {
+        keys.push(key);
+      }
+    }
+    return keys;
+  }
+
+  /**
+   * Extract selected display names from an OPNsense type map.
+   */
+  private static extractSelectedNames(typeMap: Record<string, OPNsenseTypeEntry>): string[] {
+    const names: string[] = [];
+    for (const entry of Object.values(typeMap)) {
+      if (entry?.selected === 1) {
+        names.push(entry.value || '');
+      }
+    }
+    return names;
+  }
+
+  /**
+   * Extract non-empty values from an OPNsense selectable list map.
+   */
+  private static extractListValues(listMap: Record<string, OPNsenseSelectableList>): string[] {
+    const values: string[] = [];
+    for (const entry of Object.values(listMap)) {
+      if (entry?.value) {
+        values.push(entry.value);
+      }
+    }
+    return values;
+  }
+
+  /**
+   * List all DNS blocklist entries (both DNSBL subscriptions and manual blocks)
+   */
+  async list(): Promise<DnsBlocklistResult> {
     try {
-      // Get all Unbound settings
       const response = await this.client.getUnboundSettings();
-      
-      if (!response?.unbound?.hosts) {
-        return [];
+
+      const subscriptions: DnsblSubscription[] = [];
+      const manualBlocks: DnsBlocklistConfig[] = [];
+
+      // Parse DNSBL subscription blocklists (e.g. OISD, Hagezi, Steven Black)
+      const dnsblBlocklist = response?.unbound?.dnsbl?.blocklist as
+        Record<string, OPNsenseDnsblEntry> | undefined;
+
+      if (dnsblBlocklist && typeof dnsblBlocklist === 'object') {
+        for (const [uuid, entry] of Object.entries(dnsblBlocklist)) {
+          if (!entry || typeof entry !== 'object') continue;
+
+          subscriptions.push({
+            uuid,
+            enabled: entry.enabled === '1',
+            selectedLists: entry.type
+              ? DnsBlocklistResource.extractSelectedNames(entry.type)
+              : [],
+            customLists: entry.lists
+              ? DnsBlocklistResource.extractListValues(entry.lists)
+              : [],
+            allowlists: entry.allowlists
+              ? DnsBlocklistResource.extractListValues(entry.allowlists)
+              : [],
+            wildcards: entry.wildcards
+              ? DnsBlocklistResource.extractListValues(entry.wildcards)
+              : [],
+            address: entry.address || '',
+            nxdomain: entry.nxdomain === '1',
+            cacheTtl: entry.cache_ttl || '',
+            description: entry.description || '',
+          });
+        }
       }
 
-      // Extract host overrides that act as blocklist entries (pointing to 0.0.0.0)
-      const hosts = response.unbound.hosts;
-      const blocklist: DnsBlocklistConfig[] = [];
+      // Parse manual host override blocks (pointing to 0.0.0.0)
+      const hosts = response?.unbound?.hosts?.host as
+        Record<string, OPNsenseHostOverride> | undefined;
 
-      for (const [uuid, host] of Object.entries(hosts)) {
-        if (typeof host === 'object' && host !== null) {
-          const hostData = host as any;
-          // Check if this is a blocklist entry (points to 0.0.0.0)
+      if (hosts && typeof hosts === 'object') {
+        for (const [uuid, hostData] of Object.entries(hosts)) {
+          if (!hostData || typeof hostData !== 'object') continue;
           if (hostData.server === '0.0.0.0') {
-            blocklist.push({
+            const hostname = hostData.hostname || '';
+            manualBlocks.push({
               uuid,
               enabled: hostData.enabled === '1',
-              host: `${hostData.host}.${hostData.domain}`,
-              description: hostData.description || ''
+              host: hostname ? `${hostname}.${hostData.domain}` : hostData.domain,
+              description: hostData.description || '',
             });
           }
         }
       }
 
-      return blocklist;
+      return { subscriptions, manualBlocks };
     } catch (error: any) {
       console.error('Failed to list DNS blocklist:', error);
       throw new Error(`Failed to list DNS blocklist: ${error.message}`);
@@ -68,16 +190,13 @@ export class DnsBlocklistResource {
    */
   async blockDomain(domain: string, description?: string): Promise<{ uuid: string }> {
     try {
-      // Parse domain into host and domain parts
       const parts = domain.split('.');
       let host = '';
       let domainPart = '';
-      
+
       if (parts.length >= 2) {
-        // For subdomains like ads.example.com, host=ads, domain=example.com
-        // For domains like example.com, host=@, domain=example.com
         if (parts.length === 2) {
-          host = '@';  // Special case for root domain
+          host = '@';
           domainPart = domain;
         } else {
           host = parts[0];
@@ -87,23 +206,22 @@ export class DnsBlocklistResource {
         throw new Error('Invalid domain format');
       }
 
-      const hostData: any = {
+      const hostData = {
         enabled: '1',
-        host: host,
+        hostname: host,
         domain: domainPart,
-        server: '0.0.0.0',  // Block by pointing to 0.0.0.0
-        description: description || `Blocked: ${domain}`
+        rr: 'A',
+        server: '0.0.0.0',
+        description: description || `Blocked: ${domain}`,
       };
 
-      // Add the host override
       const response = await this.client.addUnboundHost(hostData);
-      
+
       if (response?.uuid) {
-        // Apply changes
         await this.applyChanges();
         return { uuid: response.uuid };
       }
-      
+
       throw new Error('Failed to add domain to blocklist');
     } catch (error: any) {
       console.error('Failed to block domain:', error);
@@ -116,18 +234,14 @@ export class DnsBlocklistResource {
    */
   async unblockDomain(domain: string): Promise<void> {
     try {
-      // Find the entry
       const blocklist = await this.list();
-      const entry = blocklist.find(item => item.host === domain);
-      
+      const entry = blocklist.manualBlocks.find(item => item.host === domain);
+
       if (!entry || !entry.uuid) {
         throw new Error(`Domain ${domain} not found in blocklist`);
       }
 
-      // Delete the entry
       await this.client.delUnboundHost(entry.uuid);
-      
-      // Apply changes
       await this.applyChanges();
     } catch (error: any) {
       console.error('Failed to unblock domain:', error);
@@ -159,13 +273,9 @@ export class DnsBlocklistResource {
    * Get blocklist entries for a specific interface
    * Note: This requires domain-based access control lists which may need additional configuration
    */
-  async getInterfaceBlocklist(interfaceName: string): Promise<DnsBlocklistConfig[]> {
-    // For now, return all blocklist entries with a note about interface filtering
+  async getInterfaceBlocklist(interfaceName: string): Promise<DnsBlocklistResult> {
     const allBlocked = await this.list();
-    
-    // In a full implementation, this would filter based on ACLs
     console.warn(`Interface-specific filtering for ${interfaceName} requires ACL configuration`);
-    
     return allBlocked;
   }
 
@@ -198,7 +308,6 @@ export class DnsBlocklistResource {
     const malwareDomains = [
       'malware-test.com',
       'phishing-test.com',
-      // Add more known malware domains
     ];
 
     return this.blockMultipleDomains(malwareDomains, 'Malware Block');
@@ -228,16 +337,205 @@ export class DnsBlocklistResource {
   }
 
   /**
-   * Search blocklist entries
+   * Search blocklist entries (searches both subscriptions and manual blocks)
    */
-  async searchBlocklist(pattern: string): Promise<DnsBlocklistConfig[]> {
-    const allEntries = await this.list();
+  async searchBlocklist(pattern: string): Promise<DnsBlocklistResult> {
+    const result = await this.list();
     const searchLower = pattern.toLowerCase();
-    
-    return allEntries.filter(entry => 
+
+    const subscriptions = result.subscriptions.filter(entry =>
+      entry.selectedLists.some(l => l.toLowerCase().includes(searchLower)) ||
+      entry.description.toLowerCase().includes(searchLower)
+    );
+
+    const manualBlocks = result.manualBlocks.filter(entry =>
       entry.host.toLowerCase().includes(searchLower) ||
       (entry.description && entry.description.toLowerCase().includes(searchLower))
     );
+
+    return { subscriptions, manualBlocks };
+  }
+
+  /**
+   * Get available DNSBL list types from the API.
+   * Returns a map of list key to display name (e.g. { atf: "Abuse.ch - ThreatFox IOC database", ... })
+   */
+  async getAvailableDnsblLists(): Promise<Record<string, string>> {
+    const response = await this.client.getUnboundSettings();
+    const dnsblBlocklist = response?.unbound?.dnsbl?.blocklist as
+      Record<string, OPNsenseDnsblEntry> | undefined;
+
+    if (!dnsblBlocklist || typeof dnsblBlocklist !== 'object') {
+      return {};
+    }
+
+    const firstEntry = Object.values(dnsblBlocklist)[0];
+    if (!firstEntry?.type || typeof firstEntry.type !== 'object') {
+      return {};
+    }
+
+    const available: Record<string, string> = {};
+    for (const [key, info] of Object.entries(firstEntry.type)) {
+      available[key] = info.value || key;
+    }
+    return available;
+  }
+
+  /**
+   * Add a DNSBL subscription list to an existing entry, or create a new entry.
+   * @param listKey - The list key (e.g. "atf", "oisd1", "hgz003")
+   * @param targetUuid - Optional UUID of existing entry to modify. If omitted, creates a new entry.
+   */
+  async addDnsblSubscription(listKey: string, targetUuid?: string): Promise<{ uuid: string; selectedLists: string[] }> {
+    const available = await this.getAvailableDnsblLists();
+    if (!available[listKey]) {
+      const validKeys = Object.entries(available)
+        .map(([k, v]) => `  ${k}: ${v}`)
+        .join('\n');
+      throw new Error(`Unknown DNSBL list key "${listKey}". Valid keys:\n${validKeys}`);
+    }
+
+    if (targetUuid) {
+      const current = await this.client.getDnsbl(targetUuid) as OPNsenseDnsblGetResponse | undefined;
+      if (!current?.blocklist) {
+        throw new Error(`DNSBL entry ${targetUuid} not found`);
+      }
+
+      const currentTypes = DnsBlocklistResource.extractSelectedKeys(current.blocklist.type);
+
+      if (currentTypes.includes(listKey)) {
+        throw new Error(`List "${available[listKey]}" is already active on this entry`);
+      }
+
+      currentTypes.push(listKey);
+      const response = await this.client.setDnsbl(targetUuid, {
+        enabled: current.blocklist.enabled || '1',
+        type: currentTypes.join(','),
+      });
+
+      if (response?.result !== 'saved') {
+        throw new Error('API returned unexpected result: ' + JSON.stringify(response));
+      }
+
+      await this.applyChanges();
+      return {
+        uuid: targetUuid,
+        selectedLists: currentTypes.map(k => available[k] || k),
+      };
+    } else {
+      const response = await this.client.addDnsbl({
+        enabled: '1',
+        type: listKey,
+      });
+
+      if (!response?.uuid) {
+        throw new Error('Failed to create DNSBL entry: ' + JSON.stringify(response));
+      }
+
+      await this.applyChanges();
+      return {
+        uuid: response.uuid,
+        selectedLists: [available[listKey]],
+      };
+    }
+  }
+
+  /**
+   * Remove a DNSBL subscription list from an entry.
+   * If the entry has only one list, deletes the entire entry.
+   * @param listKey - The list key to remove (e.g. "atf", "oisd1")
+   * @param targetUuid - UUID of the DNSBL entry to modify.
+   */
+  async removeDnsblSubscription(listKey: string, targetUuid: string): Promise<{ deleted: boolean; remainingLists: string[] }> {
+    const current = await this.client.getDnsbl(targetUuid) as OPNsenseDnsblGetResponse | undefined;
+    if (!current?.blocklist) {
+      throw new Error(`DNSBL entry ${targetUuid} not found`);
+    }
+
+    const available = await this.getAvailableDnsblLists();
+    const currentTypes = DnsBlocklistResource.extractSelectedKeys(current.blocklist.type);
+
+    if (!currentTypes.includes(listKey)) {
+      throw new Error(`List "${available[listKey] || listKey}" is not active on this entry`);
+    }
+
+    const remaining = currentTypes.filter(k => k !== listKey);
+
+    if (remaining.length === 0) {
+      const response = await this.client.delDnsbl(targetUuid);
+      if (response?.result !== 'deleted') {
+        throw new Error('Failed to delete DNSBL entry: ' + JSON.stringify(response));
+      }
+      await this.applyChanges();
+      return { deleted: true, remainingLists: [] };
+    } else {
+      const response = await this.client.setDnsbl(targetUuid, {
+        enabled: current.blocklist.enabled || '1',
+        type: remaining.join(','),
+      });
+      if (response?.result !== 'saved') {
+        throw new Error('Failed to update DNSBL entry: ' + JSON.stringify(response));
+      }
+      await this.applyChanges();
+      return {
+        deleted: false,
+        remainingLists: remaining.map(k => available[k] || k),
+      };
+    }
+  }
+
+  /**
+   * Update a DNSBL subscription entry (replace all selected lists, enable/disable, change settings).
+   */
+  async updateDnsblSubscription(
+    targetUuid: string,
+    options: { listKeys?: string[]; enabled?: boolean; description?: string }
+  ): Promise<{ uuid: string; selectedLists: string[] }> {
+    const current = await this.client.getDnsbl(targetUuid) as OPNsenseDnsblGetResponse | undefined;
+    if (!current?.blocklist) {
+      throw new Error(`DNSBL entry ${targetUuid} not found`);
+    }
+
+    const available = await this.getAvailableDnsblLists();
+    const update: Record<string, unknown> = {};
+
+    if (options.listKeys !== undefined) {
+      for (const key of options.listKeys) {
+        if (!available[key]) {
+          throw new Error(`Unknown DNSBL list key "${key}"`);
+        }
+      }
+      if (options.listKeys.length === 0) {
+        throw new Error('Cannot set empty list — use remove to delete the entry instead');
+      }
+      update.type = options.listKeys.join(',');
+    }
+
+    if (options.enabled !== undefined) {
+      update.enabled = options.enabled ? '1' : '0';
+    }
+
+    if (options.description !== undefined) {
+      update.description = options.description;
+    }
+
+    if (Object.keys(update).length === 0) {
+      throw new Error('No update options provided');
+    }
+
+    const response = await this.client.setDnsbl(targetUuid, update);
+    if (response?.result !== 'saved') {
+      throw new Error('Failed to update DNSBL entry: ' + JSON.stringify(response));
+    }
+
+    await this.applyChanges();
+
+    const updated = await this.client.getDnsbl(targetUuid) as OPNsenseDnsblGetResponse;
+    const selectedLists = updated?.blocklist?.type
+      ? DnsBlocklistResource.extractSelectedKeys(updated.blocklist.type).map(k => available[k] || k)
+      : [];
+
+    return { uuid: targetUuid, selectedLists };
   }
 
   /**
@@ -259,10 +557,10 @@ export class DnsBlocklistResource {
     switch (category) {
       case 'adult':
         return this.blockAdultContent();
-      
+
       case 'malware':
         return this.blockMalware();
-      
+
       case 'ads': {
         const adDomains = [
           'doubleclick.net',
@@ -274,7 +572,7 @@ export class DnsBlocklistResource {
         ];
         return this.blockMultipleDomains(adDomains, 'Ad Block');
       }
-      
+
       case 'social': {
         const socialDomains = [
           'facebook.com',
@@ -288,7 +586,7 @@ export class DnsBlocklistResource {
         ];
         return this.blockMultipleDomains(socialDomains, 'Social Media Block');
       }
-      
+
       default:
         throw new Error(`Unknown category: ${category}`);
     }

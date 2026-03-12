@@ -701,6 +701,79 @@ class OPNSenseMCPServer {
           }
         },
 
+        // DNSBL Subscription Management Tools
+        {
+          name: 'list_available_dnsbl',
+          description: 'List all available DNSBL subscription lists (e.g. OISD, Hagezi, Abuse.ch)',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'add_dnsbl_subscription',
+          description: 'Add a DNSBL subscription list (e.g. OISD, Hagezi, Abuse.ch ThreatFox)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              list_key: {
+                type: 'string',
+                description: 'The list key to add (e.g. "atf", "oisd1", "hgz003"). Use list_available_dnsbl to see valid keys.'
+              },
+              target_uuid: {
+                type: 'string',
+                description: 'Optional UUID of existing DNSBL entry to add the list to. If omitted, creates a new entry.'
+              }
+            },
+            required: ['list_key']
+          }
+        },
+        {
+          name: 'remove_dnsbl_subscription',
+          description: 'Remove a DNSBL subscription list. Deletes the entry if no lists remain.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              list_key: {
+                type: 'string',
+                description: 'The list key to remove (e.g. "atf", "oisd1")'
+              },
+              target_uuid: {
+                type: 'string',
+                description: 'UUID of the DNSBL entry to remove the list from'
+              }
+            },
+            required: ['list_key', 'target_uuid']
+          }
+        },
+        {
+          name: 'update_dnsbl_subscription',
+          description: 'Update a DNSBL subscription entry (change lists, enable/disable, update description)',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              target_uuid: {
+                type: 'string',
+                description: 'UUID of the DNSBL entry to update'
+              },
+              list_keys: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Replace all selected lists with these keys'
+              },
+              enabled: {
+                type: 'boolean',
+                description: 'Enable or disable the DNSBL entry'
+              },
+              description: {
+                type: 'string',
+                description: 'Update the description'
+              }
+            },
+            required: ['target_uuid']
+          }
+        },
+
         // HAProxy Service Control
         {
           name: 'haproxy_service_control',
@@ -3154,8 +3227,9 @@ class OPNSenseMCPServer {
           
           try {
             const results = await this.dnsBlocklistResource!.searchBlocklist(args.pattern as string);
-            
-            if (results.length === 0) {
+            const totalResults = results.subscriptions.length + results.manualBlocks.length;
+
+            if (totalResults === 0) {
               return {
                 content: [{
                   type: 'text',
@@ -3163,15 +3237,28 @@ class OPNSenseMCPServer {
                 }]
               };
             }
-            
+
+            const lines: string[] = [];
+            if (results.subscriptions.length > 0) {
+              lines.push('DNSBL Subscriptions:');
+              for (const sub of results.subscriptions) {
+                lines.push(`• ${sub.selectedLists.join(', ')} ${sub.enabled ? '(enabled)' : '(disabled)'}` +
+                  (sub.description ? ` - ${sub.description}` : ''));
+              }
+            }
+            if (results.manualBlocks.length > 0) {
+              if (lines.length > 0) lines.push('');
+              lines.push('Manual Blocks:');
+              for (const entry of results.manualBlocks) {
+                lines.push(`• ${entry.host} ${entry.enabled ? '(enabled)' : '(disabled)'}` +
+                  (entry.description ? ` - ${entry.description}` : ''));
+              }
+            }
+
             return {
               content: [{
                 type: 'text',
-                text: `Found ${results.length} blocklist entries:\n\n` +
-                      results.map(entry => 
-                        `• ${entry.host} ${entry.enabled ? '(enabled)' : '(disabled)'}` +
-                        (entry.description ? ` - ${entry.description}` : '')
-                      ).join('\n')
+                text: `Found ${totalResults} blocklist entries:\n\n${lines.join('\n')}`
               }]
             };
           } catch (error: any) {
@@ -3205,6 +3292,109 @@ class OPNSenseMCPServer {
               ErrorCode.InvalidRequest,
               error.message
             );
+          }
+        }
+
+        // DNSBL Subscription Management
+        case 'list_available_dnsbl': {
+          await this.ensureInitialized();
+
+          try {
+            const available = await this.dnsBlocklistResource!.getAvailableDnsblLists();
+            const lines = Object.entries(available)
+              .map(([key, name]) => `  ${key}: ${name}`);
+            return {
+              content: [{
+                type: 'text',
+                text: `Available DNSBL lists (${lines.length}):\n\n${lines.join('\n')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InternalError,
+              `Failed to list available DNSBL lists: ${error.message}`
+            );
+          }
+        }
+
+        case 'add_dnsbl_subscription': {
+          await this.ensureInitialized();
+
+          if (!args?.list_key) {
+            throw new McpError(ErrorCode.InvalidRequest, 'list_key parameter is required');
+          }
+
+          try {
+            const result = await this.dnsBlocklistResource!.addDnsblSubscription(
+              args.list_key as string,
+              args.target_uuid as string | undefined
+            );
+            return {
+              content: [{
+                type: 'text',
+                text: `Added DNSBL subscription to entry ${result.uuid}.\nActive lists: ${result.selectedLists.join(', ')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'remove_dnsbl_subscription': {
+          await this.ensureInitialized();
+
+          if (!args?.list_key || !args?.target_uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'list_key and target_uuid parameters are required');
+          }
+
+          try {
+            const result = await this.dnsBlocklistResource!.removeDnsblSubscription(
+              args.list_key as string,
+              args.target_uuid as string
+            );
+            if (result.deleted) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: `Removed last list from entry — DNSBL entry deleted.`
+                }]
+              };
+            }
+            return {
+              content: [{
+                type: 'text',
+                text: `Removed list from entry. Remaining: ${result.remainingLists.join(', ')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        case 'update_dnsbl_subscription': {
+          await this.ensureInitialized();
+
+          if (!args?.target_uuid) {
+            throw new McpError(ErrorCode.InvalidRequest, 'target_uuid parameter is required');
+          }
+
+          try {
+            const result = await this.dnsBlocklistResource!.updateDnsblSubscription(
+              args.target_uuid as string,
+              {
+                listKeys: args.list_keys as string[] | undefined,
+                enabled: args.enabled as boolean | undefined,
+                description: args.description as string | undefined,
+              }
+            );
+            return {
+              content: [{
+                type: 'text',
+                text: `Updated DNSBL entry ${result.uuid}.\nActive lists: ${result.selectedLists.join(', ')}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
           }
         }
 
