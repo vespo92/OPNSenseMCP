@@ -5937,16 +5937,21 @@ ${analysis.recommendations.length > 0 ? analysis.recommendations.map(r => `- ${r
       // For STDIO, connect directly
       await this.server.connect(transportOrServer as Transport);
       logger.info('OPNsense MCP server running on stdio');
-    } else if (transportType === 'sse') {
-      // For SSE, set up connection handler
+    } else if (transportType === 'sse' || transportType === 'streamable-http') {
+      // For SSE and Streamable HTTP, set up connection handler
+      // Both use SSETransportServer which handles /sse (legacy) and /mcp (streamable HTTP)
       const sseServer = transportOrServer as SSETransportServer;
       sseServer.onConnection(async (transport) => {
-        // Connect each new SSE client
+        // Connect each new SSE/Streamable HTTP client
         await this.server.connect(transport);
-        logger.info('New SSE client connected');
+        logger.info(`New ${transportType} client connected`);
       });
-      logger.info(`OPNsense MCP server running on SSE (port: ${transportOptions.port || 3000})`);
-      logger.info('Waiting for SSE client connections...');
+      const port = transportOptions.port || 3000;
+      logger.info(`OPNsense MCP server running on ${transportType} (port: ${port})`);
+      if (transportType === 'streamable-http') {
+        logger.info(`Streamable HTTP endpoint: http://${transportOptions.host || '0.0.0.0'}:${port}/mcp`);
+      }
+      logger.info('Waiting for client connections...');
     }
   }
   
