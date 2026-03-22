@@ -1539,6 +1539,232 @@ class OPNSenseMCPServer {
           }
         },
 
+        // HAProxy Backend Update
+        {
+          name: 'haproxy_backend_update',
+          description: 'Update an existing HAProxy backend configuration',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Backend UUID' },
+              name: { type: 'string', description: 'Backend name' },
+              mode: { type: 'string', enum: ['http', 'tcp'], description: 'Backend mode' },
+              balance: {
+                type: 'string',
+                enum: ['roundrobin', 'leastconn', 'source', 'uri', 'hdr', 'random', 'first', 'static-rr'],
+                description: 'Load balancing algorithm'
+              },
+              description: { type: 'string' },
+              enabled: { type: 'boolean', description: 'Enable/disable backend' }
+            },
+            required: ['uuid']
+          }
+        },
+
+        // HAProxy Backend Get (single)
+        {
+          name: 'haproxy_backend_get',
+          description: 'Get detailed information about a specific HAProxy backend by UUID',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Backend UUID' }
+            },
+            required: ['uuid']
+          }
+        },
+
+        // HAProxy Frontend Update
+        {
+          name: 'haproxy_frontend_update',
+          description: 'Update an existing HAProxy frontend configuration',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Frontend UUID' },
+              name: { type: 'string', description: 'Frontend name' },
+              bind: { type: 'string', description: 'Bind address (e.g., 0.0.0.0:443)' },
+              ssl: { type: 'boolean', description: 'Enable SSL' },
+              certificates: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Certificate UUIDs or names'
+              },
+              mode: { type: 'string', enum: ['http', 'tcp'], description: 'Frontend mode' },
+              backend: { type: 'string', description: 'Default backend name or UUID' },
+              description: { type: 'string' },
+              enabled: { type: 'boolean', description: 'Enable/disable frontend' },
+              tcpInspectDelay: { type: 'number', description: 'TCP inspect delay in ms (for SNI routing)' }
+            },
+            required: ['uuid']
+          }
+        },
+
+        // HAProxy Frontend Get (single)
+        {
+          name: 'haproxy_frontend_get',
+          description: 'Get detailed information about a specific HAProxy frontend by UUID',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Frontend UUID' }
+            },
+            required: ['uuid']
+          }
+        },
+
+        // HAProxy Server Management
+        {
+          name: 'haproxy_server_add',
+          description: 'Add a server to an HAProxy backend',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              backend: { type: 'string', description: 'Backend UUID to add server to' },
+              name: { type: 'string', description: 'Server name' },
+              address: { type: 'string', description: 'Server IP address or hostname' },
+              port: { type: 'number', description: 'Server port' },
+              ssl: { type: 'boolean', description: 'Enable SSL for server connection' },
+              sslVerify: { type: 'boolean', description: 'Verify SSL certificate' },
+              sslSNI: { type: 'string', description: 'SNI hostname to send' },
+              sslCA: { type: 'string', description: 'CA certificate UUID for verification' },
+              weight: { type: 'number', description: 'Server weight (1-256)' },
+              backup: { type: 'boolean', description: 'Mark as backup server' },
+              enabled: { type: 'boolean', description: 'Enable/disable server' },
+              checkEnabled: { type: 'boolean', description: 'Enable health checks' },
+              checkInterval: { type: 'number', description: 'Health check interval in ms' },
+              maxConnections: { type: 'number', description: 'Maximum connections' }
+            },
+            required: ['backend', 'name', 'address', 'port']
+          }
+        },
+        {
+          name: 'haproxy_server_update',
+          description: 'Update an existing HAProxy server',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Server UUID' },
+              name: { type: 'string', description: 'Server name' },
+              address: { type: 'string', description: 'Server IP address or hostname' },
+              port: { type: 'number', description: 'Server port' },
+              ssl: { type: 'boolean', description: 'Enable SSL for server connection' },
+              sslVerify: { type: 'boolean', description: 'Verify SSL certificate' },
+              sslSNI: { type: 'string', description: 'SNI hostname to send' },
+              weight: { type: 'number', description: 'Server weight (1-256)' },
+              backup: { type: 'boolean', description: 'Mark as backup server' },
+              enabled: { type: 'boolean', description: 'Enable/disable server' },
+              checkEnabled: { type: 'boolean', description: 'Enable health checks' },
+              maxConnections: { type: 'number', description: 'Maximum connections' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'haproxy_server_delete',
+          description: 'Delete an HAProxy server',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Server UUID' }
+            },
+            required: ['uuid']
+          }
+        },
+
+        // HAProxy ACL Update/Delete
+        {
+          name: 'haproxy_acl_update',
+          description: 'Update an existing HAProxy ACL',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'ACL UUID' },
+              name: { type: 'string', description: 'ACL name' },
+              expression: {
+                type: 'string',
+                enum: [
+                  'ssl_sni', 'ssl_sni_end', 'ssl_sni_beg', 'ssl_sni_sub', 'ssl_sni_reg',
+                  'hdr_host', 'hdr_host_end', 'hdr_host_beg', 'hdr_host_sub', 'hdr_host_reg',
+                  'path', 'path_beg', 'path_end', 'path_sub', 'path_reg', 'path_dir',
+                  'url', 'url_beg', 'url_end', 'url_sub', 'url_reg',
+                  'src', 'src_port', 'src_is_local',
+                  'custom_acl', 'method',
+                  'ssl_fc', 'ssl_fc_sni', 'ssl_c_used', 'ssl_c_verify',
+                  'nbsrv', 'connslots', 'queue'
+                ],
+                description: 'ACL expression type'
+              },
+              value: { type: 'string', description: 'Value to match against' },
+              negate: { type: 'boolean', description: 'Negate the ACL condition' },
+              enabled: { type: 'boolean', description: 'Enable/disable ACL' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'haproxy_acl_delete',
+          description: 'Delete an HAProxy ACL',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'ACL UUID' }
+            },
+            required: ['uuid']
+          }
+        },
+
+        // HAProxy Action Update/Delete
+        {
+          name: 'haproxy_action_update',
+          description: 'Update an existing HAProxy action',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Action UUID' },
+              type: {
+                type: 'string',
+                enum: [
+                  'use_backend',
+                  'redirect', 'add_header', 'set_header', 'del_header', 'replace_header', 'replace_value',
+                  'tcp-request_content_accept', 'tcp-request_content_reject',
+                  'tcp-request_content_use-server', 'tcp-request_inspect-delay',
+                  'http-request_deny', 'http-request_tarpit', 'http-request_auth', 'http-request_set-var',
+                  'http-request_capture', 'http-request_track-sc',
+                  'http-response_add-header', 'http-response_set-header', 'http-response_del-header'
+                ],
+                description: 'Action type'
+              },
+              backend: { type: 'string', description: 'Backend name or UUID (for use_backend)' },
+              condition: { type: 'string', description: 'ACL condition string' },
+              aclNames: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Array of ACL names to link to this action'
+              },
+              operator: {
+                type: 'string',
+                enum: ['if', 'unless'],
+                description: 'Condition operator'
+              },
+              value: { type: 'string', description: 'Action-specific value' },
+              enabled: { type: 'boolean', description: 'Enable/disable action' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'haproxy_action_delete',
+          description: 'Delete an HAProxy action',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Action UUID' }
+            },
+            required: ['uuid']
+          }
+        },
+
         // Macro Recording Tools
         {
           name: 'macro_start_recording',
@@ -5294,10 +5520,347 @@ class OPNSenseMCPServer {
           }
         }
 
+        // HAProxy Backend Update
+        case 'haproxy_backend_update': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            const updates: Record<string, any> = {};
+            if (args.name !== undefined) updates.name = args.name;
+            if (args.mode !== undefined) updates.mode = args.mode;
+            if (args.balance !== undefined) updates.balance = args.balance;
+            if (args.description !== undefined) updates.description = args.description;
+            if (args.enabled !== undefined) updates.enabled = args.enabled;
+
+            await this.haproxyResource!.updateBackend(args.uuid as string, updates);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully updated HAProxy backend ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        // HAProxy Backend Get
+        case 'haproxy_backend_get': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            const backend = await this.haproxyResource!.getBackend(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(backend, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InternalError, error.message);
+          }
+        }
+
+        // HAProxy Frontend Update
+        case 'haproxy_frontend_update': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            const updates: Record<string, any> = {};
+            if (args.name !== undefined) updates.name = args.name;
+            if (args.bind !== undefined) updates.bind = args.bind;
+            if (args.mode !== undefined) updates.mode = args.mode;
+            if (args.backend !== undefined) updates.backend = args.backend;
+            if (args.description !== undefined) updates.description = args.description;
+            if (args.enabled !== undefined) updates.enabled = args.enabled;
+            if (args.tcpInspectDelay !== undefined) updates.tcpInspectDelay = args.tcpInspectDelay;
+            if (args.ssl !== undefined || args.certificates !== undefined) {
+              updates.bindOptions = {
+                ssl: args.ssl as boolean | undefined,
+                certificates: args.certificates as string[] | undefined
+              };
+            }
+
+            await this.haproxyResource!.updateFrontend(args.uuid as string, updates);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully updated HAProxy frontend ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        // HAProxy Frontend Get
+        case 'haproxy_frontend_get': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            const frontend = await this.haproxyResource!.getFrontend(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(frontend, null, 2)
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InternalError, error.message);
+          }
+        }
+
+        // HAProxy Server Add
+        case 'haproxy_server_add': {
+          await this.ensureInitialized();
+
+          if (!args || !args.backend || !args.name || !args.address || !args.port) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'backend, name, address, and port parameters are required'
+            );
+          }
+
+          try {
+            const server: Record<string, any> = {
+              name: args.name as string,
+              address: args.address as string,
+              port: args.port as number
+            };
+            if (args.ssl !== undefined) server.ssl = args.ssl;
+            if (args.sslVerify !== undefined) server.sslVerify = args.sslVerify;
+            if (args.sslSNI !== undefined) server.sslSNI = args.sslSNI;
+            if (args.sslCA !== undefined) server.sslCA = args.sslCA;
+            if (args.weight !== undefined) server.weight = args.weight;
+            if (args.backup !== undefined) server.backup = args.backup;
+            if (args.enabled !== undefined) server.enabled = args.enabled;
+            if (args.checkEnabled !== undefined) server.checkEnabled = args.checkEnabled;
+            if (args.checkInterval !== undefined) server.checkInterval = args.checkInterval;
+            if (args.maxConnections !== undefined) server.maxConnections = args.maxConnections;
+
+            const result = await this.haproxyResource!.addServerToBackend(
+              args.backend as string,
+              server as any
+            );
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully added server "${args.name}" to backend ${args.backend} with UUID: ${result.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            const errorDetails = error.details ? `\nDetails: ${JSON.stringify(error.details)}` : '';
+            throw new McpError(ErrorCode.InvalidRequest, `${error.message}${errorDetails}`);
+          }
+        }
+
+        // HAProxy Server Update
+        case 'haproxy_server_update': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            const updates: Record<string, any> = {};
+            if (args.name !== undefined) updates.name = args.name;
+            if (args.address !== undefined) updates.address = args.address;
+            if (args.port !== undefined) updates.port = args.port;
+            if (args.ssl !== undefined) updates.ssl = args.ssl;
+            if (args.sslVerify !== undefined) updates.sslVerify = args.sslVerify;
+            if (args.sslSNI !== undefined) updates.sslSNI = args.sslSNI;
+            if (args.weight !== undefined) updates.weight = args.weight;
+            if (args.backup !== undefined) updates.backup = args.backup;
+            if (args.enabled !== undefined) updates.enabled = args.enabled;
+            if (args.checkEnabled !== undefined) updates.checkEnabled = args.checkEnabled;
+            if (args.maxConnections !== undefined) updates.maxConnections = args.maxConnections;
+
+            await this.haproxyResource!.updateServer(args.uuid as string, updates);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully updated HAProxy server ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        // HAProxy Server Delete
+        case 'haproxy_server_delete': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            await this.haproxyResource!.deleteServer(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully deleted HAProxy server ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        // HAProxy ACL Update
+        case 'haproxy_acl_update': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            const updates: Record<string, any> = {};
+            if (args.name !== undefined) updates.name = args.name;
+            if (args.expression !== undefined) updates.expression = args.expression;
+            if (args.value !== undefined) updates.value = args.value;
+            if (args.negate !== undefined) updates.negate = args.negate;
+            if (args.enabled !== undefined) updates.enabled = args.enabled;
+
+            await this.haproxyResource!.updateACL(args.uuid as string, updates);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully updated HAProxy ACL ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            const errorDetails = error.details ? `\nDetails: ${JSON.stringify(error.details)}` : '';
+            throw new McpError(ErrorCode.InvalidRequest, `${error.message}${errorDetails}`);
+          }
+        }
+
+        // HAProxy ACL Delete
+        case 'haproxy_acl_delete': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            await this.haproxyResource!.deleteACL(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully deleted HAProxy ACL ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
+        // HAProxy Action Update
+        case 'haproxy_action_update': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            const updates: Record<string, any> = {};
+            if (args.type !== undefined) updates.type = args.type;
+            if (args.backend !== undefined) updates.backend = args.backend;
+            if (args.condition !== undefined) updates.condition = args.condition;
+            if (args.aclNames !== undefined) updates.aclNames = args.aclNames;
+            if (args.operator !== undefined) updates.operator = args.operator;
+            if (args.value !== undefined) updates.value = args.value;
+            if (args.enabled !== undefined) updates.enabled = args.enabled;
+
+            await this.haproxyResource!.updateAction(args.uuid as string, updates);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully updated HAProxy action ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            const errorDetails = error.details ? `\nDetails: ${JSON.stringify(error.details)}` : '';
+            throw new McpError(ErrorCode.InvalidRequest, `${error.message}${errorDetails}`);
+          }
+        }
+
+        // HAProxy Action Delete
+        case 'haproxy_action_delete': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            await this.haproxyResource!.deleteAction(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully deleted HAProxy action ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(ErrorCode.InvalidRequest, error.message);
+          }
+        }
+
         // Macro Recording Tools
         case 'macro_start_recording': {
           await this.ensureInitialized();
-          
+
           if (!args || !args.name || !args.description) {
             throw new McpError(
               ErrorCode.InvalidRequest,
