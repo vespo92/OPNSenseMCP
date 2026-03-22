@@ -94,7 +94,7 @@
     "@types/pg": "^8.11.0",
     "@types/ssh2": "^1.11.0",
     "drizzle-kit": "^0.31.8",
-    "eslint": "^9.39.1",
+    "eslint": "^10.1.0",
     "jest": "^30.2.0",
     "prettier": "^3.7.4",
     "rimraf": "^6.0.1",
