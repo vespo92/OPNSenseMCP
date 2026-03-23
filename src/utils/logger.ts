@@ -1,6 +1,19 @@
 /**
- * Simple logger utility for OPNSense MCP Server
+ * Logger utility for OPNSense MCP Server
+ *
+ * Supports file logging via LOG_FILE environment variable.
+ * When running with stdio transport, file logging is critical since
+ * stdout is reserved for JSON-RPC and stderr may not be captured.
+ *
+ * Environment variables:
+ *   LOG_LEVEL   - ERROR, WARN, INFO, DEBUG (default: INFO)
+ *   LOG_FILE    - Path to log file (default: none, stderr only)
+ *   LOG_MAX_SIZE - Max log file size in bytes before rotation (default: 10MB)
+ *   LOG_MAX_FILES - Number of rotated log files to keep (default: 5)
  */
+
+import { createWriteStream, statSync, renameSync, unlinkSync, existsSync, mkdirSync, type WriteStream } from 'node:fs';
+import { dirname } from 'node:path';
 
 export enum LogLevel {
   ERROR = 0,
@@ -14,10 +27,18 @@ export interface LoggerConfig {
   prefix?: string;
   timestamp?: boolean;
   output?: 'stdout' | 'stderr';
+  logFile?: string;
+  maxFileSize?: number;
+  maxFiles?: number;
 }
+
+const DEFAULT_MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const DEFAULT_MAX_FILES = 5;
 
 export class Logger {
   private config: LoggerConfig;
+  private fileStream: WriteStream | null = null;
+  private currentFileSize = 0;
 
   constructor(config?: Partial<LoggerConfig>) {
     this.config = {
@@ -32,6 +53,109 @@ export class Logger {
     const envLevel = process.env.LOG_LEVEL?.toUpperCase();
     if (envLevel && LogLevel[envLevel as keyof typeof LogLevel] !== undefined) {
       this.config.level = LogLevel[envLevel as keyof typeof LogLevel];
+    }
+
+    // Set log file from environment (constructor config takes precedence)
+    if (!this.config.logFile && process.env.LOG_FILE) {
+      this.config.logFile = process.env.LOG_FILE;
+    }
+
+    if (!this.config.maxFileSize && process.env.LOG_MAX_SIZE) {
+      this.config.maxFileSize = parseInt(process.env.LOG_MAX_SIZE, 10);
+    }
+
+    if (!this.config.maxFiles && process.env.LOG_MAX_FILES) {
+      this.config.maxFiles = parseInt(process.env.LOG_MAX_FILES, 10);
+    }
+
+    if (this.config.logFile) {
+      this.initFileLogging(this.config.logFile);
+    }
+  }
+
+  private initFileLogging(filePath: string): void {
+    try {
+      // Ensure the directory exists
+      const dir = dirname(filePath);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+
+      // Get current file size if file exists
+      if (existsSync(filePath)) {
+        try {
+          this.currentFileSize = statSync(filePath).size;
+        } catch {
+          this.currentFileSize = 0;
+        }
+      }
+
+      this.fileStream = createWriteStream(filePath, { flags: 'a' });
+
+      this.fileStream.on('error', (err) => {
+        // Fall back to stderr if file logging fails
+        process.stderr.write(`[Logger] File logging error: ${err.message}\n`);
+        this.fileStream = null;
+      });
+    } catch (err: any) {
+      process.stderr.write(`[Logger] Failed to initialize file logging: ${err.message}\n`);
+    }
+  }
+
+  private rotateLogFile(): void {
+    const filePath = this.config.logFile;
+    if (!filePath) return;
+
+    const maxFiles = this.config.maxFiles ?? DEFAULT_MAX_FILES;
+
+    // Close current stream
+    if (this.fileStream) {
+      this.fileStream.end();
+      this.fileStream = null;
+    }
+
+    try {
+      // Remove oldest file
+      const oldest = `${filePath}.${maxFiles}`;
+      if (existsSync(oldest)) {
+        unlinkSync(oldest);
+      }
+
+      // Shift existing rotated files
+      for (let i = maxFiles - 1; i >= 1; i--) {
+        const from = `${filePath}.${i}`;
+        const to = `${filePath}.${i + 1}`;
+        if (existsSync(from)) {
+          renameSync(from, to);
+        }
+      }
+
+      // Rotate current file
+      if (existsSync(filePath)) {
+        renameSync(filePath, `${filePath}.1`);
+      }
+    } catch (err: any) {
+      process.stderr.write(`[Logger] Log rotation error: ${err.message}\n`);
+    }
+
+    // Reopen file
+    this.currentFileSize = 0;
+    this.initFileLogging(filePath);
+  }
+
+  private writeToFile(line: string): void {
+    if (!this.fileStream) return;
+
+    const maxSize = this.config.maxFileSize ?? DEFAULT_MAX_FILE_SIZE;
+    const bytes = Buffer.byteLength(line, 'utf8');
+
+    if (this.currentFileSize + bytes > maxSize) {
+      this.rotateLogFile();
+    }
+
+    if (this.fileStream) {
+      this.fileStream.write(line);
+      this.currentFileSize += bytes;
     }
   }
 
@@ -50,7 +174,7 @@ export class Logger {
     parts.push(message);
 
     // Format additional arguments
-    const formattedArgs = args.map(arg => 
+    const formattedArgs = args.map(arg =>
       typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
     );
 
@@ -61,6 +185,11 @@ export class Logger {
     if (level > this.config.level) return;
 
     const formatted = this.format(levelName, message, ...args);
+
+    // Always write to file if configured
+    this.writeToFile(formatted + '\n');
+
+    // Write to console output (stderr by default to avoid polluting stdio transport)
     const output = this.config.output === 'stdout' ? console.log : console.error;
     output(formatted);
   }
@@ -81,11 +210,27 @@ export class Logger {
     this.log(LogLevel.DEBUG, 'DEBUG', message, ...args);
   }
 
-  // Create a child logger with additional context
+  // Create a child logger with additional context (shares file stream)
   child(context: string): Logger {
-    return new Logger({
+    const child = new Logger({
       ...this.config,
-      prefix: `${this.config.prefix} [${context}]`
+      prefix: `${this.config.prefix} [${context}]`,
+      logFile: undefined // Don't re-init file stream
+    });
+    // Share the parent's file stream
+    child.fileStream = this.fileStream;
+    child.currentFileSize = this.currentFileSize;
+    return child;
+  }
+
+  // Flush and close the file stream
+  close(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.fileStream) {
+        this.fileStream.end(() => resolve());
+      } else {
+        resolve();
+      }
     });
   }
 }

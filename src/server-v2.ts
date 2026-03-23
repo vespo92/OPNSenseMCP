@@ -12,7 +12,7 @@ import { OPNSenseAPIClient } from './api/client.js';
 import { SSHExecutor } from './resources/ssh/executor.js';
 import { MCPCacheManager } from './cache/manager.js';
 import { ResourceStateStore } from './state/store.js';
-import { Logger, LogLevel } from './utils/logger.js';
+import { Logger, LogLevel, logger } from './utils/logger.js';
 import type { PluginContext } from './core/types/plugin.js';
 
 /**
@@ -354,18 +354,18 @@ if (require.main === module) {
 
       // Graceful shutdown
       process.on('SIGINT', async () => {
-        console.log('\nReceived SIGINT, shutting down gracefully...');
+        logger.info('Received SIGINT, shutting down gracefully...');
         await server.stop();
         process.exit(0);
       });
 
       process.on('SIGTERM', async () => {
-        console.log('\nReceived SIGTERM, shutting down gracefully...');
+        logger.info('Received SIGTERM, shutting down gracefully...');
         await server.stop();
         process.exit(0);
       });
     } catch (error) {
-      console.error('Failed to start server:', error);
+      logger.error('Failed to start server:', error);
       process.exit(1);
     }
   })();

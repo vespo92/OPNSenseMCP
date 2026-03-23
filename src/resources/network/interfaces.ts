@@ -1,6 +1,7 @@
 // Interface Configuration Resource Implementation
 // Manages OPNsense network interface settings including VLAN routing configuration
 import { OPNSenseAPIClient } from '../../api/client.js';
+import { logger } from '../../utils/logger.js';
 
 export interface InterfaceConfig {
   uuid?: string;
@@ -58,7 +59,7 @@ export class InterfaceConfigResource {
    */
   async listOverview(): Promise<InterfaceOverview[]> {
     if (this.debugMode) {
-      console.log('[InterfaceConfig] Getting interface overview');
+      logger.debug('[InterfaceConfig] Getting interface overview');
     }
 
     // Try primary endpoint first (works on older OPNsense versions)
@@ -66,7 +67,7 @@ export class InterfaceConfigResource {
       const response = await this.client.get('/interfaces/overview/list');
 
       if (this.debugMode) {
-        console.log('[InterfaceConfig] Overview response:', {
+        logger.debug('[InterfaceConfig] Overview response:', {
           isArray: Array.isArray(response),
           hasRows: !!response?.rows,
           keys: response ? Object.keys(response) : []
@@ -79,7 +80,7 @@ export class InterfaceConfigResource {
       }
     } catch (error) {
       if (this.debugMode) {
-        console.log('[InterfaceConfig] /interfaces/overview/list failed, trying fallback endpoints');
+        logger.debug('[InterfaceConfig] /interfaces/overview/list failed, trying fallback endpoints');
       }
     }
 
@@ -88,7 +89,7 @@ export class InterfaceConfigResource {
       return await this.listOverviewFromDiagnostics();
     } catch (error) {
       if (this.debugMode) {
-        console.log('[InterfaceConfig] Diagnostics fallback failed:', error);
+        logger.debug('[InterfaceConfig] Diagnostics fallback failed:', error);
       }
     }
 
@@ -101,7 +102,7 @@ export class InterfaceConfigResource {
    */
   private async listOverviewFromDiagnostics(): Promise<InterfaceOverview[]> {
     if (this.debugMode) {
-      console.log('[InterfaceConfig] Fetching interfaces via diagnostics endpoints');
+      logger.debug('[InterfaceConfig] Fetching interfaces via diagnostics endpoints');
     }
 
     // Get interface names
@@ -113,7 +114,7 @@ export class InterfaceConfigResource {
       }
     } catch (error) {
       if (this.debugMode) {
-        console.log('[InterfaceConfig] getInterfaceNames failed:', error);
+        logger.debug('[InterfaceConfig] getInterfaceNames failed:', error);
       }
     }
 
@@ -126,7 +127,7 @@ export class InterfaceConfigResource {
       }
     } catch (error) {
       if (this.debugMode) {
-        console.log('[InterfaceConfig] getInterfaceStatistics failed:', error);
+        logger.debug('[InterfaceConfig] getInterfaceStatistics failed:', error);
       }
     }
 
@@ -139,7 +140,7 @@ export class InterfaceConfigResource {
       }
     } catch (error) {
       if (this.debugMode) {
-        console.log('[InterfaceConfig] getInterfaceConfig failed:', error);
+        logger.debug('[InterfaceConfig] getInterfaceConfig failed:', error);
       }
     }
 
@@ -176,7 +177,7 @@ export class InterfaceConfigResource {
     }
 
     if (this.debugMode) {
-      console.log(`[InterfaceConfig] Diagnostics fallback found ${interfaces.length} interfaces`);
+      logger.debug(`[InterfaceConfig] Diagnostics fallback found ${interfaces.length} interfaces`);
     }
 
     return interfaces;
@@ -219,7 +220,7 @@ export class InterfaceConfigResource {
    */
   async getInterfaceConfig(interfaceName: string): Promise<InterfaceConfig | null> {
     if (this.debugMode) {
-      console.log(`[InterfaceConfig] Getting config for interface: ${interfaceName}`);
+      logger.debug(`[InterfaceConfig] Getting config for interface: ${interfaceName}`);
     }
 
     try {
@@ -235,7 +236,7 @@ export class InterfaceConfigResource {
           const response = await this.client.get(endpoint);
           
           if (this.debugMode) {
-            console.log(`[InterfaceConfig] ${endpoint} response:`, {
+            logger.debug(`[InterfaceConfig] ${endpoint} response:`, {
               hasInterface: !!response?.interface,
               hasSettings: !!response?.settings,
               keys: Object.keys(response || {})
@@ -250,12 +251,12 @@ export class InterfaceConfigResource {
           }
         } catch (error) {
           if (this.debugMode) {
-            console.log(`[InterfaceConfig] ${endpoint} failed:`, error);
+            logger.debug(`[InterfaceConfig] ${endpoint} failed:`, error);
           }
         }
       }
     } catch (error) {
-      console.error(`Error getting interface config for ${interfaceName}:`, error);
+      logger.error(`Error getting interface config for ${interfaceName}:`, error);
     }
 
     return null;
@@ -266,7 +267,7 @@ export class InterfaceConfigResource {
    */
   async updateInterfaceConfig(interfaceName: string, config: Partial<InterfaceConfig>): Promise<boolean> {
     if (this.debugMode) {
-      console.log(`[InterfaceConfig] Updating interface ${interfaceName}:`, config);
+      logger.debug(`[InterfaceConfig] Updating interface ${interfaceName}:`, config);
     }
 
     try {
@@ -283,7 +284,7 @@ export class InterfaceConfigResource {
           const response = await this.client.post(endpoint.path, payload);
           
           if (this.debugMode) {
-            console.log(`[InterfaceConfig] ${endpoint.path} response:`, response);
+            logger.debug(`[InterfaceConfig] ${endpoint.path} response:`, response);
           }
 
           if (response?.result === 'saved' || response?.status === 'ok') {
@@ -295,12 +296,12 @@ export class InterfaceConfigResource {
           }
         } catch (error) {
           if (this.debugMode) {
-            console.log(`[InterfaceConfig] ${endpoint.path} failed:`, error);
+            logger.debug(`[InterfaceConfig] ${endpoint.path} failed:`, error);
           }
         }
       }
     } catch (error) {
-      console.error(`Error updating interface ${interfaceName}:`, error);
+      logger.error(`Error updating interface ${interfaceName}:`, error);
     }
 
     return false;
@@ -311,19 +312,19 @@ export class InterfaceConfigResource {
    * This removes the "Block private networks" and "Block bogons" settings
    */
   async enableInterVLANRoutingOnInterface(interfaceName: string): Promise<boolean> {
-    console.log(`[InterfaceConfig] Enabling inter-VLAN routing on ${interfaceName}...`);
+    logger.debug(`[InterfaceConfig] Enabling inter-VLAN routing on ${interfaceName}...`);
 
     try {
       // Get current configuration
       const currentConfig = await this.getInterfaceConfig(interfaceName);
       
       if (!currentConfig) {
-        console.error(`Interface ${interfaceName} not found`);
+        logger.error(`Interface ${interfaceName} not found`);
         return false;
       }
 
       if (this.debugMode) {
-        console.log('[InterfaceConfig] Current interface config:', {
+        logger.debug('[InterfaceConfig] Current interface config:', {
           name: interfaceName,
           blockpriv: currentConfig.blockpriv,
           blockbogons: currentConfig.blockbogons
@@ -339,14 +340,14 @@ export class InterfaceConfigResource {
       const success = await this.updateInterfaceConfig(interfaceName, updatedConfig);
       
       if (success) {
-        console.log(`[InterfaceConfig] Inter-VLAN routing enabled on ${interfaceName}`);
+        logger.debug(`[InterfaceConfig] Inter-VLAN routing enabled on ${interfaceName}`);
       } else {
-        console.log(`[InterfaceConfig] Failed to enable inter-VLAN routing on ${interfaceName}`);
+        logger.debug(`[InterfaceConfig] Failed to enable inter-VLAN routing on ${interfaceName}`);
       }
 
       return success;
     } catch (error) {
-      console.error(`Error enabling inter-VLAN routing on ${interfaceName}:`, error);
+      logger.error(`Error enabling inter-VLAN routing on ${interfaceName}:`, error);
       return false;
     }
   }
@@ -355,7 +356,7 @@ export class InterfaceConfigResource {
    * Enable inter-VLAN routing on all interfaces
    */
   async enableInterVLANRoutingOnAllInterfaces(): Promise<{ success: boolean; details: any[] }> {
-    console.log('[InterfaceConfig] Enabling inter-VLAN routing on all interfaces...');
+    logger.debug('[InterfaceConfig] Enabling inter-VLAN routing on all interfaces...');
 
     const results: any[] = [];
     const interfaces = await this.listOverview();
@@ -407,7 +408,7 @@ export class InterfaceConfigResource {
    * Configure DMZ interface for inter-VLAN routing
    */
   async configureDMZInterface(dmzInterface: string = 'opt8'): Promise<boolean> {
-    console.log(`[InterfaceConfig] Configuring DMZ interface ${dmzInterface} for inter-VLAN routing...`);
+    logger.debug(`[InterfaceConfig] Configuring DMZ interface ${dmzInterface} for inter-VLAN routing...`);
 
     try {
       // Enable inter-VLAN routing on DMZ interface
@@ -427,7 +428,7 @@ export class InterfaceConfigResource {
 
       return success;
     } catch (error) {
-      console.error(`Error configuring DMZ interface ${dmzInterface}:`, error);
+      logger.error(`Error configuring DMZ interface ${dmzInterface}:`, error);
       return false;
     }
   }
@@ -437,7 +438,7 @@ export class InterfaceConfigResource {
    */
   async applyChanges(): Promise<void> {
     if (this.debugMode) {
-      console.log('[InterfaceConfig] Applying interface changes');
+      logger.debug('[InterfaceConfig] Applying interface changes');
     }
 
     const applyEndpoints = [
@@ -449,11 +450,11 @@ export class InterfaceConfigResource {
       try {
         await this.client.post(endpoint);
         if (this.debugMode) {
-          console.log(`[InterfaceConfig] Applied changes via ${endpoint}`);
+          logger.debug(`[InterfaceConfig] Applied changes via ${endpoint}`);
         }
       } catch (error) {
         if (this.debugMode) {
-          console.log(`[InterfaceConfig] ${endpoint} failed:`, error);
+          logger.debug(`[InterfaceConfig] ${endpoint} failed:`, error);
         }
       }
     }
@@ -466,7 +467,7 @@ export class InterfaceConfigResource {
    * Debug method to discover interface endpoints
    */
   async debugDiscoverEndpoints(): Promise<void> {
-    console.log('\n[InterfaceConfig] Discovering interface endpoints...');
+    logger.debug('[InterfaceConfig] Discovering interface endpoints...');
 
     const testEndpoints = [
       '/interfaces/overview/list',
@@ -483,8 +484,7 @@ export class InterfaceConfigResource {
     for (const endpoint of testEndpoints) {
       try {
         const response = await this.client.get(endpoint);
-        console.log(`\n${endpoint}:`);
-        console.log('  Success - Response structure:', {
+        logger.debug(`${endpoint}: Success - Response structure:`, {
           isArray: Array.isArray(response),
           keys: Object.keys(response || {}).slice(0, 10),
           hasRows: !!response?.rows,
@@ -493,13 +493,13 @@ export class InterfaceConfigResource {
 
         // Check for interface-specific settings
         if (response && typeof response === 'object') {
-          const interfaces = Array.isArray(response) ? response : 
-                            response.rows ? response.rows : 
+          const interfaces = Array.isArray(response) ? response :
+                            response.rows ? response.rows :
                             [response];
-          
+
           for (const iface of interfaces.slice(0, 2)) {
             if (iface.blockpriv !== undefined || iface.blockbogons !== undefined) {
-              console.log('  Found interface settings:', {
+              logger.debug('  Found interface settings:', {
                 name: iface.name || iface.descr,
                 blockpriv: iface.blockpriv,
                 blockbogons: iface.blockbogons
@@ -508,8 +508,7 @@ export class InterfaceConfigResource {
           }
         }
       } catch (error: any) {
-        console.log(`\n${endpoint}:`);
-        console.log('  Failed:', error?.message || error);
+        logger.debug(`${endpoint}: Failed:`, error?.message || error);
       }
     }
   }
@@ -526,7 +525,7 @@ export class InterfaceConfigResource {
       }
     } catch (error) {
       if (this.debugMode) {
-        console.log(`[InterfaceConfig] Legacy stats endpoint failed for ${interfaceName}, trying diagnostics`);
+        logger.debug(`[InterfaceConfig] Legacy stats endpoint failed for ${interfaceName}, trying diagnostics`);
       }
     }
 
@@ -537,7 +536,7 @@ export class InterfaceConfigResource {
         return response[interfaceName];
       }
     } catch (error) {
-      console.error(`Error getting statistics for ${interfaceName}:`, error);
+      logger.error(`Error getting statistics for ${interfaceName}:`, error);
     }
 
     return null;

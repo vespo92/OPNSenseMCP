@@ -1,5 +1,6 @@
 // DHCP Lease Management Resource - FIXED VERSION
 import { OPNSenseAPIClient } from '../../../api/client.js';
+import { logger } from '../../../utils/logger.js';
 
 export interface DhcpLease {
   address: string;          // IP address
@@ -74,7 +75,7 @@ export class DhcpLeaseResource {
   async listLeases(): Promise<DhcpLease[]> {
     try {
       if (this.debugMode) {
-        console.log('[DHCP] Calling searchLease endpoint...');
+        logger.debug('[DHCP] Calling searchLease endpoint...');
       }
 
       const response = await this.client.post('/dhcpv4/leases/searchLease', {
@@ -85,7 +86,7 @@ export class DhcpLeaseResource {
       });
 
       if (this.debugMode) {
-        console.log('[DHCP] Raw response:', JSON.stringify(response, null, 2));
+        logger.debug('[DHCP] Raw response:', JSON.stringify(response, null, 2));
       }
 
       // Handle different response formats
@@ -102,9 +103,9 @@ export class DhcpLeaseResource {
       }
 
       if (this.debugMode) {
-        console.log(`[DHCP] Found ${leases.length} leases`);
+        logger.debug(`[DHCP] Found ${leases.length} leases`);
         if (leases.length > 0) {
-          console.log('[DHCP] First lease:', JSON.stringify(leases[0], null, 2));
+          logger.debug('[DHCP] First lease:', JSON.stringify(leases[0], null, 2));
         }
       }
 
@@ -112,13 +113,13 @@ export class DhcpLeaseResource {
       return leases.map(lease => this.normalizeLease(lease));
     } catch (error) {
       if (this.debugMode) {
-        console.error('[DHCP] Failed to list leases:', error);
+        logger.error('[DHCP] Failed to list leases:', error);
       }
       
       // Try alternative endpoint
       try {
         if (this.debugMode) {
-          console.log('[DHCP] Trying alternative endpoint...');
+          logger.debug('[DHCP] Trying alternative endpoint...');
         }
         
         const altResponse = await this.client.get('/dhcpv4/leases');
@@ -127,11 +128,11 @@ export class DhcpLeaseResource {
         }
       } catch (altError) {
         if (this.debugMode) {
-          console.error('[DHCP] Alternative endpoint also failed:', altError);
+          logger.error('[DHCP] Alternative endpoint also failed:', altError);
         }
       }
       
-      console.error('Failed to list DHCP leases:', error instanceof Error ? error.message : 'Unknown error');
+      logger.error('Failed to list DHCP leases:', error instanceof Error ? error.message : 'Unknown error');
       return [];
     }
   }
@@ -326,7 +327,7 @@ export class DhcpLeaseResource {
    * Debug method to test API endpoints
    */
   async debugApiEndpoints(): Promise<void> {
-    console.log('=== Debugging DHCP API Endpoints ===\n');
+    logger.debug('Debugging DHCP API Endpoints');
 
     // Test various endpoints
     const endpoints = [
@@ -337,17 +338,16 @@ export class DhcpLeaseResource {
     ];
 
     for (const endpoint of endpoints) {
-      console.log(`Testing ${endpoint.method} ${endpoint.path}...`);
+      logger.debug(`Testing ${endpoint.method} ${endpoint.path}...`);
       try {
-        const response = endpoint.method === 'POST' 
+        const response = endpoint.method === 'POST'
           ? await this.client.post(endpoint.path, endpoint.data || {})
           : await this.client.get(endpoint.path);
-        
-        console.log('Success! Response structure:', JSON.stringify(response, null, 2).substring(0, 500));
+
+        logger.debug('Success! Response structure:', JSON.stringify(response, null, 2).substring(0, 500));
       } catch (error: any) {
-        console.log('Failed:', error.message);
+        logger.debug('Failed:', error.message);
       }
-      console.log();
     }
   }
 }

@@ -1,5 +1,6 @@
 // ARP Table Management Resource
 import { OPNSenseAPIClient } from '../../api/client.js';
+import { logger } from '../../utils/logger.js';
 
 export interface ArpEntry {
   ip: string;                // IP address
@@ -35,14 +36,14 @@ export class ArpTableResource {
   async list(): Promise<ArpEntry[]> {
     try {
       if (this.debugMode) {
-        console.log('[ARP] Fetching ARP table...');
+        logger.debug('[ARP] Fetching ARP table...');
       }
 
       // OPNsense exposes ARP table through diagnostics interface
       const response = await this.client.get('/diagnostics/interface/getArp');
 
       if (this.debugMode) {
-        console.log('[ARP] Raw response:', JSON.stringify(response, null, 2));
+        logger.debug('[ARP] Raw response:', JSON.stringify(response, null, 2));
       }
 
       // Handle different response formats
@@ -59,7 +60,7 @@ export class ArpTableResource {
       return entries.map(entry => this.normalizeArpEntry(entry));
     } catch (error) {
       if (this.debugMode) {
-        console.error('[ARP] Failed to fetch ARP table:', error);
+        logger.error('[ARP] Failed to fetch ARP table:', error);
       }
       
       // Try alternative endpoint
@@ -76,7 +77,7 @@ export class ArpTableResource {
         }
       } catch (altError) {
         if (this.debugMode) {
-          console.error('[ARP] Alternative endpoint also failed:', altError);
+          logger.error('[ARP] Alternative endpoint also failed:', altError);
         }
       }
       
@@ -311,7 +312,7 @@ export class ArpTableResource {
       return true;
     } catch (error) {
       if (this.debugMode) {
-        console.error('[ARP] Failed to clear entry:', error);
+        logger.error('[ARP] Failed to clear entry:', error);
       }
       throw new Error(`Failed to clear ARP entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -330,7 +331,7 @@ export class ArpTableResource {
       return true;
     } catch (error) {
       if (this.debugMode) {
-        console.error('[ARP] Failed to add static entry:', error);
+        logger.error('[ARP] Failed to add static entry:', error);
       }
       throw new Error(`Failed to add static ARP entry: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }

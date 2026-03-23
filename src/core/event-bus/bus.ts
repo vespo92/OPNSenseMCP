@@ -6,6 +6,7 @@
 
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
+import { logger } from '../../utils/logger.js';
 import {
   EventSeverity,
   type Event,
@@ -76,7 +77,7 @@ export class EventBus extends EventEmitter {
         try {
           subscription.handler(fullEvent);
         } catch (error) {
-          console.error(`Error in event handler for ${subscription.id}:`, error);
+          logger.error(`Error in event handler for ${subscription.id}:`, error);
         }
       }
     }
