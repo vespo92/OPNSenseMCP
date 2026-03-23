@@ -1,4 +1,5 @@
 // MCP Integration for Natural Language Network Queries
+import { logger } from '../../utils/logger.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -378,12 +379,12 @@ export class NetworkQueryMCP {
     // Start periodic sync
     await this.startPeriodicSync();
     
-    console.error('Network Query MCP server started');
+    logger.info('Network Query MCP server started');
   }
 }
 
 // Start the server
 if (require.main === module) {
   const server = new NetworkQueryMCP();
-  server.start().catch(console.error);
+  server.start().catch((err) => logger.error('Failed to start server:', err));
 }

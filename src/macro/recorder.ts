@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from '../utils/logger.js';
 import { JSONPath } from 'jsonpath-plus';
 import { 
   APICall, 
@@ -263,7 +264,7 @@ export class MacroRecorder implements IMacroRecorder {
           const results = JSONPath({ path: expression, json: context });
           value = results.length > 0 ? results[0] : match[0]; // Keep original if no match
         } catch (error) {
-          console.warn(`Invalid JSONPath expression: ${expression}`, error);
+          logger.warn(`Invalid JSONPath expression: ${expression}`, error);
           value = match[0]; // Keep original on error
         }
       } else {

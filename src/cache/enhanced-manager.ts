@@ -1,5 +1,6 @@
 // Enhanced MCP Cache Manager with Drizzle ORM
 import { OPNSenseAPIClient } from '../api/client.js';
+import { logger } from '../utils/logger.js';
 import Redis from 'ioredis';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
@@ -137,7 +138,7 @@ export class EnhancedCacheManager {
       }
 
       this.redis.on('ready', () => {
-        console.log('✅ Redis connection established');
+        logger.info('Redis connection established');
       });
 
       // Load invalidation rules
@@ -149,7 +150,7 @@ export class EnhancedCacheManager {
       }
 
     } catch (error) {
-      console.error('Failed to initialize cache connections:', error);
+      logger.error('Failed to initialize cache connections:', error);
     }
   }
 
@@ -212,7 +213,7 @@ export class EnhancedCacheManager {
         }
       }
     } catch (error) {
-      console.error('Cache get error:', error);
+      logger.error('Cache get error:', error);
     }
 
     // Cache miss - fetch from API
@@ -350,7 +351,7 @@ export class EnhancedCacheManager {
       });
 
     } catch (error) {
-      console.error('Cache invalidation error:', error);
+      logger.error('Cache invalidation error:', error);
       throw error;
     }
   }
@@ -479,7 +480,7 @@ export class EnhancedCacheManager {
         }
       };
     } catch (error) {
-      console.error('Fetch and cache error:', error);
+      logger.error('Fetch and cache error:', error);
       throw error;
     }
   }
@@ -534,7 +535,7 @@ export class EnhancedCacheManager {
           }
         });
     } catch (error) {
-      console.error('Failed to update cache stats:', error);
+      logger.error('Failed to update cache stats:', error);
     }
   }
 
@@ -576,7 +577,7 @@ export class EnhancedCacheManager {
         this.patternCache.set(keyInfo.pattern, updated[0]);
       }
     } catch (error) {
-      console.error('Failed to update query pattern:', error);
+      logger.error('Failed to update query pattern:', error);
     }
   }
 
@@ -589,7 +590,7 @@ export class EnhancedCacheManager {
       
       this.invalidationRules = rules;
     } catch (error) {
-      console.error('Failed to load invalidation rules:', error);
+      logger.error('Failed to load invalidation rules:', error);
     }
   }
 
@@ -626,7 +627,7 @@ export class EnhancedCacheManager {
         timestamp: new Date()
       });
     } catch (error) {
-      console.error('Failed to log operation:', error);
+      logger.error('Failed to log operation:', error);
     }
   }
 
@@ -713,7 +714,7 @@ export class EnhancedCacheManager {
             .where(eq(queryPatterns.id, pattern.id));
         }
       } catch (error) {
-        console.error('Pattern analysis error:', error);
+        logger.error('Pattern analysis error:', error);
       }
     }, 5 * 60 * 1000);
   }

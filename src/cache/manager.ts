@@ -1,5 +1,6 @@
 // MCP Cache Manager for Local Infrastructure Integration
 import { OPNSenseAPIClient } from '../api/client.js';
+import { logger } from '../utils/logger.js';
 import Redis from 'ioredis';
 import pkg from 'pg';
 const { Pool } = pkg;
@@ -86,11 +87,11 @@ export class MCPCacheManager {
       });
 
       this.redisClient.on('connect', () => {
-        console.log(`Connected to Redis at ${this.config.redisHost}:${this.config.redisPort} (using database ${this.config.redisDb})`);
+        logger.info(`Connected to Redis at ${this.config.redisHost}:${this.config.redisPort} (using database ${this.config.redisDb})`);
       });
 
       this.redisClient.on('error', (err) => {
-        console.error('Redis connection error:', err);
+        logger.error('Redis connection error:', err);
       });
 
       // Connect to PostgreSQL
@@ -108,9 +109,9 @@ export class MCPCacheManager {
       // Set search path to include opnsense schema
       await this.pgPool.query(`SET search_path TO ${this.config.postgresSchema}, public`);
       
-      console.log(`Connected to PostgreSQL at ${this.config.postgresHost}:${this.config.postgresPort}/${this.config.postgresDb} (schema: ${this.config.postgresSchema})`);
+      logger.info(`Connected to PostgreSQL at ${this.config.postgresHost}:${this.config.postgresPort}/${this.config.postgresDb} (schema: ${this.config.postgresSchema})`);
     } catch (error) {
-      console.error('Failed to initialize cache connections:', error);
+      logger.error('Failed to initialize cache connections:', error);
     }
   }
 
@@ -145,7 +146,7 @@ export class MCPCacheManager {
         };
       }
     } catch (error) {
-      console.error('Redis get error:', error);
+      logger.error('Redis get error:', error);
     }
 
     // Fetch from API
@@ -159,7 +160,7 @@ export class MCPCacheManager {
         JSON.stringify(data)
       );
     } catch (error) {
-      console.error('Redis set error:', error);
+      logger.error('Redis set error:', error);
     }
     
     // Log cache miss
@@ -187,10 +188,10 @@ export class MCPCacheManager {
         // Remove the key prefix before deleting
         const unprefixedKeys = keys.map(k => k.replace(this.keyPrefix, ''));
         await this.redisClient.del(...unprefixedKeys);
-        console.log(`Invalidated ${keys.length} cache entries matching: ${this.keyPrefix}${pattern}`);
+        logger.info(`Invalidated ${keys.length} cache entries matching: ${this.keyPrefix}${pattern}`);
       }
     } catch (error) {
-      console.error('Cache invalidation error:', error);
+      logger.error('Cache invalidation error:', error);
     }
   }
 
@@ -203,7 +204,7 @@ export class MCPCacheManager {
       const cached = await this.redisClient.get(key);
       return cached ? JSON.parse(cached) : null;
     } catch (error) {
-      console.error('Redis getValue error:', error);
+      logger.error('Redis getValue error:', error);
       return null;
     }
   }
@@ -221,7 +222,7 @@ export class MCPCacheManager {
         await this.redisClient.set(key, serialized);
       }
     } catch (error) {
-      console.error('Redis set error:', error);
+      logger.error('Redis set error:', error);
     }
   }
 
@@ -305,7 +306,7 @@ export class MCPCacheManager {
         await this.redisClient.expire(recentKey, 3600); // 1 hour TTL
       }
     } catch (error) {
-      console.error('Failed to log operation:', error);
+      logger.error('Failed to log operation:', error);
     }
   }
 
@@ -321,7 +322,7 @@ export class MCPCacheManager {
           return operations.map(op => JSON.parse(op));
         }
       } catch (error) {
-        console.error('Redis operations fetch error:', error);
+        logger.error('Redis operations fetch error:', error);
       }
     }
 
@@ -334,7 +335,7 @@ export class MCPCacheManager {
         );
         return result.rows;
       } catch (error) {
-        console.error('PostgreSQL operations fetch error:', error);
+        logger.error('PostgreSQL operations fetch error:', error);
       }
     }
 
@@ -359,9 +360,9 @@ export class MCPCacheManager {
         timestamp: new Date()
       }));
       
-      console.log(`Queued command ${command.id} to ${queueKey}`);
+      logger.info(`Queued command ${command.id} to ${queueKey}`);
     } catch (error) {
-      console.error('Failed to queue command:', error);
+      logger.error('Failed to queue command:', error);
     }
   }
 
@@ -393,7 +394,7 @@ export class MCPCacheManager {
           };
         }
       } catch (error) {
-        console.error('Redis health check failed:', error);
+        logger.error('Redis health check failed:', error);
       }
     }
 
@@ -407,7 +408,7 @@ export class MCPCacheManager {
           schema: result.rows[0].current_schema
         };
       } catch (error) {
-        console.error('PostgreSQL health check failed:', error);
+        logger.error('PostgreSQL health check failed:', error);
       }
     }
 
@@ -429,7 +430,7 @@ export class MCPCacheManager {
       );
     } catch (error) {
       // Don't fail operations due to logging errors
-      console.error('Cache access logging error:', error);
+      logger.error('Cache access logging error:', error);
     }
   }
 
@@ -462,7 +463,7 @@ export class MCPCacheManager {
         recentStats: result.rows
       };
     } catch (error) {
-      console.error('Failed to get cache stats:', error);
+      logger.error('Failed to get cache stats:', error);
       return { hits: 0, misses: 0, hitRate: 0, recentStats: [] };
     }
   }

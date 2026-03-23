@@ -3,6 +3,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { TransportOptions } from "./types.js";
+import { logger } from "../utils/logger.js";
 
 interface SSEConnection {
   transport: SSEServerTransport;
@@ -83,17 +84,17 @@ export class SSETransportServer {
 
       this.server.on("error", reject);
       this.server.listen(this.port, this.host, () => {
-        console.log(
+        logger.info(
           `MCP Server listening on http://${this.host}:${this.port}`,
         );
-        console.log(
+        logger.info(
           `- Streamable HTTP endpoint: http://${this.host}:${this.port}/mcp`,
         );
-        console.log(`- SSE endpoint: http://${this.host}:${this.port}/sse`);
-        console.log(
+        logger.info(`- SSE endpoint: http://${this.host}:${this.port}/sse`);
+        logger.info(
           `- Messages endpoint: http://${this.host}:${this.port}/messages`,
         );
-        console.log(`- Health check: http://${this.host}:${this.port}/health`);
+        logger.info(`- Health check: http://${this.host}:${this.port}/health`);
         resolve();
       });
     });
@@ -140,13 +141,13 @@ export class SSETransportServer {
             transport.onclose = () => {
               if (newSessionId) {
                 this.streamableTransports.delete(newSessionId);
-                console.log(
+                logger.info(
                   `Streamable HTTP session closed: ${newSessionId}`,
                 );
               }
             };
 
-            console.log(
+            logger.info(
               `New Streamable HTTP session established: ${newSessionId}`,
             );
           }
@@ -172,7 +173,7 @@ export class SSETransportServer {
           const transport = this.streamableTransports.get(sessionId)!;
           await transport.handleRequest(req, res);
           this.streamableTransports.delete(sessionId);
-          console.log(`Streamable HTTP session terminated: ${sessionId}`);
+          logger.info(`Streamable HTTP session terminated: ${sessionId}`);
         } else {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(
@@ -186,7 +187,7 @@ export class SSETransportServer {
         res.end(JSON.stringify({ error: "Method not allowed" }));
       }
     } catch (error) {
-      console.error("Error handling Streamable HTTP request:", error);
+      logger.error("Error handling Streamable HTTP request:", error);
       if (!res.headersSent) {
         res.writeHead(500, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Internal server error" }));
@@ -224,7 +225,7 @@ export class SSETransportServer {
 
       if (sessionId) {
         this.connections.set(sessionId, { transport, sessionId });
-        console.log(`New SSE connection established: ${sessionId}`);
+        logger.info(`New SSE connection established: ${sessionId}`);
       }
 
       // Notify that a new connection is ready
@@ -237,11 +238,11 @@ export class SSETransportServer {
       req.on("close", () => {
         if (sessionId) {
           this.connections.delete(sessionId);
-          console.log(`SSE connection closed: ${sessionId}`);
+          logger.info(`SSE connection closed: ${sessionId}`);
         }
       });
     } catch (error) {
-      console.error("Error handling SSE connection:", error);
+      logger.error("Error handling SSE connection:", error);
       // Don't write headers if SSE has already started
       if (!res.headersSent) {
         res.writeHead(500);
@@ -274,7 +275,7 @@ export class SSETransportServer {
       // Let the transport handle the message
       await connection.transport.handlePostMessage(req, res);
     } catch (error) {
-      console.error("Error handling POST message:", error);
+      logger.error("Error handling POST message:", error);
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Internal server error" }));
     }
@@ -316,7 +317,7 @@ export class SSETransportServer {
         try {
           (connection.transport as any).close();
         } catch (error) {
-          console.error("Error closing SSE connection:", error);
+          logger.error("Error closing SSE connection:", error);
         }
       }
       this.connections.clear();
@@ -326,7 +327,7 @@ export class SSETransportServer {
         try {
           transport.close();
         } catch (error) {
-          console.error(
+          logger.error(
             `Error closing Streamable HTTP session ${sessionId}:`,
             error,
           );
@@ -336,7 +337,7 @@ export class SSETransportServer {
 
       if (this.server) {
         this.server.close(() => {
-          console.log("MCP Server stopped");
+          logger.info("MCP Server stopped");
           resolve();
         });
       } else {

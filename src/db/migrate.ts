@@ -1,4 +1,5 @@
 // Database Migration Runner
+import { logger } from '../utils/logger.js';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pkg from 'pg';
@@ -8,7 +9,7 @@ import * as schema from './schema.js';
 // Environment variables are provided by Claude Desktop/Code or npm scripts
 
 async function runMigrations() {
-  console.log('🚀 Starting database migrations...');
+  logger.info('Starting database migrations...');
   
   const pool = new Pool({
     host: process.env.POSTGRES_HOST || 'localhost',
@@ -22,12 +23,12 @@ async function runMigrations() {
   try {
     const db = drizzle(pool, { schema });
     
-    console.log('📦 Running migrations...');
+    logger.info('Running migrations...');
     await migrate(db, { migrationsFolder: './migrations' });
     
-    console.log('✅ Migrations completed successfully!');
+    logger.info('Migrations completed successfully');
   } catch (error) {
-    console.error('❌ Migration failed:', error);
+    logger.error('Migration failed:', error);
     process.exit(1);
   } finally {
     await pool.end();

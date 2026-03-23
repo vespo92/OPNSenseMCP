@@ -1,6 +1,8 @@
 // Interface mapping utility for OPNsense API
 // Maps user-friendly interface names to OPNsense internal keys
 
+import { logger } from './logger.js';
+
 export interface InterfaceMapping {
   [key: string]: string;
 }
@@ -44,7 +46,7 @@ export class InterfaceMapper {
         const customMappings = JSON.parse(process.env.OPNSENSE_INTERFACE_MAPPINGS);
         Object.assign(this.interfaceMap, customMappings);
       } catch (e) {
-        console.warn('Failed to parse OPNSENSE_INTERFACE_MAPPINGS:', e);
+        logger.warn('Failed to parse OPNSENSE_INTERFACE_MAPPINGS:', e);
       }
     }
     
@@ -123,7 +125,7 @@ export class InterfaceMapper {
     }
     
     // Return as-is if no mapping found
-    console.warn(`No mapping found for interface: ${userInterface}`);
+    logger.warn(`No mapping found for interface: ${userInterface}`);
     return userInterface;
   }
 

@@ -2,6 +2,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import https from 'https';
 import { APICall } from '../macro/types.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Custom error class for OPNsense API errors
@@ -54,7 +55,7 @@ export class OPNSenseAPIClient {
     this.axios.interceptors.request.use(
       (config) => {
         if (this.debugMode) {
-          console.log('[API Request]', {
+          logger.debug('[API Request]', {
             method: config.method?.toUpperCase(),
             url: config.url,
             headers: config.headers,
@@ -65,7 +66,7 @@ export class OPNSenseAPIClient {
       },
       (error) => {
         if (this.debugMode) {
-          console.error('[API Request Error]', error);
+          logger.error('[API Request Error]', error);
         }
         return Promise.reject(error);
       }
@@ -75,7 +76,7 @@ export class OPNSenseAPIClient {
     this.axios.interceptors.response.use(
       (response) => {
         if (this.debugMode) {
-          console.log('[API Response]', {
+          logger.debug('[API Response]', {
             status: response.status,
             statusText: response.statusText,
             data: response.data
@@ -85,7 +86,7 @@ export class OPNSenseAPIClient {
       },
       (error: AxiosError) => {
         if (this.debugMode) {
-          console.error('[API Response Error]', {
+          logger.error('[API Response Error]', {
             status: error.response?.status,
             statusText: error.response?.statusText,
             data: error.response?.data

@@ -4,6 +4,7 @@ import { OPNSenseAPIClient } from '../../api/client.js';
 import { InterfaceMapper } from '../../utils/interface-mapper.js';
 import SSHExecutor from '../ssh/executor.js';
 import { parseStringPromise, Builder } from 'xml2js';
+import { logger } from '../../utils/logger.js';
 
 // NAT Rule Types
 export interface OutboundNATRule {
@@ -84,11 +85,11 @@ export class NATResource {
       this.sshExecutor = new SSHExecutor();
       this.useSSH = true;
       if (this.debugMode) {
-        console.log('[NATResource] SSH configured, using SSH/CLI for NAT management');
+        logger.debug('[NATResource] SSH configured, using SSH/CLI for NAT management');
       }
     } else {
       if (this.debugMode) {
-        console.log('[NATResource] SSH not configured, limited NAT functionality available');
+        logger.debug('[NATResource] SSH not configured, limited NAT functionality available');
       }
     }
   }
@@ -174,11 +175,11 @@ export class NATResource {
    */
   async listOutboundRules(): Promise<OutboundNATRule[]> {
     if (this.debugMode) {
-      console.log('[NATResource] Fetching outbound NAT rules via SSH');
+      logger.debug('[NATResource] Fetching outbound NAT rules via SSH');
     }
 
     if (!this.sshExecutor) {
-      console.warn('[NATResource] SSH not configured, returning empty list');
+      logger.warn('[NATResource] SSH not configured, returning empty list');
       return [];
     }
 
@@ -188,7 +189,7 @@ export class NATResource {
       const outbound = natConfig.outbound || {};
       
       if (this.debugMode) {
-        console.log('[NATResource] Outbound NAT mode:', outbound.mode);
+        logger.debug('[NATResource] Outbound NAT mode:', outbound.mode);
       }
 
       // Handle rules - they might be an array or object
@@ -203,12 +204,12 @@ export class NATResource {
       }
 
       if (this.debugMode) {
-        console.log(`[NATResource] Found ${rules.length} outbound NAT rules`);
+        logger.debug(`[NATResource] Found ${rules.length} outbound NAT rules`);
       }
 
       return rules;
     } catch (error) {
-      console.error('Failed to list outbound NAT rules:', error);
+      logger.error('Failed to list outbound NAT rules:', error);
       return [];
     }
   }
@@ -218,7 +219,7 @@ export class NATResource {
    */
   async getOutboundMode(): Promise<NATMode> {
     if (!this.sshExecutor) {
-      console.warn('[NATResource] SSH not configured, returning default mode');
+      logger.warn('[NATResource] SSH not configured, returning default mode');
       return 'automatic';
     }
 
@@ -227,7 +228,7 @@ export class NATResource {
       const mode = config.nat?.outbound?.mode || 'automatic';
       return mode as NATMode;
     } catch (error) {
-      console.error('Failed to get outbound NAT mode:', error);
+      logger.error('Failed to get outbound NAT mode:', error);
       return 'automatic';
     }
   }
@@ -237,7 +238,7 @@ export class NATResource {
    */
   async setOutboundMode(mode: NATMode): Promise<boolean> {
     if (this.debugMode) {
-      console.log(`[NATResource] Setting outbound NAT mode to: ${mode}`);
+      logger.debug(`[NATResource] Setting outbound NAT mode to: ${mode}`);
     }
 
     if (!this.sshExecutor) {
@@ -259,7 +260,7 @@ export class NATResource {
       
       return true;
     } catch (error) {
-      console.error('Failed to set outbound NAT mode:', error);
+      logger.error('Failed to set outbound NAT mode:', error);
       return false;
     }
   }
@@ -269,7 +270,7 @@ export class NATResource {
    */
   async createOutboundRule(rule: OutboundNATRule): Promise<{ uuid: string; success: boolean }> {
     if (this.debugMode) {
-      console.log('[NATResource] Creating outbound NAT rule via SSH:', rule);
+      logger.debug('[NATResource] Creating outbound NAT rule via SSH:', rule);
     }
 
     if (!this.sshExecutor) {
@@ -329,7 +330,7 @@ export class NATResource {
       
       return { uuid, success: true };
     } catch (error) {
-      console.error('Failed to create outbound NAT rule:', error);
+      logger.error('Failed to create outbound NAT rule:', error);
       throw error;
     }
   }
@@ -371,7 +372,7 @@ export class NATResource {
       
       return true;
     } catch (error) {
-      console.error('Failed to delete outbound NAT rule:', error);
+      logger.error('Failed to delete outbound NAT rule:', error);
       throw error;
     }
   }
@@ -381,7 +382,7 @@ export class NATResource {
    */
   async updateOutboundRule(uuid: string, updates: Partial<OutboundNATRule>): Promise<boolean> {
     // For SSH implementation, we would need to identify rules by description or other fields
-    console.warn('[NATResource] Update via SSH not fully implemented. Use delete and create instead.');
+    logger.warn('[NATResource] Update via SSH not fully implemented. Use delete and create instead.');
     return false;
   }
 
@@ -389,7 +390,7 @@ export class NATResource {
    * Toggle outbound rule enabled/disabled (placeholder for SSH implementation)
    */
   async toggleOutboundRule(uuid: string, enabled?: string): Promise<boolean> {
-    console.warn('[NATResource] Toggle via SSH not fully implemented');
+    logger.warn('[NATResource] Toggle via SSH not fully implemented');
     return false;
   }
 
@@ -397,7 +398,7 @@ export class NATResource {
    * Get a specific outbound NAT rule (placeholder for SSH implementation)
    */
   async getOutboundRule(uuid: string): Promise<OutboundNATRule | null> {
-    console.warn('[NATResource] Get specific rule via SSH not implemented');
+    logger.warn('[NATResource] Get specific rule via SSH not implemented');
     return null;
   }
 
@@ -408,11 +409,11 @@ export class NATResource {
    */
   async listPortForwards(): Promise<PortForwardRule[]> {
     if (this.debugMode) {
-      console.log('[NATResource] Fetching port forward rules via SSH');
+      logger.debug('[NATResource] Fetching port forward rules via SSH');
     }
 
     if (!this.sshExecutor) {
-      console.warn('[NATResource] SSH not configured, returning empty list');
+      logger.warn('[NATResource] SSH not configured, returning empty list');
       return [];
     }
 
@@ -433,12 +434,12 @@ export class NATResource {
       }
 
       if (this.debugMode) {
-        console.log(`[NATResource] Found ${rules.length} port forward rules`);
+        logger.debug(`[NATResource] Found ${rules.length} port forward rules`);
       }
 
       return rules;
     } catch (error) {
-      console.error('Failed to list port forward rules:', error);
+      logger.error('Failed to list port forward rules:', error);
       return [];
     }
   }
@@ -448,7 +449,7 @@ export class NATResource {
    */
   async createPortForward(rule: PortForwardRule): Promise<{ uuid: string; success: boolean }> {
     if (this.debugMode) {
-      console.log('[NATResource] Creating port forward rule via SSH:', rule);
+      logger.debug('[NATResource] Creating port forward rule via SSH:', rule);
     }
 
     if (!this.sshExecutor) {
@@ -522,12 +523,12 @@ export class NATResource {
       await this.applyNATChanges();
 
       if (this.debugMode) {
-        console.log(`[NATResource] Port forward created successfully: ${uuid}`);
+        logger.debug(`[NATResource] Port forward created successfully: ${uuid}`);
       }
 
       return { uuid, success: true };
     } catch (error) {
-      console.error('Failed to create port forward rule:', error);
+      logger.error('Failed to create port forward rule:', error);
       throw error;
     }
   }
@@ -537,7 +538,7 @@ export class NATResource {
    */
   async deletePortForward(identifier: string): Promise<boolean> {
     if (this.debugMode) {
-      console.log('[NATResource] Deleting port forward rule:', identifier);
+      logger.debug('[NATResource] Deleting port forward rule:', identifier);
     }
 
     if (!this.sshExecutor) {
@@ -580,12 +581,12 @@ export class NATResource {
       await this.applyNATChanges();
 
       if (this.debugMode) {
-        console.log(`[NATResource] Port forward deleted successfully`);
+        logger.debug(`[NATResource] Port forward deleted successfully`);
       }
 
       return true;
     } catch (error) {
-      console.error('Failed to delete port forward rule:', error);
+      logger.error('Failed to delete port forward rule:', error);
       throw error;
     }
   }
@@ -638,8 +639,8 @@ export class NATResource {
     lanNetwork?: string;
     otherInternalNetworks?: string[];
   }): Promise<{ success: boolean; message: string; rulesCreated: string[] }> {
-    console.log('\n[NATResource] Starting DMZ NAT fix...');
-    
+    logger.info('[NATResource] Starting DMZ NAT fix...');
+
     const dmzNetwork = params?.dmzNetwork || '10.0.6.0/24';
     const lanNetwork = params?.lanNetwork || '10.0.0.0/24';
     const otherNetworks = params?.otherInternalNetworks || [
@@ -652,18 +653,18 @@ export class NATResource {
     try {
       // Step 1: Check current NAT mode
       const currentMode = await this.getOutboundMode();
-      console.log(`Current NAT mode: ${currentMode}`);
+      logger.info(`Current NAT mode: ${currentMode}`);
 
       // Step 2: Set to hybrid mode if needed (allows manual rules with automatic)
       if (currentMode === 'automatic') {
-        console.log('Switching NAT mode from automatic to hybrid...');
+        logger.info('Switching NAT mode from automatic to hybrid...');
         await this.setOutboundMode('hybrid');
       }
 
       // Step 3: Create no-NAT exception rules for inter-VLAN traffic
-      
+
       // DMZ to LAN - No NAT
-      console.log('Creating DMZ to LAN no-NAT rule...');
+      logger.info('Creating DMZ to LAN no-NAT rule...');
       const dmzToLan = await this.createOutboundRule({
         enabled: '1',
         interface: 'wan',
@@ -676,7 +677,7 @@ export class NATResource {
       rulesCreated.push(`DMZ→LAN`);
 
       // LAN to DMZ - No NAT (return traffic)
-      console.log('Creating LAN to DMZ no-NAT rule...');
+      logger.info('Creating LAN to DMZ no-NAT rule...');
       const lanToDmz = await this.createOutboundRule({
         enabled: '1',
         interface: 'wan',
@@ -690,7 +691,7 @@ export class NATResource {
 
       // DMZ to other internal networks
       for (const network of otherNetworks) {
-        console.log(`Creating DMZ to ${network} no-NAT rule...`);
+        logger.info(`Creating DMZ to ${network} no-NAT rule...`);
         await this.createOutboundRule({
           enabled: '1',
           interface: 'wan',
@@ -716,16 +717,16 @@ export class NATResource {
       }
 
       // Step 4: Apply all NAT changes
-      console.log('Applying NAT configuration...');
+      logger.info('Applying NAT configuration...');
       await this.applyNATChanges();
 
       // Step 5: Verify the rules were created
       const rules = await this.listOutboundRules();
       const mcpRules = rules.filter(r => r.description?.includes('MCP auto-fix'));
-      
-      console.log(`\n✅ DMZ NAT fix completed successfully!`);
-      console.log(`Created ${rulesCreated.length} no-NAT exception rules`);
-      console.log(`Verified ${mcpRules.length} MCP rules in configuration`);
+
+      logger.info('DMZ NAT fix completed successfully');
+      logger.info(`Created ${rulesCreated.length} no-NAT exception rules`);
+      logger.info(`Verified ${mcpRules.length} MCP rules in configuration`);
 
       return {
         success: true,
@@ -734,7 +735,7 @@ export class NATResource {
       };
 
     } catch (error) {
-      console.error('Failed to fix DMZ NAT:', error);
+      logger.error('Failed to fix DMZ NAT:', error);
       return {
         success: false,
         message: `Failed to fix DMZ NAT: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -747,7 +748,7 @@ export class NATResource {
    * Quick fix for DMZ NAT issue with minimal configuration
    */
   async quickFixDMZNAT(): Promise<{ success: boolean; message: string }> {
-    console.log('\n[NATResource] Quick DMZ NAT fix...');
+    logger.info('[NATResource] Quick DMZ NAT fix...');
     
     try {
       // Set to hybrid mode
@@ -791,7 +792,7 @@ export class NATResource {
    * Remove all MCP-created NAT fix rules
    */
   async cleanupDMZNATFix(): Promise<{ success: boolean; deletedCount: number }> {
-    console.log('\n[NATResource] Cleaning up MCP NAT fix rules...');
+    logger.info('[NATResource] Cleaning up MCP NAT fix rules...');
     
     try {
       const rules = await this.listOutboundRules();
@@ -803,7 +804,7 @@ export class NATResource {
       let deletedCount = 0;
       for (const rule of mcpRules) {
         if (rule.description) {
-          console.log(`Deleting rule: ${rule.description}`);
+          logger.info(`Deleting rule: ${rule.description}`);
           await this.deleteOutboundRule(rule.description);
           deletedCount++;
         }
@@ -815,7 +816,7 @@ export class NATResource {
 
       return { success: true, deletedCount };
     } catch (error) {
-      console.error('Cleanup failed:', error);
+      logger.error('Cleanup failed:', error);
       return { success: false, deletedCount: 0 };
     }
   }
@@ -836,7 +837,7 @@ export class NATResource {
       npt: number;
     };
   }> {
-    console.log('\n[NATResource] Analyzing NAT configuration...');
+    logger.info('[NATResource] Analyzing NAT configuration...');
 
     const issues: string[] = [];
     const recommendations: string[] = [];
@@ -907,7 +908,7 @@ export class NATResource {
    */
   async applyNATChanges(): Promise<any> {
     if (this.debugMode) {
-      console.log('[NATResource] Applying NAT changes...');
+      logger.debug('[NATResource] Applying NAT changes...');
     }
 
     if (this.sshExecutor) {
@@ -923,7 +924,7 @@ export class NATResource {
         const response = await this.client.post('/firewall/nat/apply');
         return response;
       } catch (error) {
-        console.error('Failed to apply NAT changes via API:', error);
+        logger.error('Failed to apply NAT changes via API:', error);
         throw new Error('Cannot apply NAT changes without SSH access');
       }
     }

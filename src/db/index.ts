@@ -1,4 +1,5 @@
 // Drizzle Configuration and Database Connection
+import { logger } from '../utils/logger.js';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pkg from 'pg';
@@ -67,11 +68,11 @@ export async function closeDb() {
 // Run migrations
 export async function runMigrations(db: ReturnType<typeof createDb>) {
   try {
-    console.log('Running database migrations...');
+    logger.info('Running database migrations...');
     await migrate(db, { migrationsFolder: './migrations' });
-    console.log('Migrations completed successfully');
+    logger.info('Migrations completed successfully');
   } catch (error) {
-    console.error('Migration failed:', error);
+    logger.error('Migration failed:', error);
     throw error;
   }
 }

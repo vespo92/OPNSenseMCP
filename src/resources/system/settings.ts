@@ -1,6 +1,7 @@
 // System Settings Resource Implementation
 // Manages OPNsense system-level settings including inter-VLAN routing
 import { OPNSenseAPIClient } from '../../api/client.js';
+import { logger } from '../../utils/logger.js';
 
 export interface SystemSettings {
   firewall?: FirewallSettings;
@@ -65,7 +66,7 @@ export class SystemSettingsResource {
    */
   async getFirewallSettings(): Promise<FirewallSettings | null> {
     if (this.debugMode) {
-      console.log('[SystemSettings] Getting firewall settings');
+      logger.debug('[SystemSettings] Getting firewall settings');
     }
 
     try {
@@ -81,7 +82,7 @@ export class SystemSettingsResource {
           const response = await this.client.get(endpoint);
           
           if (this.debugMode) {
-            console.log(`[SystemSettings] ${endpoint} response:`, {
+            logger.debug(`[SystemSettings] ${endpoint} response:`, {
               hasSettings: !!response?.settings,
               hasFirewall: !!response?.firewall,
               keys: Object.keys(response || {})
@@ -95,12 +96,12 @@ export class SystemSettingsResource {
           }
         } catch (error) {
           if (this.debugMode) {
-            console.log(`[SystemSettings] ${endpoint} failed:`, error);
+            logger.debug(`[SystemSettings] ${endpoint} failed:`, error);
           }
         }
       }
     } catch (error) {
-      console.error('Error getting firewall settings:', error);
+      logger.error('Error getting firewall settings:', error);
     }
 
     return null;
@@ -111,7 +112,7 @@ export class SystemSettingsResource {
    */
   async updateFirewallSettings(settings: Partial<FirewallSettings>): Promise<boolean> {
     if (this.debugMode) {
-      console.log('[SystemSettings] Updating firewall settings:', settings);
+      logger.debug('[SystemSettings] Updating firewall settings:', settings);
     }
 
     try {
@@ -128,7 +129,7 @@ export class SystemSettingsResource {
           const response = await this.client.post(endpoint.path, payload);
           
           if (this.debugMode) {
-            console.log(`[SystemSettings] ${endpoint.path} response:`, response);
+            logger.debug(`[SystemSettings] ${endpoint.path} response:`, response);
           }
 
           if (response?.result === 'saved' || response?.status === 'ok') {
@@ -138,12 +139,12 @@ export class SystemSettingsResource {
           }
         } catch (error) {
           if (this.debugMode) {
-            console.log(`[SystemSettings] ${endpoint.path} failed:`, error);
+            logger.debug(`[SystemSettings] ${endpoint.path} failed:`, error);
           }
         }
       }
     } catch (error) {
-      console.error('Error updating firewall settings:', error);
+      logger.error('Error updating firewall settings:', error);
     }
 
     return false;
@@ -154,14 +155,14 @@ export class SystemSettingsResource {
    * This disables the blocking of private networks and enables routing between VLANs
    */
   async enableInterVLANRouting(): Promise<boolean> {
-    console.log('[SystemSettings] Enabling inter-VLAN routing...');
+    logger.debug('[SystemSettings] Enabling inter-VLAN routing...');
 
     try {
       // Get current settings
       const currentSettings = await this.getFirewallSettings();
       
       if (this.debugMode) {
-        console.log('[SystemSettings] Current settings:', currentSettings);
+        logger.debug('[SystemSettings] Current settings:', currentSettings);
       }
 
       // Update settings to enable inter-VLAN routing
@@ -176,14 +177,14 @@ export class SystemSettingsResource {
       const success = await this.updateFirewallSettings(updatedSettings);
       
       if (success) {
-        console.log('[SystemSettings] Inter-VLAN routing enabled successfully');
+        logger.debug('[SystemSettings] Inter-VLAN routing enabled successfully');
       } else {
-        console.log('[SystemSettings] Failed to enable inter-VLAN routing');
+        logger.debug('[SystemSettings] Failed to enable inter-VLAN routing');
       }
 
       return success;
     } catch (error) {
-      console.error('Error enabling inter-VLAN routing:', error);
+      logger.error('Error enabling inter-VLAN routing:', error);
       return false;
     }
   }
@@ -193,14 +194,14 @@ export class SystemSettingsResource {
    */
   async getRoutingSettings(): Promise<RoutingSettings | null> {
     if (this.debugMode) {
-      console.log('[SystemSettings] Getting routing settings');
+      logger.debug('[SystemSettings] Getting routing settings');
     }
 
     try {
       const response = await this.client.get('/routing/settings/get');
       return response?.settings || response || null;
     } catch (error) {
-      console.error('Error getting routing settings:', error);
+      logger.error('Error getting routing settings:', error);
       return null;
     }
   }
@@ -210,7 +211,7 @@ export class SystemSettingsResource {
    */
   async updateRoutingSettings(settings: Partial<RoutingSettings>): Promise<boolean> {
     if (this.debugMode) {
-      console.log('[SystemSettings] Updating routing settings:', settings);
+      logger.debug('[SystemSettings] Updating routing settings:', settings);
     }
 
     try {
@@ -221,7 +222,7 @@ export class SystemSettingsResource {
         return true;
       }
     } catch (error) {
-      console.error('Error updating routing settings:', error);
+      logger.error('Error updating routing settings:', error);
     }
 
     return false;
@@ -252,7 +253,7 @@ export class SystemSettingsResource {
       const response = await this.client.get('/system/settings/general/get');
       return response?.settings || response || null;
     } catch (error) {
-      console.error('Error getting general settings:', error);
+      logger.error('Error getting general settings:', error);
       return null;
     }
   }
@@ -262,7 +263,7 @@ export class SystemSettingsResource {
    */
   async applySettings(): Promise<void> {
     if (this.debugMode) {
-      console.log('[SystemSettings] Applying settings changes');
+      logger.debug('[SystemSettings] Applying settings changes');
     }
 
     const applyEndpoints = [
@@ -275,11 +276,11 @@ export class SystemSettingsResource {
       try {
         await this.client.post(endpoint);
         if (this.debugMode) {
-          console.log(`[SystemSettings] Applied changes via ${endpoint}`);
+          logger.debug(`[SystemSettings] Applied changes via ${endpoint}`);
         }
       } catch (error) {
         if (this.debugMode) {
-          console.log(`[SystemSettings] ${endpoint} failed:`, error);
+          logger.debug(`[SystemSettings] ${endpoint} failed:`, error);
         }
       }
     }
@@ -292,7 +293,7 @@ export class SystemSettingsResource {
    * Debug method to discover available settings endpoints
    */
   async debugDiscoverEndpoints(): Promise<void> {
-    console.log('\n[SystemSettings] Discovering settings endpoints...');
+    logger.debug('[SystemSettings] Discovering settings endpoints...');
 
     const testEndpoints = [
       '/firewall/settings/get',
@@ -308,30 +309,28 @@ export class SystemSettingsResource {
     for (const endpoint of testEndpoints) {
       try {
         const response = await this.client.get(endpoint);
-        console.log(`\n${endpoint}:`);
-        console.log('  Success - Response structure:', {
+        logger.debug(`${endpoint}: Success - Response structure:`, {
           keys: Object.keys(response || {}),
           hasSettings: !!response?.settings,
           hasFirewall: !!response?.firewall,
           hasAdvanced: !!response?.advanced
         });
-        
+
         // Log specific settings if found
         if (response?.settings || response?.firewall || response?.advanced) {
           const settings = response.settings || response.firewall || response.advanced;
-          const relevantKeys = Object.keys(settings).filter(key => 
-            key.includes('block') || 
-            key.includes('route') || 
+          const relevantKeys = Object.keys(settings).filter(key =>
+            key.includes('block') ||
+            key.includes('route') ||
             key.includes('vlan') ||
             key.includes('inter')
           );
           if (relevantKeys.length > 0) {
-            console.log('  Relevant settings found:', relevantKeys);
+            logger.debug('  Relevant settings found:', relevantKeys);
           }
         }
       } catch (error: any) {
-        console.log(`\n${endpoint}:`);
-        console.log('  Failed:', error?.message || error);
+        logger.debug(`${endpoint}: Failed:`, error?.message || error);
       }
     }
   }
