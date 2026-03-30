@@ -42,6 +42,10 @@ A Model Context Protocol (MCP) server for comprehensive OPNsense firewall manage
 - Configuration backup and restore
 - Infrastructure as Code support
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/vespo92-opnsensemcp).
+
 ## Installation
 
 ### Prerequisites
