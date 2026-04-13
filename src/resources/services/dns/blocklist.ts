@@ -1,4 +1,5 @@
 import { OPNSenseAPIClient } from '../../../api/client.js';
+import { logger } from '../../../utils/logger.js';
 
 /**
  * OPNsense API response shapes for Unbound DNSBL / host override data.
@@ -180,7 +181,7 @@ export class DnsBlocklistResource {
 
       return { subscriptions, manualBlocks };
     } catch (error: any) {
-      console.error('Failed to list DNS blocklist:', error);
+      logger.error('Failed to list DNS blocklist:', error);
       throw new Error(`Failed to list DNS blocklist: ${error.message}`);
     }
   }
@@ -224,7 +225,7 @@ export class DnsBlocklistResource {
 
       throw new Error('Failed to add domain to blocklist');
     } catch (error: any) {
-      console.error('Failed to block domain:', error);
+      logger.error('Failed to block domain:', error);
       throw new Error(`Failed to block domain: ${error.message}`);
     }
   }
@@ -244,7 +245,7 @@ export class DnsBlocklistResource {
       await this.client.delUnboundHost(entry.uuid);
       await this.applyChanges();
     } catch (error: any) {
-      console.error('Failed to unblock domain:', error);
+      logger.error('Failed to unblock domain:', error);
       throw new Error(`Failed to unblock domain: ${error.message}`);
     }
   }
@@ -261,7 +262,7 @@ export class DnsBlocklistResource {
         await this.blockDomain(domain, description);
         blocked.push(domain);
       } catch (error) {
-        console.error(`Failed to block ${domain}:`, error);
+        logger.error(`Failed to block ${domain}:`, error);
         failed.push(domain);
       }
     }
@@ -275,7 +276,7 @@ export class DnsBlocklistResource {
    */
   async getInterfaceBlocklist(interfaceName: string): Promise<DnsBlocklistResult> {
     const allBlocked = await this.list();
-    console.warn(`Interface-specific filtering for ${interfaceName} requires ACL configuration`);
+    logger.warn(`Interface-specific filtering for ${interfaceName} requires ACL configuration`);
     return allBlocked;
   }
 
@@ -331,7 +332,7 @@ export class DnsBlocklistResource {
       await this.client.setUnboundHost(uuid, updated);
       await this.applyChanges();
     } catch (error: any) {
-      console.error('Failed to toggle blocklist entry:', error);
+      logger.error('Failed to toggle blocklist entry:', error);
       throw new Error(`Failed to toggle blocklist entry: ${error.message}`);
     }
   }
@@ -545,7 +546,7 @@ export class DnsBlocklistResource {
     try {
       await this.client.applyUnboundChanges();
     } catch (error: any) {
-      console.error('Failed to apply DNS changes:', error);
+      logger.error('Failed to apply DNS changes:', error);
       throw new Error(`Failed to apply DNS changes: ${error.message}`);
     }
   }

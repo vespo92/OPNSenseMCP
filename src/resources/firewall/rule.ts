@@ -1,6 +1,7 @@
 // Firewall Rule Resource Implementation
 import { OPNSenseAPIClient } from '../../api/client.js';
 import { InterfaceMapper } from '../../utils/interface-mapper.js';
+import { logger } from '../../utils/logger.js';
 
 export interface FirewallRule {
   uuid?: string;
@@ -41,7 +42,7 @@ export class FirewallRuleResource {
    */
   async list(): Promise<FirewallRule[]> {
     if (this.debugMode) {
-      console.log('[FirewallRuleResource] Starting list() operation');
+      logger.debug('[FirewallRuleResource] Starting list() operation');
     }
 
     try {
@@ -49,19 +50,19 @@ export class FirewallRuleResource {
       const allRules = await this.getAllRules();
 
       if (this.debugMode) {
-        console.log(`[FirewallRuleResource] getAllRules() returned ${allRules.length} rules`);
+        logger.debug(`[FirewallRuleResource] getAllRules() returned ${allRules.length} rules`);
       }
 
       // If no rules found from the automation API, try legacy pf rule stats
       // Many users configure rules via the GUI which only creates legacy pf rules
       if (allRules.length === 0) {
         if (this.debugMode) {
-          console.log('[FirewallRuleResource] No automation rules found, trying legacy pf rules');
+          logger.debug('[FirewallRuleResource] No automation rules found, trying legacy pf rules');
         }
         const legacyRules = await this.getLegacyRules();
         if (legacyRules.length > 0) {
           if (this.debugMode) {
-            console.log(`[FirewallRuleResource] Found ${legacyRules.length} legacy pf rules`);
+            logger.debug(`[FirewallRuleResource] Found ${legacyRules.length} legacy pf rules`);
           }
           return legacyRules;
         }
@@ -83,7 +84,7 @@ export class FirewallRuleResource {
 
       return allRules;
     } catch (error) {
-      console.error('Error listing firewall rules:', error);
+      logger.error('Error listing firewall rules:', error);
 
       // Try legacy rules as fallback
       try {
@@ -93,13 +94,13 @@ export class FirewallRuleResource {
         }
       } catch (legacyError) {
         if (this.debugMode) {
-          console.log('[FirewallRuleResource] Legacy rules fallback also failed:', legacyError);
+          logger.debug('[FirewallRuleResource] Legacy rules fallback also failed:', legacyError);
         }
       }
 
       // Return cached rules as last resort
       if (this.rulesCache.size > 0) {
-        console.log('Returning cached rules due to API error');
+        logger.info('Returning cached rules due to API error');
         return Array.from(this.rulesCache.values());
       }
     }
@@ -112,23 +113,23 @@ export class FirewallRuleResource {
    */
   async get(uuid: string): Promise<FirewallRule | null> {
     if (this.debugMode) {
-      console.log(`[FirewallRuleResource] Getting rule ${uuid}`);
+      logger.debug(`[FirewallRuleResource] Getting rule ${uuid}`);
     }
     
     try {
       const response = await this.client.get(`/firewall/filter/getRule/${uuid}`);
       if (response?.rule) {
         if (this.debugMode) {
-          console.log(`[FirewallRuleResource] Rule ${uuid} found:`, response.rule);
+          logger.debug(`[FirewallRuleResource] Rule ${uuid} found:`, response.rule);
         }
         return { uuid, ...response.rule };
       }
     } catch (error) {
-      console.warn(`Could not get rule ${uuid}:`, error);
+      logger.warn(`Could not get rule ${uuid}:`, error);
     }
     
     if (this.debugMode) {
-      console.log(`[FirewallRuleResource] Rule ${uuid} not found`);
+      logger.debug(`[FirewallRuleResource] Rule ${uuid} not found`);
     }
     return null;
   }
@@ -139,14 +140,14 @@ export class FirewallRuleResource {
    */
   async getAllRules(): Promise<FirewallRule[]> {
     if (this.debugMode) {
-      console.log('[FirewallRuleResource] Fetching all rules via /firewall/filter/get');
+      logger.debug('[FirewallRuleResource] Fetching all rules via /firewall/filter/get');
     }
     
     try {
       const response = await this.client.get('/firewall/filter/get');
       
       if (this.debugMode) {
-        console.log('[FirewallRuleResource] /firewall/filter/get response structure:', {
+        logger.debug('[FirewallRuleResource] /firewall/filter/get response structure:', {
           hasFilter: !!response?.filter,
           hasRules: !!response?.filter?.rules,
           hasRulesRule: !!response?.filter?.rules?.rule,
@@ -185,7 +186,7 @@ export class FirewallRuleResource {
           });
           
           if (this.debugMode) {
-            console.log(`[FirewallRuleResource] Converted ${rulesArray.length} rules from filter.rules.rule`);
+            logger.debug(`[FirewallRuleResource] Converted ${rulesArray.length} rules from filter.rules.rule`);
           }
           
           return rulesArray;
@@ -194,7 +195,7 @@ export class FirewallRuleResource {
         // If already an array (unlikely), return it
         if (Array.isArray(rulesObj)) {
           if (this.debugMode) {
-            console.log(`[FirewallRuleResource] Rules already in array format: ${rulesObj.length} rules`);
+            logger.debug(`[FirewallRuleResource] Rules already in array format: ${rulesObj.length} rules`);
           }
           return rulesObj;
         }
@@ -219,13 +220,13 @@ export class FirewallRuleResource {
         
         if (rulesArray.length > 0) {
           if (this.debugMode) {
-            console.log(`[FirewallRuleResource] Found ${rulesArray.length} rules at filter.rules`);
+            logger.debug(`[FirewallRuleResource] Found ${rulesArray.length} rules at filter.rules`);
           }
           return rulesArray;
         }
       }
     } catch (error) {
-      console.warn('Could not fetch all rules via get endpoint:', error);
+      logger.warn('Could not fetch all rules via get endpoint:', error);
     }
     
     return [];
@@ -238,7 +239,7 @@ export class FirewallRuleResource {
    */
   async getLegacyRules(): Promise<FirewallRule[]> {
     if (this.debugMode) {
-      console.log('[FirewallRuleResource] Fetching legacy pf rules');
+      logger.debug('[FirewallRuleResource] Fetching legacy pf rules');
     }
 
     const rules: FirewallRule[] = [];
@@ -277,7 +278,7 @@ export class FirewallRuleResource {
       }
     } catch (error) {
       if (this.debugMode) {
-        console.log('[FirewallRuleResource] filter_util/ruleStats failed:', error);
+        logger.debug('[FirewallRuleResource] filter_util/ruleStats failed:', error);
       }
     }
 
@@ -316,13 +317,13 @@ export class FirewallRuleResource {
         }
       } catch (error) {
         if (this.debugMode) {
-          console.log('[FirewallRuleResource] searchRule fallback also failed:', error);
+          logger.debug('[FirewallRuleResource] searchRule fallback also failed:', error);
         }
       }
     }
 
     if (this.debugMode) {
-      console.log(`[FirewallRuleResource] Legacy rules: found ${rules.length} total`);
+      logger.debug(`[FirewallRuleResource] Legacy rules: found ${rules.length} total`);
     }
 
     return rules;
@@ -370,7 +371,7 @@ export class FirewallRuleResource {
         this.interfacesLoaded = true;
       }
     } catch (error) {
-      console.warn('Failed to load interface mappings, using defaults');
+      logger.warn('Failed to load interface mappings, using defaults');
     }
   }
 
@@ -379,7 +380,7 @@ export class FirewallRuleResource {
    */
   async create(rule: FirewallRule): Promise<{ uuid: string; success: boolean }> {
     if (this.debugMode) {
-      console.log('[FirewallRuleResource] Creating rule:', rule);
+      logger.debug('[FirewallRuleResource] Creating rule:', rule);
     }
     
     // Ensure interface mappings are loaded
@@ -392,11 +393,11 @@ export class FirewallRuleResource {
     mappedRule.protocol = InterfaceMapper.mapProtocol(rule.protocol);
     
     if (this.debugMode) {
-      console.log('[FirewallRuleResource] Interface mapping:', {
+      logger.debug('[FirewallRuleResource] Interface mapping:', {
         original: originalInterface,
         mapped: mappedRule.interface
       });
-      console.log('[FirewallRuleResource] Protocol mapping:', {
+      logger.debug('[FirewallRuleResource] Protocol mapping:', {
         original: rule.protocol,
         mapped: mappedRule.protocol
       });
@@ -429,13 +430,13 @@ export class FirewallRuleResource {
 
     // Add the rule
     if (this.debugMode) {
-      console.log('[FirewallRuleResource] Sending addRule request:', { rule: ruleData });
+      logger.debug('[FirewallRuleResource] Sending addRule request:', { rule: ruleData });
     }
     
     const response = await this.client.post('/firewall/filter/addRule', { rule: ruleData });
     
     if (this.debugMode) {
-      console.log('[FirewallRuleResource] addRule response:', response);
+      logger.debug('[FirewallRuleResource] addRule response:', response);
     }
     
     if (response.uuid) {
@@ -454,12 +455,12 @@ export class FirewallRuleResource {
       try {
         const refreshedRules = await this.getAllRules();
         if (this.debugMode) {
-          console.log(`[FirewallRuleResource] After refresh, total rules: ${refreshedRules.length}`);
+          logger.debug(`[FirewallRuleResource] After refresh, total rules: ${refreshedRules.length}`);
           const foundInList = refreshedRules.some(r => r.uuid === response.uuid);
-          console.log(`[FirewallRuleResource] New rule ${response.uuid} found in list: ${foundInList}`);
+          logger.debug(`[FirewallRuleResource] New rule ${response.uuid} found in list: ${foundInList}`);
         }
       } catch (refreshError) {
-        console.warn('Could not refresh rules after creation:', refreshError);
+        logger.warn('Could not refresh rules after creation:', refreshError);
       }
       
       // Verify the rule was created successfully
@@ -467,21 +468,21 @@ export class FirewallRuleResource {
       if (verifyRule) {
         // Update cache with verified rule
         this.rulesCache.set(response.uuid, verifyRule);
-        console.log(`Rule ${response.uuid} created and verified successfully`);
+        logger.info(`Rule ${response.uuid} created and verified successfully`);
         
         // Double-check it appears in the list
         const allRules = await this.list();
         const inList = allRules.some(r => r.uuid === response.uuid);
         
         if (!inList) {
-          console.warn(`WARNING: Rule ${response.uuid} exists individually but not in list!`);
-          console.warn('This may indicate a persistence issue. Attempting additional apply...');
+          logger.warn(`Rule ${response.uuid} exists individually but not in list!`);
+          logger.warn('This may indicate a persistence issue. Attempting additional apply...');
           
           // Try additional apply methods
           await this.forceApply();
         }
       } else {
-        console.warn(`Warning: Rule ${response.uuid} was created but could not be verified immediately`);
+        logger.warn(`Rule ${response.uuid} was created but could not be verified immediately`);
       }
       
       return { uuid: response.uuid, success: true };
@@ -540,7 +541,7 @@ export class FirewallRuleResource {
    */
   async applyChanges(): Promise<any> {
     if (this.debugMode) {
-      console.log('[FirewallRuleResource] Starting applyChanges()');
+      logger.debug('[FirewallRuleResource] Starting applyChanges()');
     }
     
     try {
@@ -548,7 +549,7 @@ export class FirewallRuleResource {
       const applyResponse = await this.client.post('/firewall/filter/apply');
       
       if (this.debugMode) {
-        console.log('[FirewallRuleResource] apply response:', applyResponse);
+        logger.debug('[FirewallRuleResource] apply response:', applyResponse);
       }
       
       // Add a delay to allow changes to propagate
@@ -559,18 +560,18 @@ export class FirewallRuleResource {
       try {
         // Try to reconfigure the filter service
         const reconfigureResponse = await this.client.post('/firewall/filter/reconfigure');
-        console.log('Firewall filter reconfigured:', reconfigureResponse);
+        logger.info('Firewall filter reconfigured:', reconfigureResponse);
       } catch (reconfigError) {
         if (this.debugMode) {
-          console.log('[FirewallRuleResource] reconfigure failed, trying savepoint:', reconfigError);
+          logger.debug('[FirewallRuleResource] reconfigure failed, trying savepoint:', reconfigError);
         }
         
         // If reconfigure fails, try the savepoint approach
         try {
           const savepointResponse = await this.client.post('/firewall/filter/savepoint');
-          console.log('Firewall configuration saved via savepoint:', savepointResponse);
+          logger.info('Firewall configuration saved via savepoint:', savepointResponse);
         } catch (savepointError) {
-          console.warn('Could not save firewall configuration:', savepointError);
+          logger.warn('Could not save firewall configuration:', savepointError);
         }
       }
       
@@ -579,7 +580,7 @@ export class FirewallRuleResource {
       
       return applyResponse;
     } catch (error) {
-      console.error('Failed to apply firewall changes:', error);
+      logger.error('Failed to apply firewall changes:', error);
       throw error;
     }
   }
@@ -589,7 +590,7 @@ export class FirewallRuleResource {
    */
   async forceApply(): Promise<void> {
     if (this.debugMode) {
-      console.log('[FirewallRuleResource] Starting forceApply() - trying all apply methods');
+      logger.debug('[FirewallRuleResource] Starting forceApply() - trying all apply methods');
     }
     
     const applyMethods = [
@@ -603,11 +604,11 @@ export class FirewallRuleResource {
     for (const method of applyMethods) {
       try {
         const response = await this.client.post(method.endpoint);
-        console.log(`[FirewallRuleResource] ${method.name} succeeded:`, response);
+        logger.debug(`[FirewallRuleResource] ${method.name} succeeded:`, response);
         await new Promise(resolve => setTimeout(resolve, 500));
       } catch (error: any) {
         if (this.debugMode) {
-          console.log(`[FirewallRuleResource] ${method.name} failed:`, error?.message || error);
+          logger.debug(`[FirewallRuleResource] ${method.name} failed:`, error?.message || error);
         }
       }
     }
@@ -629,18 +630,18 @@ export class FirewallRuleResource {
    * Debug method to discover valid interface names
    */
   async debugInterfaces(): Promise<void> {
-    console.log('\n[FirewallRuleResource] Discovering interfaces...');
-    
+    logger.debug('[FirewallRuleResource] Discovering interfaces...');
+
     try {
       // Method 1: Get from rule options
       const options = await this.getOptions();
       if (options?.interface?.values) {
-        console.log('\nAvailable interfaces from getRule:');
+        logger.debug('Available interfaces from getRule:');
         Object.entries(options.interface.values).forEach(([key, value]: [string, any]) => {
-          console.log(`  ${key}: ${value.value}`);
+          logger.debug(`  ${key}: ${value.value}`);
         });
       }
-      
+
       // Method 2: Try common interface names
       const testInterfaces = [
         'lan', 'wan', 'opt1', 'opt2', 'opt3',
@@ -648,24 +649,24 @@ export class FirewallRuleResource {
         'igc3_vlan6', 'igc3_vlan4', 'igc3_vlan2',
         'vlan6', 'vlan4', 'vlan2'
       ];
-      
-      console.log('\nTesting common interface names:');
+
+      logger.debug('Testing common interface names:');
       for (const iface of testInterfaces) {
         const mapped = this.interfaceMapper.mapInterface(iface);
         if (mapped !== iface) {
-          console.log(`  ${iface} -> ${mapped}`);
+          logger.debug(`  ${iface} -> ${mapped}`);
         }
       }
-      
+
       // Method 3: Get all current mappings
-      console.log('\nCurrent interface mappings:');
+      logger.debug('Current interface mappings:');
       const mappings = this.interfaceMapper.getMappings();
       Object.entries(mappings).forEach(([friendly, internal]) => {
-        console.log(`  ${friendly} -> ${internal}`);
+        logger.debug(`  ${friendly} -> ${internal}`);
       });
-      
+
     } catch (error) {
-      console.error('Error discovering interfaces:', error);
+      logger.error('Error discovering interfaces:', error);
     }
   }
 
@@ -673,8 +674,8 @@ export class FirewallRuleResource {
    * Test alternative API endpoints
    */
   async testAlternativeEndpoints(): Promise<void> {
-    console.log('\n[FirewallRuleResource] Testing alternative endpoints...');
-    
+    logger.debug('[FirewallRuleResource] Testing alternative endpoints...');
+
     const endpoints = [
       '/firewall/filter/get',
       '/firewall/filter/listRules',
@@ -683,26 +684,24 @@ export class FirewallRuleResource {
       '/firewall/filter/status',
       '/firewall/filter/info'
     ];
-    
+
     for (const endpoint of endpoints) {
       try {
         const response = await this.client.get(endpoint);
-        console.log(`\n${endpoint}:`);
-        console.log('  Success - Response keys:', Object.keys(response || {}));
-        
+        logger.debug(`${endpoint}: Success - Response keys:`, Object.keys(response || {}));
+
         // Check for rules in various places
         if (response?.rules) {
-          console.log('  Found rules at .rules:', Array.isArray(response.rules) ? `Array(${response.rules.length})` : typeof response.rules);
+          logger.debug(`  Found rules at .rules: ${Array.isArray(response.rules) ? `Array(${response.rules.length})` : typeof response.rules}`);
         }
         if (response?.filter?.rules) {
-          console.log('  Found rules at .filter.rules:', Array.isArray(response.filter.rules) ? `Array(${response.filter.rules.length})` : typeof response.filter.rules);
+          logger.debug(`  Found rules at .filter.rules: ${Array.isArray(response.filter.rules) ? `Array(${response.filter.rules.length})` : typeof response.filter.rules}`);
         }
         if (response?.rows) {
-          console.log('  Found rules at .rows:', Array.isArray(response.rows) ? `Array(${response.rows.length})` : typeof response.rows);
+          logger.debug(`  Found rules at .rows: ${Array.isArray(response.rows) ? `Array(${response.rows.length})` : typeof response.rows}`);
         }
       } catch (error: any) {
-        console.log(`\n${endpoint}:`);
-        console.log('  Failed:', error?.message || error);
+        logger.debug(`${endpoint}: Failed:`, error?.message || error);
       }
     }
   }
@@ -858,10 +857,10 @@ export class FirewallRuleResource {
     const sourceNetwork = params.sourceNetwork || '10.0.6.0/24';
     const truenasIP = params.truenasIP || '10.0.0.14';
     
-    console.log(`\n[FirewallRuleResource] Creating NFS rules:`);
-    console.log(`  Interface: ${params.interface}`);
-    console.log(`  Source: ${sourceNetwork}`);
-    console.log(`  Destination: ${truenasIP}`);
+    logger.info('[FirewallRuleResource] Creating NFS rules:');
+    logger.info(`  Interface: ${params.interface}`);
+    logger.info(`  Source: ${sourceNetwork}`);
+    logger.info(`  Destination: ${truenasIP}`);
     
     // Create TCP rule for NFS
     const tcpRule = await this.create({
@@ -881,9 +880,9 @@ export class FirewallRuleResource {
       interface: params.interface
     } as FirewallRule);
     
-    console.log(`\nNFS Rules created:`);
-    console.log(`  TCP Rule UUID: ${tcpRule.uuid}`);
-    console.log(`  UDP Rule UUID: ${udpRule.uuid}`);
+    logger.info('NFS Rules created:');
+    logger.info(`  TCP Rule UUID: ${tcpRule.uuid}`);
+    logger.info(`  UDP Rule UUID: ${udpRule.uuid}`);
     
     return {
       tcp: tcpRule.uuid,
@@ -898,7 +897,7 @@ export class FirewallRuleResource {
     rulesExist: boolean;
     details: any;
   }> {
-    console.log('\n[FirewallRuleResource] Validating NFS connectivity rules...');
+    logger.info('[FirewallRuleResource] Validating NFS connectivity rules...');
     
     const rules = await this.list();
     const nfsRules = rules.filter(r => 
@@ -906,7 +905,7 @@ export class FirewallRuleResource {
       (r.destination_port && (r.destination_port.includes('111') || r.destination_port.includes('2049')))
     );
     
-    console.log(`Found ${nfsRules.length} NFS-related rules`);
+    logger.info(`Found ${nfsRules.length} NFS-related rules`);
     
     const details = {
       totalRules: rules.length,

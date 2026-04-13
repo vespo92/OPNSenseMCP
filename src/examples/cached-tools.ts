@@ -1,4 +1,5 @@
 // Example: Using Enhanced Cache Manager in MCP Tools
+import { logger } from '../utils/logger.js';
 import { OPNSenseAPIClient } from '../api/client.js';
 import { EnhancedCacheManager } from '../cache/enhanced-manager.js';
 import { z } from 'zod';
@@ -120,7 +121,7 @@ export class CachedOPNSenseTools {
 
       return result;
     } catch (error) {
-      console.error('Failed to create firewall rule:', error);
+      logger.error('Failed to create firewall rule:', error);
       throw error;
     }
   }
@@ -173,7 +174,7 @@ export class CachedOPNSenseTools {
    * Pre-warm cache for critical data
    */
   async warmCache() {
-    console.log('🔥 Pre-warming cache...');
+    logger.info('Pre-warming cache...');
     
     // Pre-fetch critical data in parallel
     await Promise.all([
@@ -183,7 +184,7 @@ export class CachedOPNSenseTools {
       this.getSystemInfo(),
     ]);
 
-    console.log('✅ Cache warmed successfully');
+    logger.info('Cache warmed successfully');
   }
 
   // Private helper methods
