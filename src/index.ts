@@ -4311,9 +4311,12 @@ class OPNSenseMCPServer {
           try {
             const interfaces = await this.interfaceConfigResource!.listOverview();
             
-            const formatted = interfaces.map(iface => 
-              `${iface.name}: ${iface.device} - ${iface.status} (${iface.ipaddr || 'no IP'}/${iface.subnet || ''})`
-            );
+            const formatted = interfaces.map(iface => {
+              const ipv4 = iface.ipaddr ? `${iface.ipaddr}/${iface.subnet || ''}` : null;
+              const ipv6 = iface.ipaddr6 ? `${iface.ipaddr6}/${iface.subnet6 || ''}` : null;
+              const addrs = [ipv4, ipv6].filter(Boolean).join(', ') || 'no IP';
+              return `${iface.name}: ${iface.device} - ${iface.status} (${addrs})`;
+            });
             
             return {
               content: [{

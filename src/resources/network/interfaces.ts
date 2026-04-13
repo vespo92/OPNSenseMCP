@@ -33,6 +33,9 @@ export interface InterfaceOverview {
   ipaddr?: string;
   subnet?: string;
   gateway?: string;
+  ipaddr6?: string;
+  subnet6?: string;
+  gateway6?: string;
   media?: string;
   statistics?: {
     packets_in: number;
@@ -164,6 +167,9 @@ export class InterfaceConfigResource {
         ipaddr: config.ipaddr || config.addr || config.ipv4?.[0]?.ipaddr,
         subnet: config.subnet || config.subnetbits || config.ipv4?.[0]?.subnetbits,
         gateway: config.gateway,
+        ipaddr6: config.ipaddrv6 || config.addr6 || config.ipv6?.[0]?.ipaddr,
+        subnet6: config.subnetv6 || config.prefixv6 || config.ipv6?.[0]?.subnetbits || config.ipv6?.[0]?.prefix,
+        gateway6: config.gatewayv6,
         media: config.media || stats.media,
         statistics: stats ? {
           packets_in: parseInt(stats['packets received'] || stats.inpkts || '0', 10),
