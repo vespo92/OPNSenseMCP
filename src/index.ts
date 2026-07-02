@@ -89,8 +89,23 @@ class OPNSenseMCPServer {
 
   constructor() {
     this.iacEnabled = process.env.IAC_ENABLED !== 'false';
-    
-    this.server = new Server(
+
+    this.server = this.createMcpServer();
+  }
+
+  /**
+   * Creates a new MCP Server (Protocol) instance with handlers wired up.
+   *
+   * The SDK's Protocol.connect() only permits one transport per Server
+   * instance (it throws "Already connected to a transport" otherwise), so
+   * every independent connection - each HTTP/SSE session - needs its own
+   * Server built via this factory. Handlers close over `this` (shared
+   * resources: API client, resources, IaC state), not over any particular
+   * Server instance, so tool behavior is identical across every instance
+   * this factory produces.
+   */
+  private createMcpServer(): Server {
+    const server = new Server(
       {
         name: 'opnsense-mcp',
         version: '0.9.0',
@@ -103,7 +118,8 @@ class OPNSenseMCPServer {
       }
     );
 
-    this.setupHandlers();
+    this.setupHandlers(server);
+    return server;
   }
 
   private formatHostUrl(host: string): string {
@@ -219,9 +235,9 @@ class OPNSenseMCPServer {
     }
   }
 
-  private setupHandlers() {
+  private setupHandlers(server: Server) {
     // List available tools
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         // Configuration tool
         {
@@ -2299,7 +2315,7 @@ class OPNSenseMCPServer {
     }));
 
     // List available resources
-    this.server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+    server.setRequestHandler(ListResourcesRequestSchema, async () => ({
       resources: [
         {
           uri: 'opnsense://vlans',
@@ -2393,7 +2409,7 @@ class OPNSenseMCPServer {
     }));
 
     // Read resource
-    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
       await this.ensureInitialized();
 
       const uri = request.params.uri;
@@ -2582,7 +2598,7 @@ class OPNSenseMCPServer {
     });
 
     // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
       
       // Route IaC tools
@@ -6508,8 +6524,12 @@ ${analysis.recommendations.length > 0 ? analysis.recommendations.map(r => `- ${r
       // Both use SSETransportServer which handles /sse (legacy) and /mcp (streamable HTTP)
       const sseServer = transportOrServer as SSETransportServer;
       sseServer.onConnection(async (transport) => {
-        // Connect each new SSE/Streamable HTTP client
-        await this.server.connect(transport);
+        // Each SSE/Streamable HTTP client gets its own Server instance -
+        // the SDK's Protocol only supports one transport per Server.
+        // (stdio, above, keeps using the single `this.server` built in
+        // the constructor - that path is unaffected.)
+        const server = this.createMcpServer();
+        await server.connect(transport);
         logger.info(`New ${transportType} client connected`);
       });
       const port = transportOptions.port || 3000;

@@ -122,34 +122,32 @@ export class SSETransportServer {
           // Existing session
           transport = this.streamableTransports.get(sessionId)!;
         } else {
-          // New session - create a new transport
+          // New session - create a new transport.
+          //
+          // The session ID isn't assigned until the SDK processes the
+          // initialize request inside handleRequest() below, so it can't be
+          // read synchronously right after construction (transport.sessionId
+          // would still be undefined here). Use the SDK's dedicated
+          // lifecycle hooks instead, which fire at the correct moments.
           transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => crypto.randomUUID(),
+            onsessioninitialized: (newSessionId) => {
+              this.streamableTransports.set(newSessionId, transport);
+              logger.info(
+                `New Streamable HTTP session established: ${newSessionId}`,
+              );
+            },
+            onsessionclosed: (closedSessionId) => {
+              this.streamableTransports.delete(closedSessionId);
+              logger.info(
+                `Streamable HTTP session closed: ${closedSessionId}`,
+              );
+            },
           });
 
           // Notify that a new connection is ready
           if (this.onConnectionCallback) {
             await this.onConnectionCallback(transport);
-          }
-
-          // Extract and store session ID after connection
-          const newSessionId = (transport as any).sessionId;
-          if (newSessionId) {
-            this.streamableTransports.set(newSessionId, transport);
-
-            // Clean up on transport close
-            transport.onclose = () => {
-              if (newSessionId) {
-                this.streamableTransports.delete(newSessionId);
-                logger.info(
-                  `Streamable HTTP session closed: ${newSessionId}`,
-                );
-              }
-            };
-
-            logger.info(
-              `New Streamable HTTP session established: ${newSessionId}`,
-            );
           }
         }
 
