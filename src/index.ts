@@ -368,7 +368,8 @@ class OPNSenseMCPServer {
               source: { type: 'string', description: 'New source' },
               destination: { type: 'string', description: 'New destination' },
               sourcePort: { type: 'string', description: 'New source port' },
-              destinationPort: { type: 'string', description: 'New destination port' }
+              destinationPort: { type: 'string', description: 'New destination port' },
+              log: { type: 'boolean', description: 'Enable/disable logging for packets matching this rule' }
             },
             required: ['uuid']
           }
@@ -391,6 +392,18 @@ class OPNSenseMCPServer {
             type: 'object',
             properties: {
               uuid: { type: 'string', description: 'Firewall rule UUID' }
+            },
+            required: ['uuid']
+          }
+        },
+        {
+          name: 'toggle_firewall_rule_log',
+          description: 'Toggle logging on/off for a firewall rule, or set it explicitly with the "enable" argument',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              uuid: { type: 'string', description: 'Firewall rule UUID' },
+              enable: { type: 'boolean', description: 'Optional: set logging explicitly (true=on, false=off). If omitted, the current state is flipped.' }
             },
             required: ['uuid']
           }
@@ -2964,7 +2977,10 @@ class OPNSenseMCPServer {
             if (args.destinationPort !== undefined) {
               updates.destination_port = args.destinationPort;
             }
-            
+            if (args.log !== undefined) {
+              updates.log = args.log ? '1' : '0';
+            }
+
             await this.firewallRuleResource!.update(args.uuid as string, updates);
             
             return {
@@ -3023,6 +3039,41 @@ class OPNSenseMCPServer {
               content: [{
                 type: 'text',
                 text: `Successfully toggled firewall rule ${args.uuid}`
+              }]
+            };
+          } catch (error: any) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              error.message
+            );
+          }
+        }
+
+        case 'toggle_firewall_rule_log': {
+          await this.ensureInitialized();
+
+          if (!args || !args.uuid) {
+            throw new McpError(
+              ErrorCode.InvalidRequest,
+              'uuid parameter is required'
+            );
+          }
+
+          try {
+            if (args.enable !== undefined) {
+              await this.firewallRuleResource!.setLog(args.uuid as string, args.enable as boolean);
+              return {
+                content: [{
+                  type: 'text',
+                  text: `Successfully set logging ${args.enable ? 'on' : 'off'} for firewall rule ${args.uuid}`
+                }]
+              };
+            }
+            await this.firewallRuleResource!.toggleLog(args.uuid as string);
+            return {
+              content: [{
+                type: 'text',
+                text: `Successfully toggled logging for firewall rule ${args.uuid}`
               }]
             };
           } catch (error: any) {

@@ -500,8 +500,14 @@ export class FirewallRuleResource {
       throw new Error(`Firewall rule ${uuid} not found`);
     }
 
+    // getRule returns select/multi-select fields as option objects
+    // (e.g. { inet46: { value: 'IPv4+IPv6', selected: 1 }, ... }). setRule
+    // expects scalar values (the comma-joined list of selected keys), so
+    // flatten before re-posting, otherwise the API returns HTTP 500.
+    const flattened = FirewallRuleResource.flattenRule(existing);
+
     const updatedRule = {
-      ...existing,
+      ...flattened,
       ...updates,
       uuid: undefined // Remove UUID from data
     };
@@ -509,6 +515,27 @@ export class FirewallRuleResource {
     await this.client.post(`/firewall/filter/setRule/${uuid}`, { rule: updatedRule });
     await this.applyChanges();
     return true;
+  }
+
+  /**
+   * Flatten a getRule response into the scalar form setRule expects.
+   * Option objects are collapsed to a comma-joined list of their selected
+   * keys; scalar fields (including boolean "0"/"1" fields like `log`) are
+   * passed through unchanged.
+   */
+  static flattenRule(rule: Record<string, any>): Record<string, any> {
+    const out: Record<string, any> = {};
+    for (const [key, value] of Object.entries(rule)) {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const selected = Object.entries(value)
+          .filter(([, opt]) => opt && typeof opt === 'object' && (opt as any).selected == 1)
+          .map(([optKey]) => optKey);
+        out[key] = selected.join(',');
+      } else {
+        out[key] = value;
+      }
+    }
+    return out;
   }
 
   /**
@@ -534,6 +561,26 @@ export class FirewallRuleResource {
 
     const newState = rule.enabled === '1' ? '0' : '1';
     return this.update(uuid, { enabled: newState });
+  }
+
+  /**
+   * Toggle rule logging on/off
+   */
+  async toggleLog(uuid: string): Promise<boolean> {
+    const rule = await this.get(uuid);
+    if (!rule) {
+      throw new Error(`Firewall rule ${uuid} not found`);
+    }
+
+    const newState = rule.log === '1' ? '0' : '1';
+    return this.update(uuid, { log: newState });
+  }
+
+  /**
+   * Explicitly set rule logging on or off (idempotent)
+   */
+  async setLog(uuid: string, enabled: boolean): Promise<boolean> {
+    return this.update(uuid, { log: enabled ? '1' : '0' });
   }
 
   /**
