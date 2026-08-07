@@ -155,13 +155,25 @@ class OPNSenseMCPServer {
       // Set up recording in the API client
       this.client.setRecorder((call) => this.macroRecorder?.recordAPICall(call));
       
-      // Test connection
+      // Connectivity probe (best-effort). A failure here MUST NOT abort
+      // initialization. The probe hits GET /core/firmware/info, which a
+      // scoped / least-privilege API user may be denied (403) even when it is
+      // authorized for other endpoints. Aborting here would leave every
+      // per-tool resource object below unconstructed (null), so *all* tools
+      // would fail with "Cannot read properties of null", not just the one
+      // gated by the missing privilege. Constructing the resources
+      // unconditionally lets each tool surface its own 403/empty result at
+      // call time. (Also covers a transiently unreachable box: individual
+      // calls then report the real network error instead of a null deref.)
       const connectionTest = await this.client.testConnection();
-      if (!connectionTest.success) {
-        throw new Error(`Failed to connect to OPNsense: ${connectionTest.error}`);
+      if (connectionTest.success) {
+        logger.info(`Connected to OPNsense ${connectionTest.version}`);
+      } else {
+        logger.warn(
+          `OPNsense connectivity probe failed (continuing anyway): ${connectionTest.error}. ` +
+          `Tools are still initialized; individual calls will surface auth/permission/network errors directly.`
+        );
       }
-
-      logger.info(`Connected to OPNsense ${connectionTest.version}`);
 
       // Initialize resources
       this.vlanResource = new VlanResource(this.client);
@@ -2638,60 +2650,66 @@ class OPNSenseMCPServer {
             const config = ConfigSchema.parse(args);
             this.client = new OPNSenseAPIClient(config);
             const test = await this.client.testConnection();
-            
-            if (test.success) {
-              this.vlanResource = new VlanResource(this.client);
-              this.firewallRuleResource = new FirewallRuleResource(this.client);
-              this.natResource = new NATResource(this.client);
-              this.dhcpResource = new DhcpLeaseResource(this.client);
-              this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
-              this.haproxyResource = new HAProxyResource(this.client);
-              this.arpResource = new ArpTableResource(this.client);
-              
-              // Initialize macro recorder
-              this.macroRecorder = new MacroRecorder(this.client, process.env.MACRO_STORAGE_PATH);
-              this.client.setRecorder((call) => this.macroRecorder?.recordAPICall(call));
-              
-              // Optional backup manager
-              if (process.env.BACKUP_ENABLED !== 'false') {
-                this.backupManager = new BackupManager(this.client, process.env.BACKUP_PATH);
-              }
-              
-              // Optional cache manager
-              if (process.env.ENABLE_CACHE === 'true') {
-                try {
-                  this.cacheManager = new MCPCacheManager(this.client, {
-                    redisHost: process.env.REDIS_HOST,
-                    redisPort: parseInt(process.env.REDIS_PORT || '6379'),
-                    postgresHost: process.env.POSTGRES_HOST,
-                    postgresPort: parseInt(process.env.POSTGRES_PORT || '5432'),
-                    postgresDb: process.env.POSTGRES_DB,
-                    postgresUser: process.env.POSTGRES_USER,
-                    postgresPassword: process.env.POSTGRES_PASSWORD,
-                    cacheTTL: parseInt(process.env.CACHE_TTL || '300'),
-                    enableCache: true
-                  });
-                } catch (error) {
-                  logger.debug('Cache not available');
-                }
-              }
-              
-              // Re-initialize IaC components if enabled
-              if (this.iacEnabled) {
-                this.stateStore = new ResourceStateStore();
-                this.planner = new DeploymentPlanner();
-                this.engine = new ExecutionEngine(this.client);
-              }
-              
-              return {
-                content: [{
-                  type: 'text',
-                  text: `Successfully connected to OPNsense ${test.version}`
-                }]
-              };
-            } else {
-              throw new Error(test.error);
+
+            // Construct resources regardless of the probe result, for the same
+            // reason as initialize(): a scoped / least-privilege API user may
+            // be denied the probe endpoint (GET /core/firmware/info) while
+            // authorized for others. Gating construction on the probe would
+            // leave every resource null and make all tools fail with a
+            // null-pointer error instead of a clean per-tool 403.
+            this.vlanResource = new VlanResource(this.client);
+            this.firewallRuleResource = new FirewallRuleResource(this.client);
+            this.natResource = new NATResource(this.client);
+            this.dhcpResource = new DhcpLeaseResource(this.client);
+            this.dnsBlocklistResource = new DnsBlocklistResource(this.client);
+            this.haproxyResource = new HAProxyResource(this.client);
+            this.arpResource = new ArpTableResource(this.client);
+
+            // Initialize macro recorder
+            this.macroRecorder = new MacroRecorder(this.client, process.env.MACRO_STORAGE_PATH);
+            this.client.setRecorder((call) => this.macroRecorder?.recordAPICall(call));
+
+            // Optional backup manager
+            if (process.env.BACKUP_ENABLED !== 'false') {
+              this.backupManager = new BackupManager(this.client, process.env.BACKUP_PATH);
             }
+
+            // Optional cache manager
+            if (process.env.ENABLE_CACHE === 'true') {
+              try {
+                this.cacheManager = new MCPCacheManager(this.client, {
+                  redisHost: process.env.REDIS_HOST,
+                  redisPort: parseInt(process.env.REDIS_PORT || '6379'),
+                  postgresHost: process.env.POSTGRES_HOST,
+                  postgresPort: parseInt(process.env.POSTGRES_PORT || '5432'),
+                  postgresDb: process.env.POSTGRES_DB,
+                  postgresUser: process.env.POSTGRES_USER,
+                  postgresPassword: process.env.POSTGRES_PASSWORD,
+                  cacheTTL: parseInt(process.env.CACHE_TTL || '300'),
+                  enableCache: true
+                });
+              } catch (error) {
+                logger.debug('Cache not available');
+              }
+            }
+
+            // Re-initialize IaC components if enabled
+            if (this.iacEnabled) {
+              this.stateStore = new ResourceStateStore();
+              this.planner = new DeploymentPlanner();
+              this.engine = new ExecutionEngine(this.client);
+            }
+
+            const text = test.success
+              ? `Successfully connected to OPNsense ${test.version}`
+              : `Configured OPNsense client, but the connectivity probe failed: ${test.error}. ` +
+                `Tools are initialized; individual calls will surface auth/permission/network errors directly.`;
+            return {
+              content: [{
+                type: 'text',
+                text
+              }]
+            };
           } catch (error: any) {
             throw new McpError(
               ErrorCode.InvalidRequest,
