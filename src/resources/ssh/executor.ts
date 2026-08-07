@@ -57,6 +57,7 @@ const COMMAND_WHITELIST = [
   'grep',
   'sed',
   'awk',
+  'xmllint',
   'cp',
   'mv',
   'rm',
