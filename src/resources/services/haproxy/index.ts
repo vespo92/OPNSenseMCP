@@ -951,7 +951,13 @@ export class HAProxyResource {
   // Certificate Management Methods
   async listCertificates(): Promise<HAProxyCertificate[]> {
     try {
-      const response = await this.client.get('/system/certificates/searchCertificate');
+      // Certificates live in the core Trust module, not a `system/certificates`
+      // controller (that path 404s). /trust/cert/search is correct: verified
+      // against a live box, it returns 403 under a key lacking the Trust
+      // privilege, i.e. the endpoint exists. Trust search rows expose the CN as
+      // `commonname`; keep the legacy `dn.CN` as a fallback. Coverage of
+      // type/altnames should be re-validated with a Trust-privileged key.
+      const response = await this.client.get('/trust/cert/search');
       if (!response.rows || !Array.isArray(response.rows)) {
         return [];
       }
@@ -959,7 +965,7 @@ export class HAProxyResource {
         uuid: row.uuid,
         name: row.descr,
         type: row.method,
-        cn: row.dn?.CN,
+        cn: row.commonname ?? row.dn?.CN,
         san: row.altnames ? row.altnames.split(',') : []
       }));
     } catch (error) {
@@ -1013,7 +1019,15 @@ export class HAProxyResource {
   // Stats Methods
   async getStats(): Promise<HAProxyStats> {
     try {
-      const response = await this.client.get('/haproxy/stats/show');
+      // The old /haproxy/stats/show path does not exist (404). OPNsense's
+      // HAProxy plugin exposes live stats under /haproxy/statistics/*. Use
+      // `counters` (parsed `show stat`: per frontend/backend/server rows), which
+      // matches what parseStats + getBackendHealth consume; `info` returns only
+      // process-level `show info`. NB: parseStats is still a best-effort stub
+      // and must be validated against a running HAProxy with live traffic - an
+      // idle service returns an empty 200, so the row shape can't be confirmed
+      // from a quiet box.
+      const response = await this.client.get('/haproxy/statistics/counters');
       return this.parseStats(response);
     } catch (error) {
       throw new Error(`Failed to get HAProxy stats: ${error}`);
