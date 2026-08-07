@@ -14,6 +14,30 @@ import {
 import { z } from 'zod';
 import { logger } from './utils/logger.js';
 
+// Register global error handlers to prevent process crashes from uncaught exceptions
+// This is defense-in-depth for errors in async callbacks (e.g., ssh2 stream handlers)
+process.on('uncaughtException', (error) => {
+  logger.error('[FATAL] Uncaught Exception:', error instanceof Error ? {
+    message: error.message,
+    stack: error.stack,
+    name: error.name
+  } : error);
+  // Do NOT call process.exit() - let the MCP server continue running
+  // The error will be logged and handled gracefully
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('[FATAL] Unhandled Rejection:', {
+    reason: reason instanceof Error ? {
+      message: reason.message,
+      stack: reason.stack,
+      name: reason.name
+    } : reason,
+    promise
+  });
+  // Do NOT call process.exit() - let the MCP server continue running
+});
+
 // Environment variables are provided by Claude Desktop/Code
 // No need for dotenv - configuration comes from MCP client
 
