@@ -6,6 +6,7 @@ import { Client, ConnectConfig, ClientChannel } from 'ssh2';
 import { promises as fs } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
+import { createHash } from 'crypto';
 import { logger } from '../../utils/logger.js';
 import { EventEmitter } from 'events';
 
@@ -21,6 +22,7 @@ export interface SSHConfig {
   keepaliveInterval?: number;
   readyTimeout?: number;
   algorithms?: any; // SSH2 algorithm configuration
+  hostFingerprint?: string; // Pinned SHA-256 host key fingerprint (SHA256:base64, bare base64, or hex)
 }
 
 export interface CommandResult {
@@ -91,6 +93,7 @@ export class SSHExecutor extends EventEmitter {
   }> = [];
   private isProcessingQueue: boolean = false;
   private debugMode: boolean = process.env.MCP_DEBUG === 'true' || process.env.DEBUG_SSH === 'true';
+  private hostKeyWarningLogged: boolean = false;
 
   constructor(config?: Partial<SSHConfig>) {
     super();
@@ -120,6 +123,7 @@ export class SSHExecutor extends EventEmitter {
       timeout: parseInt(process.env.OPNSENSE_SSH_TIMEOUT || '30000'),
       keepaliveInterval: parseInt(process.env.OPNSENSE_SSH_KEEPALIVE || '10000'),
       readyTimeout: parseInt(process.env.OPNSENSE_SSH_READY_TIMEOUT || '20000'),
+      hostFingerprint: process.env.OPNSENSE_SSH_HOST_FINGERPRINT,
       algorithms: {
         kex: ['ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521', 'diffie-hellman-group-exchange-sha256'],
         cipher: ['aes128-gcm', 'aes128-gcm@openssh.com', 'aes256-gcm', 'aes256-gcm@openssh.com'],
@@ -129,6 +133,60 @@ export class SSHExecutor extends EventEmitter {
     };
 
     return { ...defaultConfig, ...config };
+  }
+
+  /**
+   * Normalize a user-supplied fingerprint (SHA256:base64, bare base64, or hex
+   * with/without colons) to a lowercase hex string for comparison.
+   */
+  private normalizeFingerprint(fingerprint: string): string {
+    let value = fingerprint.trim();
+    if (value.toLowerCase().startsWith('sha256:')) {
+      value = value.slice('sha256:'.length);
+    }
+    value = value.replace(/:/g, '');
+
+    // Hex fingerprints only contain [0-9a-f], base64 fingerprints use a wider
+    // alphabet ([A-Za-z0-9+/=]). Decode base64 down to hex so both input
+    // styles compare equal.
+    if (/^[0-9a-fA-F]+$/.test(value)) {
+      return value.toLowerCase();
+    }
+    return Buffer.from(value, 'base64').toString('hex').toLowerCase();
+  }
+
+  /**
+   * Verify a presented SSH host key against the pinned fingerprint, if one
+   * is configured. Fails closed on mismatch, preserves legacy accept-all
+   * behavior when unconfigured (with a warning).
+   */
+  private verifyHostKey(key: Buffer): boolean {
+    const configured = this.config.hostFingerprint;
+
+    const sha256Base64 = createHash('sha256').update(key).digest('base64').replace(/=+$/, '');
+    const sha256Hex = createHash('sha256').update(key).digest('hex').toLowerCase();
+
+    if (!configured) {
+      if (!this.hostKeyWarningLogged) {
+        logger.warn(
+          `[SSH] Host key verification is DISABLED - accepting any host key for ${this.config.host}. ` +
+          `Set OPNSENSE_SSH_HOST_FINGERPRINT=SHA256:${sha256Base64} to pin and enable strict verification.`
+        );
+        this.hostKeyWarningLogged = true;
+      }
+      return true;
+    }
+
+    const expectedHex = this.normalizeFingerprint(configured);
+    if (expectedHex === sha256Hex) {
+      return true;
+    }
+
+    logger.error(
+      `[SSH] Host key verification FAILED for ${this.config.host}: presented fingerprint ` +
+      `SHA256:${sha256Base64} does not match configured OPNSENSE_SSH_HOST_FINGERPRINT.`
+    );
+    return false;
   }
 
   /**
@@ -177,8 +235,7 @@ export class SSHExecutor extends EventEmitter {
           keepaliveInterval: this.config.keepaliveInterval,
           readyTimeout: this.config.readyTimeout,
           algorithms: this.config.algorithms,
-          // Accept any host key on first connect (like ssh -o StrictHostKeyChecking=no)
-          hostVerifier: () => true
+          hostVerifier: (key: Buffer) => this.verifyHostKey(key)
         };
 
         // Set up event handlers
