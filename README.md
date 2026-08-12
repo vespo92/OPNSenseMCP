@@ -71,12 +71,44 @@ OPNSENSE_SSH_USERNAME=root
 OPNSENSE_SSH_PASSWORD=your-password
 # Or use SSH key
 # OPNSENSE_SSH_KEY_PATH=~/.ssh/id_rsa
+
+# Recommended for a new/production router — see "Safety Modes" below
+# OPNSENSE_READ_ONLY=true
 ```
 
 3. Start the MCP server:
 ```bash
 opnsense-mcp-server
 ```
+
+### ⚠️ Safety Modes (read this before pointing at a production router)
+
+By default this server can make live, immediate changes to your firewall —
+add/delete rules, change NAT, restart services, run whitelisted shell
+commands over SSH. Two environment variables (operator-only — a tool call
+can never set or override them) add a safety net:
+
+| Variable | Effect |
+|----------|--------|
+| `OPNSENSE_READ_ONLY=true` | Every mutating API call and every non-read-only SSH command is rejected before it's sent. Write-capable tools are also hidden from the tool list, so the model never sees them as an option. |
+| `OPNSENSE_DRY_RUN=true` | Mutating calls are simulated instead of sent — you get a log line and a synthetic success response describing what *would* have happened, with no request reaching the router. |
+
+Both are enforced at the two lowest-level chokepoints this server uses to
+reach the router — the API client and the SSH executor — so they apply
+uniformly across all 140+ tools, not on a per-tool basis. If both are set,
+`OPNSENSE_READ_ONLY` wins.
+
+```bash
+# First time pointing this at a real router? Start here:
+OPNSENSE_READ_ONLY=true
+
+# Once you trust it, watch what it would do before going live:
+OPNSENSE_DRY_RUN=true
+
+# Remove both once you're confident.
+```
+
+See [CONFIGURATION.md](CONFIGURATION.md#safety-modes) for details.
 
 ### Quick Start with Bun (Faster)
 
