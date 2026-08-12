@@ -108,7 +108,9 @@ OPNSENSE_DRY_RUN=true
 # Remove both once you're confident.
 ```
 
-See [CONFIGURATION.md](CONFIGURATION.md#safety-modes) for details.
+See [CONFIGURATION.md](CONFIGURATION.md#safety-modes) for the config
+reference, or [docs/features/safety-modes.md](docs/features/safety-modes.md)
+for how it works under the hood.
 
 ### Quick Start with Bun (Faster)
 
@@ -258,6 +260,7 @@ For a complete list, see [docs/api/mcp-tools.md](docs/api/mcp-tools.md).
 - [NAT Management](docs/features/nat.md)
 - [SSH/CLI Execution](docs/features/ssh.md)
 - [Firewall Rules](docs/features/firewall.md)
+- [Safety Modes (Dry-Run & Read-Only)](docs/features/safety-modes.md)
 - [Troubleshooting](docs/guides/troubleshooting.md)
 
 ## Testing
