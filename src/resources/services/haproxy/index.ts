@@ -320,6 +320,62 @@ function validateActionType(type: string): type is ActionType {
 }
 
 /**
+ * Normalize an OPNsense model field value to a plain string.
+ *
+ * OPNsense's MVC layer renders fields two different ways depending on
+ * which API action returned them:
+ *   - searchBase() (list/search endpoints, e.g. searchFrontends) returns
+ *     plain scalar/CSV strings, e.g. bind: "1.2.3.4:443,5.6.7.8:443".
+ *   - getBase() (single-item get endpoints, e.g. getFrontend/{uuid}) instead
+ *     renders any OptionField / ModelRelationField / CertificateField / or
+ *     other Multiple="Y" field as a full candidate map for building edit-form
+ *     widgets: { "http": { "value": "HTTP...", "selected": 1 }, "ssl": {...} }
+ *     - even for fields that are plain CSV lists (like bind) once Multiple=Y.
+ * This collapses either shape down to the plain string a search-endpoint
+ * response would have given, by taking the comma-joined keys with
+ * selected=1 out of the candidate-map shape, and passing plain strings
+ * through unchanged.
+ */
+function normalizeField(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (value && typeof value === 'object') {
+    const selectedKeys = Object.entries(value as Record<string, any>)
+      .filter(([key, opt]) => key !== '' && opt && Number((opt as any).selected) === 1)
+      .map(([key]) => key);
+    return selectedKeys.join(',');
+  }
+  return '';
+}
+
+/**
+ * Split an OPNsense CSV-style relation/list field ("uuid1,uuid2") into an
+ * array of trimmed, non-empty tokens. Handles both the flat-string shape
+ * (search endpoints) and the candidate-map shape (get endpoints) via
+ * normalizeField(). Missing/empty values safely become [].
+ */
+function splitCsv(value: unknown): string[] {
+  value = normalizeField(value);
+  if (typeof value !== 'string' || value.trim() === '') {
+    return [];
+  }
+  return value.split(',').map(v => v.trim()).filter(v => v.length > 0);
+}
+
+/**
+ * Coerce an OPNsense stat/CSV numeric field (string, possibly missing/empty)
+ * into a number, defaulting to 0.
+ */
+function toNumber(value: unknown): number {
+  const n = typeof value === 'string' ? parseInt(value, 10) : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
  * HAProxy Resource Manager for OPNsense
  */
 export class HAProxyResource {
@@ -329,13 +385,19 @@ export class HAProxyResource {
 
   async getServiceStatus(): Promise<HAProxyServiceStatus> {
     try {
-      const response = await this.client.get('/haproxy/service/status');
+      // /haproxy/service/status only reports whether the daemon is actually
+      // running, as { status: "running" | "stopped" } (same
+      // ServiceControllerBase shape used by every other OPNsense plugin,
+      // e.g. Monit/ACME - it has no "enabled" field and no pid/uptime/
+      // version). Whether the service is enabled in config lives on the
+      // general settings model instead, so both must be fetched.
+      const [statusResponse, settingsResponse] = await Promise.all([
+        this.client.get('/haproxy/service/status'),
+        this.client.get('/haproxy/settings/get')
+      ]);
       return {
-        enabled: response.status === 'enabled',
-        running: response.running === true,
-        pid: response.pid,
-        uptime: response.uptime,
-        version: response.version
+        enabled: normalizeField(settingsResponse?.haproxy?.general?.enabled) === '1',
+        running: statusResponse?.status === 'running'
       };
     } catch (error) {
       if (error instanceof OPNSenseAPIError) {
@@ -377,7 +439,8 @@ export class HAProxyResource {
       if (!response.rows || !Array.isArray(response.rows)) {
         return [];
       }
-      return response.rows.map((row: any) => this.parseBackend(row));
+      const serversByUuid = await this.getServersByUuid();
+      return response.rows.map((row: any) => this.parseBackend(row, serversByUuid));
     } catch (error) {
       throw new Error(`Failed to list HAProxy backends: ${error}`);
     }
@@ -389,7 +452,8 @@ export class HAProxyResource {
       if (!response.backend) {
         return null;
       }
-      return this.parseBackend(response.backend);
+      const serversByUuid = await this.getServersByUuid();
+      return this.parseBackend({ uuid, ...response.backend }, serversByUuid);
     } catch (error) {
       throw new Error(`Failed to get HAProxy backend: ${error}`);
     }
@@ -560,7 +624,11 @@ export class HAProxyResource {
       if (!response.rows || !Array.isArray(response.rows)) {
         return [];
       }
-      return response.rows.map((row: any) => this.parseFrontend(row));
+      const [actionsByUuid, aclsByUuid] = await Promise.all([
+        this.getActionsByUuid(),
+        this.getAclsByUuid()
+      ]);
+      return response.rows.map((row: any) => this.parseFrontend(row, actionsByUuid, aclsByUuid));
     } catch (error) {
       throw new Error(`Failed to list HAProxy frontends: ${error}`);
     }
@@ -572,7 +640,11 @@ export class HAProxyResource {
       if (!response.frontend) {
         return null;
       }
-      return this.parseFrontend(response.frontend);
+      const [actionsByUuid, aclsByUuid] = await Promise.all([
+        this.getActionsByUuid(),
+        this.getAclsByUuid()
+      ]);
+      return this.parseFrontend({ uuid, ...response.frontend }, actionsByUuid, aclsByUuid);
     } catch (error) {
       throw new Error(`Failed to get HAProxy frontend: ${error}`);
     }
@@ -949,18 +1021,27 @@ export class HAProxyResource {
   }
 
   // Certificate Management Methods
+  /**
+   * List certificates available for use in HAProxy (e.g. for
+   * bindOptions.certificates / server sslCA).
+   *
+   * NOTE: The certificate manager was renamed to the "Trust" module in
+   * current OPNsense (Trust\Cert model, OPNsense\Trust\Api\CertController).
+   * The old System\Certificates controller and its
+   * /system/certificates/searchCertificate endpoint no longer exist.
+   */
   async listCertificates(): Promise<HAProxyCertificate[]> {
     try {
-      const response = await this.client.get('/system/certificates/searchCertificate');
+      const response = await this.client.get('/trust/cert/search');
       if (!response.rows || !Array.isArray(response.rows)) {
         return [];
       }
       return response.rows.map((row: any) => ({
         uuid: row.uuid,
         name: row.descr,
-        type: row.method,
-        cn: row.dn?.CN,
-        san: row.altnames ? row.altnames.split(',') : []
+        type: (row.action === 'internal' ? 'selfsigned' : 'import') as HAProxyCertificate['type'],
+        cn: row.commonname,
+        san: row.altnames_dns ? splitCsv(row.altnames_dns) : []
       }));
     } catch (error) {
       throw new Error(`Failed to list certificates: ${error}`);
@@ -1011,9 +1092,18 @@ export class HAProxyResource {
   }
 
   // Stats Methods
+  /**
+   * NOTE: The old /haproxy/stats/show endpoint does not exist in current
+   * os-haproxy. Live stats come from OPNsense\HAProxy\Api\StatisticsController
+   * ::countersAction(), which shells out to "show stat" on the HAProxy admin
+   * socket (via queryStats.php) and returns the raw CSV rows as a flat JSON
+   * array (one row per frontend/backend/server, distinguished by pxname +
+   * svname, NOT the {stats:{frontends:{},backends:{}}} shape this client
+   * used to assume).
+   */
   async getStats(): Promise<HAProxyStats> {
     try {
-      const response = await this.client.get('/haproxy/stats/show');
+      const response = await this.client.get('/haproxy/statistics/counters');
       return this.parseStats(response);
     } catch (error) {
       throw new Error(`Failed to get HAProxy stats: ${error}`);
@@ -1030,37 +1120,235 @@ export class HAProxyResource {
   }
 
   // Helper Methods
-  private parseBackend(data: any): HAProxyBackend {
+
+  /**
+   * ==================== Linked child record lookups ====================
+   *
+   * In the current os-haproxy data model, ACLs, Actions and Servers are NOT
+   * nested inside the frontend/backend record returned by getFrontend /
+   * getBackend / searchFrontends / searchBackends. They are entirely
+   * separate top-level model collections (acls.acl, actions.action,
+   * servers.server), each with its own searchAcls / searchActions /
+   * searchServers endpoint. The relationship instead lives on the *parent*:
+   *   - frontend.linkedActions  -> comma-separated action UUIDs
+   *   - action.linkedAcls       -> comma-separated ACL UUIDs
+   *   - backend.linkedServers   -> comma-separated server UUIDs
+   * Previously this client never followed those links, so acls/actions/
+   * servers/certificates always came back as [] even when fully configured.
+   */
+
+  private async getAclsByUuid(): Promise<Map<string, any>> {
+    const response = await this.client.get('/haproxy/settings/searchAcls');
+    const map = new Map<string, any>();
+    if (response?.rows && Array.isArray(response.rows)) {
+      for (const row of response.rows) {
+        if (row.uuid) map.set(row.uuid, row);
+      }
+    }
+    return map;
+  }
+
+  private async getActionsByUuid(): Promise<Map<string, any>> {
+    const response = await this.client.get('/haproxy/settings/searchActions');
+    const map = new Map<string, any>();
+    if (response?.rows && Array.isArray(response.rows)) {
+      for (const row of response.rows) {
+        if (row.uuid) map.set(row.uuid, row);
+      }
+    }
+    return map;
+  }
+
+  private async getServersByUuid(): Promise<Map<string, any>> {
+    const response = await this.client.get('/haproxy/settings/searchServers');
+    const map = new Map<string, any>();
+    if (response?.rows && Array.isArray(response.rows)) {
+      for (const row of response.rows) {
+        if (row.uuid) map.set(row.uuid, row);
+      }
+    }
+    return map;
+  }
+
+  /**
+   * Map a raw acls.acl row to our HAProxyACL shape.
+   * The ACL model has no single generic "value" field - each expression
+   * type stores its match value in a field with the SAME name as the
+   * expression (e.g. expression="hdr_sub" -> row.hdr_sub holds the value;
+   * expression="ssl_sni" -> row.ssl_sni holds the value). The cust_hdr_*
+   * expressions split the header name and match value across two fields.
+   */
+  private mapAclRow(row: any): HAProxyACL {
+    const expression = normalizeField(row.expression);
+    let value = '';
+    const rawValue = expression ? row[expression] : undefined;
+    if (typeof rawValue === 'string' && rawValue !== '') {
+      value = rawValue;
+    } else if (rawValue !== undefined) {
+      value = normalizeField(rawValue);
+    } else if (expression && expression.startsWith('cust_hdr')) {
+      const headerName = normalizeField(row[`${expression}_name`]);
+      const headerValue = normalizeField(row[expression]);
+      value = headerName ? `${headerName}: ${headerValue}` : headerValue;
+    }
+    return {
+      uuid: row.uuid,
+      name: row.name,
+      expression: expression as ACLExpressionType,
+      value,
+      negate: normalizeField(row.negate) === '1',
+      // The live ACL model has no per-item enable flag; an ACL is "enabled"
+      // whenever an action actually links to it.
+      enabled: true
+    };
+  }
+
+  /**
+   * Map a raw actions.action row to our HAProxyAction shape.
+   */
+  private mapActionRow(row: any, aclsByUuid: Map<string, any>): HAProxyAction {
+    const linkedAclUuids = splitCsv(row.linkedAcls);
+    const aclNames = linkedAclUuids
+      .map(uuid => aclsByUuid.get(uuid)?.name)
+      .filter((name: any): name is string => Boolean(name));
+
+    const testType = normalizeField(row.testType) || 'if';
+    const operatorField = normalizeField(row.operator);
+    const condition = aclNames.length > 0
+      ? `${testType} ${aclNames.join(operatorField === 'or' ? ' or ' : ' and ')}`
+      : undefined;
+
+    const backend = normalizeField(row.use_backend);
+    const type = normalizeField(row.type) || 'use_backend';
+
+    return {
+      uuid: row.uuid,
+      type: type as ActionType,
+      backend: backend || undefined,
+      condition,
+      aclNames,
+      value: this.extractActionValue(row, type),
+      operator: testType === 'unless' ? 'unless' : 'if',
+      enabled: normalizeField(row.enabled) !== '0'
+    };
+  }
+
+  /**
+   * http-request/http-response/tcp-request/tcp-response/http-after-response
+   * actions store their concrete sub-type in a "<type>_action" field
+   * (dashes replaced with underscores) and a free-form parameter in the
+   * matching "<type>_option" field, e.g. type=http-request ->
+   * http_request_action / http_request_option.
+   */
+  private extractActionValue(row: any, type: string): string | undefined {
+    const key = type.replace(/-/g, '_');
+    const subType = normalizeField(row[`${key}_action`]);
+    const option = normalizeField(row[`${key}_option`]);
+    if (subType && option) return `${subType} ${option}`;
+    if (subType) return subType;
+    const useServer = normalizeField(row.use_server);
+    if (useServer) return useServer;
+    return undefined;
+  }
+
+  /**
+   * Map a raw servers.server row to our HAProxyServer shape.
+   */
+  private mapServerRow(row: any): HAProxyServer {
+    const port = normalizeField(row.port);
+    const weight = normalizeField(row.weight);
+    const checkInterval = normalizeField(row.checkInterval);
+    const maxConnections = normalizeField(row.maxConnections);
+    const mode = normalizeField(row.mode);
+
+    return {
+      uuid: row.uuid,
+      name: row.name,
+      address: row.address || '',
+      port: port ? parseInt(port, 10) : 0,
+      ssl: normalizeField(row.ssl) === '1',
+      sslVerify: normalizeField(row.sslVerify) === '1',
+      sslSNI: row.sslSNI || undefined,
+      sslCA: normalizeField(row.sslCA) || undefined,
+      weight: weight !== '' ? parseInt(weight, 10) : undefined,
+      // The server model has no boolean "backup" flag; it's one of the
+      // mode="active"|"backup"|"disabled" values.
+      backup: mode === 'backup',
+      enabled: mode !== 'disabled',
+      checkEnabled: undefined,
+      checkInterval: checkInterval ? (parseInt(checkInterval, 10) || undefined) : undefined,
+      maxConnections: maxConnections ? parseInt(maxConnections, 10) : undefined
+    };
+  }
+
+  private parseBackend(data: any, serversByUuid: Map<string, any>): HAProxyBackend {
+    const servers = splitCsv(data.linkedServers)
+      .map(uuid => serversByUuid.get(uuid))
+      .filter(Boolean)
+      .map((row: any) => this.mapServerRow(row));
+
+    const healthCheckEnabled = normalizeField(data.healthCheckEnabled);
+    const checkInterval = normalizeField(data.checkInterval);
+
     return {
       uuid: data.uuid,
       name: data.name,
-      mode: data.mode || 'http',
-      balance: data.algorithm || 'roundrobin',
+      mode: (normalizeField(data.mode) || 'http') as HAProxyBackend['mode'],
+      balance: (normalizeField(data.algorithm) || 'roundrobin') as HAProxyBackend['balance'],
       description: data.description,
-      enabled: data.enabled === '1',
-      servers: [],
-      healthCheck: data.healthCheckEnabled === '1' ? {
-        type: data.healthCheck,
-        interval: parseInt(data.healthCheckInterval) || undefined,
-        timeout: parseInt(data.healthCheckTimeout) || undefined
+      enabled: normalizeField(data.enabled) === '1',
+      servers,
+      healthCheck: healthCheckEnabled === '1' ? {
+        type: normalizeField(data.healthCheck),
+        interval: checkInterval ? (parseInt(checkInterval, 10) || undefined) : undefined,
+        timeout: undefined
       } : undefined
     };
   }
 
-  private parseFrontend(data: any): HAProxyFrontend {
+  private parseFrontend(data: any, actionsByUuid: Map<string, any>, aclsByUuid: Map<string, any>): HAProxyFrontend {
+    const linkedActionUuids = splitCsv(data.linkedActions);
+    const actions = linkedActionUuids
+      .map(uuid => actionsByUuid.get(uuid))
+      .filter(Boolean)
+      .map((row: any) => this.mapActionRow(row, aclsByUuid));
+
+    // The frontend has no direct link to its ACLs - an ACL only becomes
+    // "attached" to a frontend through one of the frontend's linked
+    // actions referencing it via linkedAcls. Collect the union of those.
+    const aclUuids = new Set<string>();
+    for (const actionUuid of linkedActionUuids) {
+      const action = actionsByUuid.get(actionUuid);
+      if (action) {
+        for (const aclUuid of splitCsv(action.linkedAcls)) {
+          aclUuids.add(aclUuid);
+        }
+      }
+    }
+    const acls = Array.from(aclUuids)
+      .map(uuid => aclsByUuid.get(uuid))
+      .filter(Boolean)
+      .map((row: any) => this.mapAclRow(row));
+
     return {
       uuid: data.uuid,
       name: data.name,
-      bind: data.bind || '',
-      mode: data.mode || 'http',
-      backend: data.defaultBackend || '',
+      bind: normalizeField(data.bind),
+      mode: (normalizeField(data.mode) || 'http') as HAProxyFrontend['mode'],
+      backend: normalizeField(data.defaultBackend),
       description: data.description,
-      enabled: data.enabled === '1',
-      acls: [],
-      actions: [],
+      enabled: normalizeField(data.enabled) === '1',
+      acls,
+      actions,
       bindOptions: {
-        ssl: data.ssl === '1',
-        certificates: data.certificates ? data.certificates.split(',') : []
+        // NOTE: the live model fields are ssl_enabled / ssl_certificates,
+        // not ssl / certificates (which don't exist on the frontend model
+        // and previously always evaluated to false/[]).
+        ssl: normalizeField(data.ssl_enabled) === '1',
+        certificates: splitCsv(data.ssl_certificates),
+        alpn: splitCsv(data.advertised_protocols),
+        sslMinVersion: normalizeField(data.ssl_minVersion) || undefined,
+        sslMaxVersion: normalizeField(data.ssl_maxVersion) || undefined
       }
     };
   }
@@ -1208,57 +1496,71 @@ export class HAProxyResource {
     return payload;
   }
 
+  /**
+   * The live endpoint (/haproxy/statistics/counters) returns the raw HAProxy
+   * "show stat" admin-socket output as a flat JSON array - one row per
+   * proxy/server, distinguished by pxname (proxy name) + svname ("FRONTEND",
+   * "BACKEND", or a server name) - NOT the {stats:{frontends:{},backends:{}}}
+   * nested shape this method previously (and always vacuously) expected.
+   */
   private parseStats(data: any): HAProxyStats {
     const stats: HAProxyStats = {
       frontends: {},
       backends: {}
     };
 
-    // Parse the stats data from HAProxy
-    // This would need to be implemented based on the actual response format
-    // For now, returning a basic structure
-    if (data.stats) {
-      // Parse frontend stats
-      if (data.stats.frontends) {
-        for (const [name, frontendData] of Object.entries(data.stats.frontends)) {
-          stats.frontends[name] = {
-            status: (frontendData as any).status || 'unknown',
-            sessions: (frontendData as any).scur || 0,
-            bytesIn: (frontendData as any).bin || 0,
-            bytesOut: (frontendData as any).bout || 0,
-            requestRate: (frontendData as any).req_rate || 0,
-            errorRate: (frontendData as any).ereq || 0
-          };
-        }
+    const rows: any[] = Array.isArray(data) ? data : (Array.isArray(data?.rows) ? data.rows : []);
+
+    for (const row of rows) {
+      if (!row || !row.pxname || !row.svname) {
+        continue;
       }
 
-      // Parse backend stats
-      if (data.stats.backends) {
-        for (const [name, backendData] of Object.entries(data.stats.backends)) {
-          const backend = backendData as any;
-          stats.backends[name] = {
-            status: backend.status || 'unknown',
-            activeServers: backend.act || 0,
-            backupServers: backend.bck || 0,
-            sessions: backend.scur || 0,
-            queuedRequests: backend.qcur || 0,
-            health: {}
-          };
+      if (row.svname === 'FRONTEND') {
+        stats.frontends[row.pxname] = {
+          status: row.status || 'unknown',
+          sessions: toNumber(row.scur),
+          bytesIn: toNumber(row.bin),
+          bytesOut: toNumber(row.bout),
+          requestRate: toNumber(row.req_rate),
+          errorRate: toNumber(row.ereq)
+        };
+        continue;
+      }
 
-          // Parse server health
-          if (backend.servers) {
-            for (const [serverName, serverData] of Object.entries(backend.servers)) {
-              const server = serverData as any;
-              stats.backends[name].health[serverName] = {
-                status: server.status === 'UP' ? 'up' : server.status === 'DOWN' ? 'down' : 'maint',
-                lastCheck: server.check_status || '',
-                weight: server.weight || 0,
-                checksPassed: server.chkpass || 0,
-                checksFailed: server.chkfail || 0
-              };
-            }
-          }
-        }
+      // Ensure a backend entry exists regardless of row order (server rows
+      // for a backend are emitted before its own BACKEND aggregate row).
+      if (!stats.backends[row.pxname]) {
+        stats.backends[row.pxname] = {
+          status: 'unknown',
+          activeServers: 0,
+          backupServers: 0,
+          sessions: 0,
+          queuedRequests: 0,
+          health: {}
+        };
+      }
+
+      if (row.svname === 'BACKEND') {
+        stats.backends[row.pxname] = {
+          ...stats.backends[row.pxname],
+          status: row.status || 'unknown',
+          activeServers: toNumber(row.act),
+          backupServers: toNumber(row.bck),
+          sessions: toNumber(row.scur),
+          queuedRequests: toNumber(row.qcur)
+        };
+      } else {
+        // Individual server row.
+        stats.backends[row.pxname].health[row.svname] = {
+          status: row.status === 'UP' ? 'up' : row.status === 'DOWN' ? 'down' : 'maint',
+          lastCheck: row.check_status || '',
+          weight: toNumber(row.weight),
+          // HAProxy's stat CSV only exposes a failure counter (chkfail);
+          // there is no corresponding "checks passed" counter.
+          checksPassed: 0,
+          checksFailed: toNumber(row.chkfail)
+        };
       }
     }
 
