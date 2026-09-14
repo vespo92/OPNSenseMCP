@@ -225,8 +225,11 @@ export class DhcpLeaseResource {
    */
   getDeviceInfo(lease: DhcpLease): string {
     const hostname = lease.hostname || 'Unknown device';
-    const manufacturer = lease.hwaddr ? this.getMacManufacturer(lease.hwaddr) : 'Unknown';
-    
+    // dnsmasq/Kea resolve the OUI server-side and return it as `mac_info`
+    // (normalized to `man`), which beats the small built-in prefix table.
+    const manufacturer = lease.man
+      || (lease.hwaddr ? this.getMacManufacturer(lease.hwaddr) : 'Unknown');
+
     return `${hostname} - ${lease.address} (${manufacturer})`;
   }
 
