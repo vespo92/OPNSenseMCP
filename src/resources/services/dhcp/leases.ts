@@ -55,17 +55,38 @@ export class DhcpLeaseResource {
    * Normalize lease data from different possible API response formats
    */
   private normalizeLease(rawLease: any): DhcpLease {
+    // dnsmasq and Kea report the lease end as `expire` (unix seconds) rather
+    // than the ISC `ends` string, and carry the OUI vendor in `mac_info`.
+    let ends = rawLease.ends || rawLease.end || rawLease.endTime || '';
+    if (!ends && rawLease.expire) {
+      const secs = Number(rawLease.expire);
+      if (Number.isFinite(secs) && secs > 0) {
+        ends = new Date(secs * 1000).toISOString();
+      }
+    }
+
+    // dnsmasq marks reservation-backed leases via a non-empty `is_reserved`.
+    const reserved = Array.isArray(rawLease.is_reserved)
+      ? rawLease.is_reserved.length > 0
+      : Boolean(rawLease.is_reserved);
+
+    // Neither dnsmasq nor Kea emit an ISC-style `state`; a returned lease is active.
+    const state = rawLease.state || rawLease.status ||
+      ((rawLease.address || rawLease.ip_address) ? 'active' : 'unknown');
+
     return {
-      address: rawLease.address || rawLease.ip || rawLease.ipaddr || '',
-      hwaddr: rawLease.hwaddr || rawLease.mac || rawLease.macaddr || '',
+      address: rawLease.address || rawLease.ip || rawLease.ipaddr || rawLease.ip_address || '',
+      hwaddr: rawLease.hwaddr || rawLease.mac || rawLease.macaddr || rawLease.hw_address || '',
       hostname: rawLease.hostname || rawLease.host || rawLease.name || '',
-      descr: rawLease.descr || rawLease.description || rawLease.man || '',
+      descr: rawLease.descr || rawLease.description || rawLease.mac_info || rawLease.man || '',
       starts: rawLease.starts || rawLease.start || rawLease.startTime || '',
-      ends: rawLease.ends || rawLease.end || rawLease.endTime || '',
-      state: rawLease.state || rawLease.status || 'unknown',
-      act: rawLease.act || rawLease.action || '',
+      ends,
+      state,
+      act: rawLease.act || rawLease.action || (reserved ? 'static' : ''),
       wstatus: rawLease.wstatus || rawLease.status || '',
-      if: rawLease.if || rawLease.interface || rawLease.intf || ''
+      if: rawLease.if_descr || rawLease.if || rawLease.interface || rawLease.intf || rawLease.if_name || '',
+      man: rawLease.mac_info || rawLease.man || '',
+      type: reserved ? 'static' : (rawLease.type || 'dynamic')
     };
   }
 
@@ -78,11 +99,11 @@ export class DhcpLeaseResource {
         logger.debug('[DHCP] Calling searchLease endpoint...');
       }
 
-      const response = await this.client.post('/dhcpv4/leases/searchLease', {
+      // Routed through the client so it lands on whichever DHCP backend this
+      // firewall actually runs (dnsmasq / Kea / ISC).
+      const response = await this.client.searchDhcpLeases({
         current: 1,
-        rowCount: 1000,
-        sort: {},
-        searchPhrase: ''
+        rowCount: 1000
       });
 
       if (this.debugMode) {
@@ -122,9 +143,13 @@ export class DhcpLeaseResource {
           logger.debug('[DHCP] Trying alternative endpoint...');
         }
         
-        const altResponse = await this.client.get('/dhcpv4/leases');
-        if (altResponse && Array.isArray(altResponse)) {
-          return altResponse.map((lease: any) => this.normalizeLease(lease));
+        const backend = await this.client.detectDhcpBackend(true);
+        logger.error(`[DHCP] lease lookup failed against backend '${backend}'`);
+        if (backend === 'isc') {
+          const altResponse = await this.client.get('/dhcpv4/leases');
+          if (altResponse && Array.isArray(altResponse)) {
+            return altResponse.map((lease: any) => this.normalizeLease(lease));
+          }
         }
       } catch (altError) {
         if (this.debugMode) {
@@ -329,13 +354,29 @@ export class DhcpLeaseResource {
   async debugApiEndpoints(): Promise<void> {
     logger.debug('Debugging DHCP API Endpoints');
 
-    // Test various endpoints
-    const endpoints = [
-      { method: 'POST', path: '/dhcpv4/leases/searchLease', data: { current: 1, rowCount: 10 } },
-      { method: 'GET', path: '/dhcpv4/leases/get' },
-      { method: 'GET', path: '/dhcpv4/leases' },
-      { method: 'GET', path: '/dhcpv4/service/status' },
-    ];
+    const backend = await this.client.detectDhcpBackend(true);
+    logger.debug(`Detected DHCP backend: ${backend}`);
+
+    // Probe the endpoints that belong to the detected backend.
+    const byBackend: Record<string, Array<{ method: string; path: string; data?: any }>> = {
+      dnsmasq: [
+        { method: 'GET', path: '/dnsmasq/leases/search?current=1&rowCount=10' },
+        { method: 'GET', path: '/dnsmasq/settings/searchHost?current=1&rowCount=10' },
+        { method: 'GET', path: '/dnsmasq/service/status' },
+      ],
+      kea: [
+        { method: 'GET', path: '/kea/leases4/search?current=1&rowCount=10' },
+        { method: 'POST', path: '/kea/dhcpv4/searchReservation', data: { current: 1, rowCount: 10 } },
+        { method: 'GET', path: '/kea/service/status' },
+      ],
+      isc: [
+        { method: 'POST', path: '/dhcpv4/leases/searchLease', data: { current: 1, rowCount: 10 } },
+        { method: 'GET', path: '/dhcpv4/leases/get' },
+        { method: 'GET', path: '/dhcpv4/leases' },
+        { method: 'GET', path: '/dhcpv4/service/status' },
+      ],
+    };
+    const endpoints = byBackend[backend];
 
     for (const endpoint of endpoints) {
       logger.debug(`Testing ${endpoint.method} ${endpoint.path}...`);
