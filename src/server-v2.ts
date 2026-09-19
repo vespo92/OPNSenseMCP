@@ -122,12 +122,23 @@ export class OPNsenseMCPServerV2 {
   private async initializeServices(): Promise<void> {
     this.logger.info('Initializing core services');
 
-    // Initialize API client
+    // Initialize API client. Safety mode is operator-controlled via env vars
+    // only (see src/index.ts getSafetyConfig) — never sourced from ServerConfig,
+    // so it can't be relaxed by whatever supplied the config object.
+    const dryRun = process.env.OPNSENSE_DRY_RUN === 'true';
+    const readOnly = process.env.OPNSENSE_READ_ONLY === 'true';
+    if (readOnly) {
+      this.logger.warn('OPNsense API client starting in READ-ONLY mode (OPNSENSE_READ_ONLY=true) — mutating calls will be rejected.');
+    } else if (dryRun) {
+      this.logger.warn('OPNsense API client starting in DRY-RUN mode (OPNSENSE_DRY_RUN=true) — mutating calls will be simulated.');
+    }
     this.apiClient = new OPNSenseAPIClient({
       host: this.config.opnsense.host,
       apiKey: this.config.opnsense.apiKey,
       apiSecret: this.config.opnsense.apiSecret,
       verifySsl: this.config.opnsense.verifySsl,
+      dryRun,
+      readOnly,
     });
 
     // Initialize SSH executor
