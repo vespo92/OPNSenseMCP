@@ -98,6 +98,44 @@ secret-tool store --label="OPNsense API Secret" service opnsense-api-secret user
 | `CACHE_ENABLED` | Enable response caching | `true` | `false` to disable |
 | `CACHE_TTL` | Cache time-to-live (seconds) | `300` | `600` for 10 min |
 | `OPNSENSE_INTERFACE_MAPPINGS` | Friendly interface names | - | `{"dmz":"opt8"}` |
+| `OPNSENSE_READ_ONLY` | Block every mutating call (API + SSH) and hide write tools | `false` | `true` |
+| `OPNSENSE_DRY_RUN` | Simulate mutating calls (log intent, don't send) | `false` | `true` |
+
+## Safety Modes
+
+`OPNSENSE_READ_ONLY` and `OPNSENSE_DRY_RUN` guard against an agent making an
+unintended change on a production router. Both are operator-set environment
+variables only — a tool call (including `configure`) can never enable,
+disable, or weaken them, and they cover both request paths this server uses
+to reach the router: the REST API client and the SSH command executor.
+
+| Mode | What still works | What's blocked |
+|------|-------------------|-----------------|
+| `OPNSENSE_READ_ONLY=true` | All read/list/get/search/diagnostic tools, plus a fixed allowlist of read-only SSH commands (`netstat`, `ifconfig`, `ping`, `pfctl -s ...`, etc.) | Every API POST/PUT/DELETE, and any SSH command not on the read-only allowlist. Write-capable tools are also removed from the tool list entirely. |
+| `OPNSENSE_DRY_RUN=true` | Same as above, plus write tools can be *called* | Instead of sending the request, the client logs what it would have sent and returns a synthetic `{ dryRun: true, wouldSend: {...} }` response so you can see intended changes before trusting the agent with real writes. |
+
+If both are set, `OPNSENSE_READ_ONLY` takes precedence.
+
+Recommended for a new deployment against a production router: start with
+`OPNSENSE_READ_ONLY=true`, switch to `OPNSENSE_DRY_RUN=true` to review what
+an agent would do, then remove both once you're confident.
+
+```json
+{
+  "mcpServers": {
+    "opnsense": {
+      "command": "npx",
+      "args": ["opnsense-mcp-server"],
+      "env": {
+        "OPNSENSE_HOST": "https://192.168.1.1",
+        "OPNSENSE_API_KEY": "your-api-key",
+        "OPNSENSE_API_SECRET": "your-api-secret",
+        "OPNSENSE_READ_ONLY": "true"
+      }
+    }
+  }
+}
+```
 
 ### Advanced Variables (External Services)
 
@@ -179,6 +217,7 @@ For production, import the OPNsense CA certificate to your system.
 3. **Use separate API keys** for development and production
 4. **Enable SSL verification** in production
 5. **Rotate credentials** regularly
+6. **Start new/untrusted setups with `OPNSENSE_READ_ONLY=true`** (see [Safety Modes](#safety-modes)) before letting an agent make live changes
 6. **Use read-only API keys** when possible
 
 ## Example Configurations

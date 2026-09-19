@@ -25,6 +25,8 @@ export class OPNSenseAPIError extends Error {
 export class OPNSenseAPIClient {
   private axios: AxiosInstance;
   private debugMode: boolean;
+  private dryRun: boolean;
+  private readOnly: boolean;
   private recorder?: (call: Omit<APICall, 'id' | 'timestamp'>) => void;
 
   constructor(private config: {
@@ -38,8 +40,23 @@ export class OPNSenseAPIClient {
     clientKeyPath?: string;
     clientCertPfxPath?: string;
     clientCertPassphrase?: string;
+    /**
+     * When true, POST/PUT/DELETE requests are not sent to the router.
+     * Instead the intended request is logged and a synthetic success
+     * response (`{ dryRun: true, ... }`) is returned. GET requests are
+     * unaffected since they cannot mutate router state.
+     */
+    dryRun?: boolean;
+    /**
+     * When true, POST/PUT/DELETE requests are rejected before any network
+     * call is made. Stricter than dryRun: nothing is simulated, the caller
+     * just gets an OPNSenseAPIError. GET requests are unaffected.
+     */
+    readOnly?: boolean;
   }) {
     this.debugMode = config.debugMode || false;
+    this.dryRun = config.dryRun || false;
+    this.readOnly = config.readOnly || false;
 
     // Optional mTLS client certificate, for OPNsense instances that require
     // client-cert auth on top of (or instead of) the API key/secret.
@@ -159,6 +176,61 @@ export class OPNSenseAPIClient {
   }
 
   /**
+   * Whether this client is running in dry-run mode (mutations simulated, not sent).
+   */
+  isDryRun(): boolean {
+    return this.dryRun;
+  }
+
+  /**
+   * Whether this client is running in read-only mode (mutations rejected outright).
+   */
+  isReadOnly(): boolean {
+    return this.readOnly;
+  }
+
+  /**
+   * Guard invoked at the top of every mutating request (POST/PUT/DELETE).
+   * Returns a synthetic response to short-circuit with when the caller
+   * should not proceed to the real network call (dry-run or blocked),
+   * or `undefined` when the real request should proceed as normal.
+   */
+  private guardMutation(
+    method: 'POST' | 'PUT' | 'DELETE',
+    path: string,
+    data?: any
+  ): { result: string; dryRun?: boolean; readOnly?: boolean; message: string; wouldSend?: { method: string; path: string; data?: any } } | undefined {
+    if (this.readOnly) {
+      const message = `Blocked ${method} ${path}: client is in read-only mode (OPNSENSE_READ_ONLY). No request was sent.`;
+      logger.warn('[API Read-Only] ' + message, { method, path, data });
+      this.recordCall(method, path, undefined, data, undefined, 0, {
+        code: 'READ_ONLY_MODE',
+        message
+      });
+      throw new OPNSenseAPIError(message, 403);
+    }
+
+    if (this.dryRun) {
+      const message = `DRY RUN: would have sent ${method} ${path} — request was not executed.`;
+      logger.warn('[API Dry Run] ' + message, { method, path, data });
+      const response = {
+        result: 'dry-run',
+        dryRun: true,
+        message,
+        wouldSend: { method, path, data }
+      };
+      this.recordCall(method, path, undefined, data, {
+        status: 200,
+        data: response,
+        headers: {}
+      }, 0);
+      return response;
+    }
+
+    return undefined;
+  }
+
+  /**
    * Record an API call if a recorder is set
    */
   private recordCall(
@@ -244,6 +316,9 @@ export class OPNSenseAPIClient {
    * POST request - WITH Content-Type header
    */
   async post<T = any>(path: string, data: any = {}): Promise<T> {
+    const guarded = this.guardMutation('POST', path, data);
+    if (guarded) return guarded as unknown as T;
+
     const startTime = Date.now();
     const response = await this.axios.post(path, data, {
       headers: {
@@ -289,6 +364,9 @@ export class OPNSenseAPIClient {
    * PUT request - WITH Content-Type header
    */
   async put<T = any>(path: string, data: any = {}): Promise<T> {
+    const guarded = this.guardMutation('PUT', path, data);
+    if (guarded) return guarded as unknown as T;
+
     const startTime = Date.now();
     const response = await this.axios.put(path, data, {
       headers: {
@@ -324,6 +402,9 @@ export class OPNSenseAPIClient {
    * DELETE request
    */
   async delete<T = any>(path: string): Promise<T> {
+    const guarded = this.guardMutation('DELETE', path);
+    if (guarded) return guarded as unknown as T;
+
     const startTime = Date.now();
     const response = await this.axios.delete(path, {
       headers: {

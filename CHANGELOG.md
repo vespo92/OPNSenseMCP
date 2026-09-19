@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Safety modes**: `OPNSENSE_READ_ONLY` and `OPNSENSE_DRY_RUN` environment variables to prevent an agent from making unintended changes to a production router.
+  - `OPNSENSE_READ_ONLY=true` rejects every mutating API call and every non-whitelisted SSH command before it's sent, and hides write-capable tools from the MCP tool list.
+  - `OPNSENSE_DRY_RUN=true` simulates mutating calls (logs intent, returns a synthetic success) instead of sending them.
+  - Both are operator-only settings sourced from the environment; the `configure` tool cannot set or override them.
+  - Enforced at the two lowest-level chokepoints used to reach the router (`OPNSenseAPIClient` and `SSHExecutor`), so coverage is uniform across all tools rather than per-tool.
+  - New unit tests: `tests/unit/api-client-safety.test.ts`, `tests/unit/ssh-executor-safety.test.ts`.
+  - See [CONFIGURATION.md](CONFIGURATION.md#safety-modes) for usage.
+
 ## [0.8.2] - 2025-01-23
 
 ### Fixed

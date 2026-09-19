@@ -76,6 +76,35 @@ const COMMAND_WHITELIST = [
   '/usr/local/opnsense/scripts/'
 ];
 
+// Command prefixes that are read-only even though their binary is
+// whitelisted above (e.g. `pfctl -s` shows state, but `pfctl -d`/`-e`/`-f`
+// disables/enables/reloads the firewall). Used to gate execute() when
+// OPNSENSE_DRY_RUN or OPNSENSE_READ_ONLY is set, so diagnostics keep
+// working while anything that could change router state is stopped.
+const READ_ONLY_COMMAND_PATTERNS: RegExp[] = [
+  /^(sudo\s+)?netstat\b/,
+  /^(sudo\s+)?ifconfig\b(?!.*\b(up|down|destroy|create)\b)/,
+  /^(sudo\s+)?route\s+(-n\s+)?(get|show)\b/,
+  /^(sudo\s+)?arp\s+-a\b/,
+  /^(sudo\s+)?ping\b/,
+  /^(sudo\s+)?traceroute\b/,
+  /^(sudo\s+)?showmount\b/,
+  /^(sudo\s+)?cat\b/,
+  /^(sudo\s+)?grep\b/,
+  /^(sudo\s+)?ls\b/,
+  /^(sudo\s+)?pwd\b/,
+  /^(sudo\s+)?whoami\b/,
+  /^(sudo\s+)?date\b/,
+  /^(sudo\s+)?uptime\b/,
+  /^(sudo\s+)?df\b/,
+  /^(sudo\s+)?du\b/,
+  /^(sudo\s+)?ps\b/,
+  /^(sudo\s+)?top\b/,
+  /^(sudo\s+)?sysctl\b(?!.*[-=]w\b)/,
+  /^(sudo\s+)?pfctl\s+-s\b/,
+  /^(sudo\s+)?service\s+\S+\s+status\b/,
+];
+
 export class SSHExecutor extends EventEmitter {
   private config: SSHConfig;
   private client: Client | null = null;
@@ -91,10 +120,12 @@ export class SSHExecutor extends EventEmitter {
   }> = [];
   private isProcessingQueue: boolean = false;
   private debugMode: boolean = process.env.MCP_DEBUG === 'true' || process.env.DEBUG_SSH === 'true';
+  private readonly dryRun: boolean = process.env.OPNSENSE_DRY_RUN === 'true';
+  private readonly readOnly: boolean = process.env.OPNSENSE_READ_ONLY === 'true';
 
   constructor(config?: Partial<SSHConfig>) {
     super();
-    
+
     // Build configuration from environment variables and provided config
     this.config = this.buildConfig(config);
     
@@ -279,13 +310,38 @@ export class SSHExecutor extends EventEmitter {
       };
     }
 
+    // Add sudo if requested (checked against the safety allowlist below too)
+    const fullCommand = options?.sudo ? `sudo ${command}` : command;
+
+    if ((this.readOnly || this.dryRun) && !this.isReadOnlyCommand(fullCommand)) {
+      if (this.readOnly) {
+        logger.warn(`[SSH Read-Only] Blocked command: ${fullCommand}`);
+        return {
+          success: false,
+          stdout: '',
+          stderr: 'Blocked: SSH executor is in read-only mode (OPNSENSE_READ_ONLY=true); this command was not sent.',
+          exitCode: 1,
+          duration: 0,
+          command: fullCommand,
+          timestamp: new Date().toISOString()
+        };
+      }
+      logger.warn(`[SSH Dry Run] Would execute: ${fullCommand}`);
+      return {
+        success: true,
+        stdout: `DRY RUN: command was not executed: ${fullCommand}`,
+        stderr: '',
+        exitCode: 0,
+        duration: 0,
+        command: fullCommand,
+        timestamp: new Date().toISOString()
+      };
+    }
+
     // Ensure connected
     if (!this.isConnected) {
       await this.connect();
     }
-
-    // Add sudo if requested
-    const fullCommand = options?.sudo ? `sudo ${command}` : command;
     
     if (this.debugMode) {
       logger.debug(`[SSH] Executing: ${fullCommand}`);
@@ -483,10 +539,19 @@ export class SSHExecutor extends EventEmitter {
    */
   private isCommandSafe(command: string): boolean {
     // Allow any command that starts with a whitelisted command
-    return COMMAND_WHITELIST.some(safe => 
-      command.startsWith(safe) || 
+    return COMMAND_WHITELIST.some(safe =>
+      command.startsWith(safe) ||
       command.startsWith(`sudo ${safe}`)
     );
+  }
+
+  /**
+   * Check if a command is known to be read-only (safe to run even in
+   * dry-run/read-only mode). Conservative by design: anything not
+   * explicitly matched here is treated as a potential mutation.
+   */
+  private isReadOnlyCommand(command: string): boolean {
+    return READ_ONLY_COMMAND_PATTERNS.some(pattern => pattern.test(command));
   }
 
   // ===== HIGH-LEVEL OPNSENSE OPERATIONS =====
