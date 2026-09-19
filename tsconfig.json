@@ -3,6 +3,10 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "node",
+    // TypeScript 6 errors on moduleResolution "node" (node10). Migrating to
+    // "nodenext" needs ~40 CJS/ESM interop fixes (ioredis, pg, drizzle), so it
+    // is tracked separately; this keeps the option working until TS 7.
+    "ignoreDeprecations": "6.0",
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
