@@ -133,7 +133,7 @@ export class SSEServer {
   /**
    * Handle category-specific event stream
    */
-  private handleCategoryStream(req: Request, res: Response): void {
+  private handleCategoryStream(req: Request<{ category: string }>, res: Response): void {
     const category = req.params.category;
     const clientId = randomUUID();
 
@@ -222,7 +222,7 @@ export class SSEServer {
   /**
    * Handle get plugin
    */
-  private handleGetPlugin(req: Request, res: Response): void {
+  private handleGetPlugin(req: Request<{ id: string }>, res: Response): void {
     const pluginId = req.params.id;
     const entry = this.registry.getEntry(pluginId);
 
@@ -253,7 +253,7 @@ export class SSEServer {
   /**
    * Handle plugin health check
    */
-  private async handlePluginHealth(req: Request, res: Response): Promise<void> {
+  private async handlePluginHealth(req: Request<{ id: string }>, res: Response): Promise<void> {
     const pluginId = req.params.id;
     const plugin = this.registry.get(pluginId);
 
