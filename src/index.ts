@@ -14,6 +14,30 @@ import {
 import { z } from 'zod';
 import { logger } from './utils/logger.js';
 
+// Register global error handlers to prevent process crashes from uncaught exceptions
+// This is defense-in-depth for errors in async callbacks (e.g., ssh2 stream handlers)
+process.on('uncaughtException', (error) => {
+  logger.error('[FATAL] Uncaught Exception:', error instanceof Error ? {
+    message: error.message,
+    stack: error.stack,
+    name: error.name
+  } : error);
+  // Do NOT call process.exit() - let the MCP server continue running
+  // The error will be logged and handled gracefully
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('[FATAL] Unhandled Rejection:', {
+    reason: reason instanceof Error ? {
+      message: reason.message,
+      stack: reason.stack,
+      name: reason.name
+    } : reason,
+    promise
+  });
+  // Do NOT call process.exit() - let the MCP server continue running
+});
+
 // Environment variables are provided by Claude Desktop/Code
 // No need for dotenv - configuration comes from MCP client
 
@@ -58,6 +82,10 @@ const ConfigSchema = z.object({
   apiKey: z.string().min(1),
   apiSecret: z.string().min(1),
   verifySsl: z.boolean().default(true),
+  clientCertPath: z.string().optional(),
+  clientKeyPath: z.string().optional(),
+  clientCertPfxPath: z.string().optional(),
+  clientCertPassphrase: z.string().optional(),
   dryRun: z.boolean().default(false),
   readOnly: z.boolean().default(false)
 });
@@ -121,6 +149,7 @@ const WRITE_TOOL_NAMES = new Set<string>([
 class OPNSenseMCPServer {
   private server: Server;
   private client: OPNSenseAPIClient | null = null;
+  private lastInitError: string | null = null;
   private vlanResource: VlanResource | null = null;
   private firewallRuleResource: FirewallRuleResource | null = null;
   private natResource: NATResource | null = null;
@@ -202,7 +231,11 @@ class OPNSenseMCPServer {
           host: this.formatHostUrl(process.env.OPNSENSE_HOST),
           apiKey: process.env.OPNSENSE_API_KEY,
           apiSecret: process.env.OPNSENSE_API_SECRET,
-          verifySsl: process.env.OPNSENSE_VERIFY_SSL !== 'false'
+          verifySsl: process.env.OPNSENSE_VERIFY_SSL !== 'false',
+          clientCertPath: process.env.OPNSENSE_CLIENT_CERT_PATH,
+          clientKeyPath: process.env.OPNSENSE_CLIENT_KEY_PATH,
+          clientCertPfxPath: process.env.OPNSENSE_CLIENT_CERT_PFX_PATH,
+          clientCertPassphrase: process.env.OPNSENSE_CLIENT_CERT_PASSPHRASE
         }),
         ...getSafetyConfig()
       };
@@ -213,20 +246,24 @@ class OPNSenseMCPServer {
         logger.warn('OPNsense MCP server starting in DRY-RUN mode (OPNSENSE_DRY_RUN=true) — mutating API calls will be simulated and logged, not sent to the router.');
       }
 
-      // Create API client
-      this.client = new OPNSenseAPIClient(config);
-      
-      // Initialize macro recorder
-      this.macroRecorder = new MacroRecorder(this.client, process.env.MACRO_STORAGE_PATH);
-      
-      // Set up recording in the API client
-      this.client.setRecorder((call) => this.macroRecorder?.recordAPICall(call));
-      
-      // Test connection
-      const connectionTest = await this.client.testConnection();
+      // Create the client and prove it actually connects before adopting it as
+      // this.client - otherwise a failed testConnection() still leaves behind
+      // a "configured" client and every subsequent ensureInitialized() call
+      // short-circuits past the real error.
+      const client = new OPNSenseAPIClient(config);
+      const connectionTest = await client.testConnection();
       if (!connectionTest.success) {
+        this.lastInitError = connectionTest.error || 'Unknown connection error';
         throw new Error(`Failed to connect to OPNsense: ${connectionTest.error}`);
       }
+      this.client = client;
+      this.lastInitError = null;
+
+      // Initialize macro recorder
+      this.macroRecorder = new MacroRecorder(this.client, process.env.MACRO_STORAGE_PATH);
+
+      // Set up recording in the API client
+      this.client.setRecorder((call) => this.macroRecorder?.recordAPICall(call));
 
       logger.info(`Connected to OPNsense ${connectionTest.version}`);
 
@@ -284,7 +321,8 @@ class OPNSenseMCPServer {
 
       return true;
     } catch (error) {
-      logger.error('Failed to initialize OPNsense MCP server:', error instanceof Error ? error.message : 'Unknown error');
+      this.lastInitError = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to initialize OPNsense MCP server:', this.lastInitError);
       return false;
     }
   }
@@ -296,7 +334,9 @@ class OPNSenseMCPServer {
       if (!initialized) {
         throw new McpError(
           ErrorCode.InternalError,
-          'OPNsense client not initialized. Use configure tool first.'
+          this.lastInitError
+            ? `OPNsense client not initialized: ${this.lastInitError}`
+            : 'OPNsense client not initialized. Use configure tool first.'
         );
       }
     }
@@ -2730,10 +2770,12 @@ class OPNSenseMCPServer {
             } else if (config.dryRun) {
               logger.warn('OPNsense client (re)configured in DRY-RUN mode (OPNSENSE_DRY_RUN=true) — mutating calls will be simulated.');
             }
-            this.client = new OPNSenseAPIClient(config);
-            const test = await this.client.testConnection();
-            
+            const client = new OPNSenseAPIClient(config);
+            const test = await client.testConnection();
+
             if (test.success) {
+              this.client = client;
+              this.lastInitError = null;
               this.vlanResource = new VlanResource(this.client);
               this.firewallRuleResource = new FirewallRuleResource(this.client);
               this.natResource = new NATResource(this.client);

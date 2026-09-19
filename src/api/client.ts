@@ -1,6 +1,7 @@
 // Consolidated OPNsense API Client with enhanced error handling and full functionality
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import https from 'https';
+import fs from 'fs';
 import { APICall } from '../macro/types.js';
 import { logger } from '../utils/logger.js';
 
@@ -35,6 +36,10 @@ export class OPNSenseAPIClient {
     verifySsl?: boolean;
     debugMode?: boolean;
     timeout?: number;
+    clientCertPath?: string;
+    clientKeyPath?: string;
+    clientCertPfxPath?: string;
+    clientCertPassphrase?: string;
     /**
      * When true, POST/PUT/DELETE requests are not sent to the router.
      * Instead the intended request is logged and a synthetic success
@@ -52,7 +57,25 @@ export class OPNSenseAPIClient {
     this.debugMode = config.debugMode || false;
     this.dryRun = config.dryRun || false;
     this.readOnly = config.readOnly || false;
-    
+
+    // Optional mTLS client certificate, for OPNsense instances that require
+    // client-cert auth on top of (or instead of) the API key/secret.
+    const httpsAgentOptions: https.AgentOptions = {
+      rejectUnauthorized: this.config.verifySsl !== false
+    };
+    if (this.config.clientCertPfxPath) {
+      httpsAgentOptions.pfx = fs.readFileSync(this.config.clientCertPfxPath);
+      if (this.config.clientCertPassphrase) {
+        httpsAgentOptions.passphrase = this.config.clientCertPassphrase;
+      }
+    } else if (this.config.clientCertPath && this.config.clientKeyPath) {
+      httpsAgentOptions.cert = fs.readFileSync(this.config.clientCertPath);
+      httpsAgentOptions.key = fs.readFileSync(this.config.clientKeyPath);
+      if (this.config.clientCertPassphrase) {
+        httpsAgentOptions.passphrase = this.config.clientCertPassphrase;
+      }
+    }
+
     // Create axios instance with proper configuration
     this.axios = axios.create({
       baseURL: `${this.config.host}/api`,
@@ -60,9 +83,7 @@ export class OPNSenseAPIClient {
         username: this.config.apiKey,
         password: this.config.apiSecret
       },
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: this.config.verifySsl !== false
-      }),
+      httpsAgent: new https.Agent(httpsAgentOptions),
       timeout: this.config.timeout || 30000,
       // Don't set default headers - we'll add them per request type
       validateStatus: () => true // Handle all status codes

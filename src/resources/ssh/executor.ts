@@ -222,12 +222,17 @@ export class SSHExecutor extends EventEmitter {
         });
 
         this.client.on('error', (err: Error) => {
-          logger.error('[SSH] Connection error:', err);
-          this.emit('error', err);
-          if (!this.isConnected) {
-            reject(err);
-          } else {
-            this.handleDisconnect();
+          try {
+            logger.error('[SSH] Connection error:', err);
+            this.emit('error', err);
+            if (!this.isConnected) {
+              reject(err);
+            } else {
+              this.handleDisconnect();
+            }
+          } catch (handlerErr) {
+            logger.error('[SSH] Error in connection error handler:', handlerErr);
+            reject(handlerErr);
           }
         });
 
@@ -370,44 +375,66 @@ export class SSHExecutor extends EventEmitter {
       }, timeout);
 
       this.client.exec(fullCommand, (err: Error | undefined, stream: ClientChannel) => {
-        if (err) {
-          clearTimeout(timer);
-          reject(err);
-          return;
-        }
-
-        stream.on('close', (code: number, signal?: string) => {
-          clearTimeout(timer);
-          if (!timedOut) {
-            const duration = Date.now() - startTime;
-            const result: CommandResult = {
-              success: code === 0,
-              stdout: stdout.trim(),
-              stderr: stderr.trim(),
-              exitCode: code,
-              signal,
-              duration,
-              command: fullCommand,
-              timestamp: new Date().toISOString()
-            };
-            
-            if (this.debugMode) {
-              logger.debug(`[SSH] Command completed in ${duration}ms with exit code ${code}`);
-              if (stdout) logger.debug(`[SSH] stdout: ${stdout.substring(0, 200)}`);
-              if (stderr) logger.debug(`[SSH] stderr: ${stderr.substring(0, 200)}`);
-            }
-            
-            resolve(result);
+        try {
+          if (err) {
+            clearTimeout(timer);
+            reject(err);
+            return;
           }
-        });
 
-        stream.on('data', (data: Buffer) => {
-          stdout += data.toString();
-        });
+          // Handle stream errors to prevent uncaught exceptions
+          stream.on('error', (streamErr: Error) => {
+            clearTimeout(timer);
+            reject(streamErr);
+          });
 
-        stream.stderr.on('data', (data: Buffer) => {
-          stderr += data.toString();
-        });
+          // Handle stderr stream errors
+          if (stream.stderr) {
+            stream.stderr.on('error', (stderrErr: Error) => {
+              clearTimeout(timer);
+              reject(stderrErr);
+            });
+          }
+
+          stream.on('close', (code: number, signal?: string) => {
+            clearTimeout(timer);
+            if (!timedOut) {
+              const duration = Date.now() - startTime;
+              const result: CommandResult = {
+                success: code === 0,
+                stdout: stdout.trim(),
+                stderr: stderr.trim(),
+                exitCode: code,
+                signal,
+                duration,
+                command: fullCommand,
+                timestamp: new Date().toISOString()
+              };
+
+              if (this.debugMode) {
+                logger.debug(`[SSH] Command completed in ${duration}ms with exit code ${code}`);
+                if (stdout) logger.debug(`[SSH] stdout: ${stdout.substring(0, 200)}`);
+                if (stderr) logger.debug(`[SSH] stderr: ${stderr.substring(0, 200)}`);
+              }
+
+              resolve(result);
+            }
+          });
+
+          stream.on('data', (data: Buffer) => {
+            stdout += data.toString();
+          });
+
+          if (stream.stderr) {
+            stream.stderr.on('data', (data: Buffer) => {
+              stderr += data.toString();
+            });
+          }
+        } catch (execErr) {
+          // Catch any synchronous errors in this callback
+          clearTimeout(timer);
+          reject(execErr);
+        }
       });
     });
   }
