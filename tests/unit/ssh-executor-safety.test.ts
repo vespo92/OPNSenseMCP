@@ -109,6 +109,43 @@ describe('SSHExecutor dry-run mode', () => {
   });
 });
 
+describe('SSHExecutor xmllint whitelisting (issue #96)', () => {
+  it('accepts the xmllint validation step used by the NAT save path', async () => {
+    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
+    const executor = new SSHExecutor();
+
+    // saveNATConfigViaSSH() runs this with stopOnError: true. While xmllint was
+    // missing from the whitelist the batch aborted here, so every
+    // nat_create_port_forward call failed with "Command not in whitelist".
+    const result = await executor.execute('xmllint --noout /tmp/config_nat_123.xml');
+
+    expect(result.stderr).not.toMatch(/not in whitelist/i);
+  });
+
+  it('treats xmllint --noout as read-only, so it survives read-only mode', async () => {
+    process.env.OPNSENSE_READ_ONLY = 'true';
+    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
+    const executor = new SSHExecutor();
+
+    const result = await executor.execute('xmllint --noout /tmp/config_nat_123.xml');
+
+    expect(result.success).toBe(true);
+    expect(result.stderr).not.toMatch(/read-only mode/i);
+  });
+
+  it('does not treat the writing form of xmllint as read-only', async () => {
+    process.env.OPNSENSE_READ_ONLY = 'true';
+    const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
+    const executor = new SSHExecutor();
+
+    // --output writes a file, so read-only mode must still block it.
+    const result = await executor.execute('xmllint --output /conf/config.xml /tmp/x.xml');
+
+    expect(result.success).toBe(false);
+    expect(result.stderr).toMatch(/read-only mode/i);
+  });
+});
+
 describe('SSHExecutor normal mode (regression)', () => {
   it('runs a whitelisted mutating command as before', async () => {
     const { SSHExecutor } = await import('../../src/resources/ssh/executor.js');
