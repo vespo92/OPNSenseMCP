@@ -1007,7 +1007,7 @@ export class OPNSenseAPIClient {
   /**
    * Test connection
    */
-  async testConnection(): Promise<{ success: boolean; version?: string; product?: string; error?: string }> {
+  async testConnection(): Promise<{ success: boolean; version?: string; product?: string; error?: string; statusCode?: number }> {
     try {
       const result = await this.get<any>('/core/firmware/info');
       return { 
@@ -1016,9 +1016,14 @@ export class OPNSenseAPIClient {
         product: result.product_name 
       };
     } catch (error: any) {
+      // Surface the HTTP status so callers can tell "these credentials are
+      // wrong" (401) or "this host is not reachable" (no status) apart from
+      // "these credentials are fine but lack the privilege for this one
+      // endpoint" (403). See the probe handling in index.ts.
       return { 
         success: false, 
-        error: error.message 
+        error: error.message,
+        statusCode: error instanceof OPNSenseAPIError ? error.statusCode : undefined
       };
     }
   }
