@@ -14,17 +14,24 @@ jobs:
     steps:
     - uses: actions/checkout@v7
     
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    # Node is still set up here: the build runs on Bun, but `npm publish` stays
+    # on npm, which is the battle-tested path for pushing to the registry.
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
         node-version: '20.x'
         registry-url: 'https://registry.npmjs.org'
-    
+
     - name: Install dependencies
-      run: npm ci
-    
+      run: bun install --frozen-lockfile
+
     - name: Build project
-      run: npm run build
+      run: bun run build
     
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v3

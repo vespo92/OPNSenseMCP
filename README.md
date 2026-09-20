@@ -45,7 +45,7 @@ A Model Context Protocol (MCP) server for comprehensive OPNsense firewall manage
 ## Installation
 
 ### Prerequisites
-- Node.js 18+ or Bun 1.0+
+- Node.js 18+ to run the server (Bun 1.1.39+ to develop on it)
 - OPNsense firewall (v24.7+ recommended)
 - API credentials for OPNsense
 - SSH access (optional, for advanced features)
@@ -284,12 +284,23 @@ npm test
 ## Development
 
 ### Building from Source
+
+This repo uses [Bun](https://bun.sh) as its development toolchain (install,
+build, tests). The published package is still plain Node — it is consumed as
+`node dist/index.js` — so Bun is only needed to work *on* the project, not to
+run it.
+
 ```bash
 git clone https://github.com/vespo92/OPNSenseMCP.git
 cd OPNSenseMCP
-npm install
-npm run build
+bun install
+bun run build
+bun run test
 ```
+
+The lockfile is `bun.lock`; there is no `package-lock.json`. CI runs
+`bun install --frozen-lockfile`, so commit `bun.lock` alongside any
+`package.json` change.
 
 ### Project Structure
 ```
