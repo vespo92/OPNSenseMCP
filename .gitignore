@@ -33,7 +33,12 @@ yarn-error.log*
 lerna-debug.log*
 
 # Testing
-tests/
+# NOTE: `tests/` is deliberately NOT ignored. The unit suite lives in
+# tests/unit/ and is run by `npm test` in CI; ignoring the directory meant
+# `git add` silently skipped every NEW test file, and the existing ones only
+# survived because they were force-added.
+# `test/` stays ignored: it covers the ad-hoc scripts/test/ helpers, which are
+# local diagnostics rather than part of the suite.
 test/
 coverage/
 .nyc_output/
