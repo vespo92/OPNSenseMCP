@@ -13,6 +13,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { logger } from './utils/logger.js';
+import { isProbeDeniedByPrivilege } from './utils/connection-probe.js';
 
 // Register global error handlers to prevent process crashes from uncaught exceptions
 // This is defense-in-depth for errors in async callbacks (e.g., ssh2 stream handlers)
@@ -252,7 +253,8 @@ class OPNSenseMCPServer {
       // short-circuits past the real error.
       const client = new OPNSenseAPIClient(config);
       const connectionTest = await client.testConnection();
-      if (!connectionTest.success) {
+      const probeDenied = isProbeDeniedByPrivilege(connectionTest);
+      if (!connectionTest.success && !probeDenied) {
         this.lastInitError = connectionTest.error || 'Unknown connection error';
         throw new Error(`Failed to connect to OPNsense: ${connectionTest.error}`);
       }
@@ -265,7 +267,17 @@ class OPNSenseMCPServer {
       // Set up recording in the API client
       this.client.setRecorder((call) => this.macroRecorder?.recordAPICall(call));
 
-      logger.info(`Connected to OPNsense ${connectionTest.version}`);
+      if (probeDenied) {
+        logger.warn(
+          'Connectivity probe GET /core/firmware/info was denied (403). This API key ' +
+          'lacks page-system-firmware-manualupdate, which is normal for a ' +
+          'least-privilege key. Continuing to start - every tool is still ' +
+          'registered, and any that the key cannot use will report its own ' +
+          'permission error when called.'
+        );
+      } else {
+        logger.info(`Connected to OPNsense ${connectionTest.version}`);
+      }
 
       // Initialize resources
       this.vlanResource = new VlanResource(this.client);
@@ -2772,8 +2784,16 @@ class OPNSenseMCPServer {
             }
             const client = new OPNSenseAPIClient(config);
             const test = await client.testConnection();
+            const probeDenied = isProbeDeniedByPrivilege(test);
+            if (probeDenied) {
+              logger.warn(
+                'Connectivity probe GET /core/firmware/info was denied (403) for the ' +
+                'supplied credentials. Treating them as valid but least-privileged, ' +
+                'and configuring anyway.'
+              );
+            }
 
-            if (test.success) {
+            if (test.success || probeDenied) {
               this.client = client;
               this.lastInitError = null;
               this.vlanResource = new VlanResource(this.client);
@@ -2822,7 +2842,12 @@ class OPNSenseMCPServer {
               return {
                 content: [{
                   type: 'text',
-                  text: `Successfully connected to OPNsense ${test.version}`
+                  text: probeDenied
+                    ? 'Configured. The credentials authenticated, but this key lacks ' +
+                      'page-system-firmware-manualupdate so the OPNsense version could ' +
+                      'not be read. All tools are registered; any the key is not ' +
+                      'privileged for will report their own permission error when used.'
+                    : `Successfully connected to OPNsense ${test.version}`
                 }]
               };
             } else {
