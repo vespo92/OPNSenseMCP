@@ -72,6 +72,10 @@ const COMMAND_WHITELIST = [
   'kill',
   'service',
   'sysctl',
+  // Used by saveNATConfigViaSSH() to validate the rebuilt config.xml before it
+  // replaces the live one. Without this the whole NAT save batch aborts at
+  // validation and nat_create_port_forward can never succeed.
+  'xmllint',
   '/usr/local/etc/rc.reload_all',
   '/usr/local/opnsense/scripts/'
 ];
@@ -103,6 +107,9 @@ const READ_ONLY_COMMAND_PATTERNS: RegExp[] = [
   /^(sudo\s+)?sysctl\b(?!.*[-=]w\b)/,
   /^(sudo\s+)?pfctl\s+-s\b/,
   /^(sudo\s+)?service\s+\S+\s+status\b/,
+  // Only the --noout form: it validates and prints nothing. `xmllint --output`
+  // writes a file, so it must stay outside the read-only set.
+  /^(sudo\s+)?xmllint\s+--noout\b/,
 ];
 
 export class SSHExecutor extends EventEmitter {
