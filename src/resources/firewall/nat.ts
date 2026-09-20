@@ -69,6 +69,24 @@ export interface NPTRule {
 
 export type NATMode = 'automatic' | 'hybrid' | 'manual' | 'disabled';
 
+/**
+ * Read a boolean flag out of an xml2js-parsed `/conf/config.xml` element.
+ *
+ * OPNsense writes these elements with "0" or "1" as their text content, so the
+ * element is present for essentially every rule it authored. That makes both
+ * of the checks this file used before unreliable:
+ *
+ *   rule.disabled !== undefined   // always true  -> flag reported as constant
+ *   rule.disabled                 // "0" is a truthy string in JS
+ *
+ * An absent element means the flag is unset, which matches OPNsense's own
+ * handling of a missing flag.
+ */
+function xmlFlagSet(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  return String(value).trim() === '1';
+}
+
 export class NATResource {
   private client: OPNSenseAPIClient;
   private interfaceMapper: InterfaceMapper;
@@ -178,9 +196,17 @@ export class NATResource {
       logger.debug('[NATResource] Fetching outbound NAT rules via SSH');
     }
 
+    // Deliberately throws rather than returning []. OPNsense exposes no REST
+    // endpoint for these rules, so without SSH we cannot see them at all —
+    // and an empty array is indistinguishable from "this firewall has no
+    // rules", which is a dangerous thing to report to an operator or an LLM.
+    // Every other mutating method in this class already throws here.
     if (!this.sshExecutor) {
-      logger.warn('[NATResource] SSH not configured, returning empty list');
-      return [];
+      throw new Error(
+        'SSH not configured. Outbound NAT rules can only be read over SSH; ' +
+        'set OPNSENSE_SSH_HOST, OPNSENSE_SSH_USERNAME and an SSH credential ' +
+        '(OPNSENSE_SSH_PASSWORD or OPNSENSE_SSH_KEY_PATH) to list them.'
+      );
     }
 
     try {
@@ -412,9 +438,15 @@ export class NATResource {
       logger.debug('[NATResource] Fetching port forward rules via SSH');
     }
 
+    // See listOutboundRules(): reporting an empty firewall when we simply
+    // cannot see it is worse than failing loudly.
     if (!this.sshExecutor) {
-      logger.warn('[NATResource] SSH not configured, returning empty list');
-      return [];
+      throw new Error(
+        'SSH not configured. Port forward rules can only be read over SSH ' +
+        '(OPNsense exposes no REST endpoint for destination NAT); set ' +
+        'OPNSENSE_SSH_HOST, OPNSENSE_SSH_USERNAME and an SSH credential ' +
+        '(OPNSENSE_SSH_PASSWORD or OPNSENSE_SSH_KEY_PATH) to list them.'
+      );
     }
 
     try {
@@ -597,7 +629,7 @@ export class NATResource {
   private normalizePortForwardFromXML(rule: any, uuid: string): PortForwardRule {
     return {
       uuid,
-      enabled: rule.disabled !== undefined ? '0' : '1',
+      enabled: xmlFlagSet(rule.disabled) ? '0' : '1',
       interface: rule.interface || 'wan',
       protocol: rule.protocol || 'tcp',
       source_net: rule.source?.network || (rule.source?.any !== undefined ? 'any' : 'any'),
@@ -608,8 +640,8 @@ export class NATResource {
       local_port: rule['local-port'] || rule.localport || rule.destination?.port || '',
       description: rule.descr || '',
       associated_rule: rule.associated,
-      nosync: rule.nosync !== undefined ? '1' : '0',
-      log: rule.log !== undefined ? '1' : '0'
+      nosync: xmlFlagSet(rule.nosync) ? '1' : '0',
+      log: xmlFlagSet(rule.log) ? '1' : '0'
     };
   }
 
@@ -935,7 +967,7 @@ export class NATResource {
    */
   private normalizeOutboundRuleFromXML(rule: any): OutboundNATRule {
     return {
-      enabled: rule.disabled ? '0' : '1',
+      enabled: xmlFlagSet(rule.disabled) ? '0' : '1',
       sequence: rule.sequence,
       interface: rule.interface,
       source_net: rule.source?.network || 'any',
@@ -947,8 +979,8 @@ export class NATResource {
       targetip_subnet: rule.targetip_subnet,
       poolopts: rule.poolopts,
       sourceHash: rule.sourcehash,
-      nonat: rule.nonat !== undefined ? '1' : '0',
-      log: rule.log !== undefined ? '1' : '0',
+      nonat: xmlFlagSet(rule.nonat) ? '1' : '0',
+      log: xmlFlagSet(rule.log) ? '1' : '0',
       description: rule.descr || ''
     };
   }
