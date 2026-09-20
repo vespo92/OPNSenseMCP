@@ -520,13 +520,21 @@ export class FirewallRuleResource {
   /**
    * Flatten a getRule response into the scalar form setRule expects.
    * Option objects are collapsed to a comma-joined list of their selected
-   * keys; scalar fields (including boolean "0"/"1" fields like `log`) are
-   * passed through unchanged.
+   * keys; array fields (e.g. `categories`) are comma-joined; scalar fields
+   * (including boolean "0"/"1" fields like `log`) are passed through
+   * unchanged.
+   *
+   * Arrays matter here: getRule returns `categories` as an array (`[]`, or a
+   * list of UUID strings), and setRule's PHP backend rejects a JSON array,
+   * which surfaced to the caller as a bare MCP -32600. An empty array must
+   * become an empty string, not "[]" or undefined.
    */
   static flattenRule(rule: Record<string, any>): Record<string, any> {
     const out: Record<string, any> = {};
     for (const [key, value] of Object.entries(rule)) {
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (Array.isArray(value)) {
+        out[key] = value.join(',');
+      } else if (value && typeof value === 'object') {
         const selected = Object.entries(value)
           .filter(([, opt]) => opt && typeof opt === 'object' && (opt as any).selected == 1)
           .map(([optKey]) => optKey);
