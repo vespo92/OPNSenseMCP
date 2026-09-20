@@ -33,15 +33,22 @@ jobs:
     - name: Run tests
       run: bun run test
 
+    # Pack the real publishable tarball so node-compat can install exactly what
+    # users would get from npm, rather than a bare dist/ with no dependencies.
+    - name: Pack the package
+      run: npm pack
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v7
       with:
         name: build-artifacts
-        path: dist/
+        path: |
+          dist/
+          *.tgz
 
-  # Bun is the toolchain, but the published package is consumed as
-  # `node dist/index.js` (see the "bin" field). This proves the build Bun
-  # produced actually boots under the Node versions users run it on.
+  # Bun is the toolchain, but the package is published to npm and consumed
+  # under Node. This installs the actual packed tarball and boots its "bin"
+  # entrypoint, so the toolchain switch cannot ship something only Bun can run.
   node-compat:
     needs: build
     runs-on: ubuntu-latest
@@ -60,7 +67,9 @@ jobs:
       uses: actions/download-artifact@v6
       with:
         name: build-artifacts
-        path: dist/
 
-    - name: Smoke test the built server under Node
-      run: node dist/index.js < /dev/null 2>&1 | grep -q "running on stdio"
+    - name: Install the packed package
+      run: npm install --no-save ./opnsense-mcp-server-*.tgz
+
+    - name: Smoke test the published entrypoint under Node
+      run: node node_modules/.bin/opnsense-mcp-server < /dev/null 2>&1 | grep -q "running on stdio"

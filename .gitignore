@@ -126,3 +126,6 @@ tokens.json
 
 # Experimental/consolidated code
 consolidated/
+
+# npm pack output (CI packs a tarball for the node-compat smoke test)
+*.tgz
