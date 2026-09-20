@@ -3,8 +3,13 @@
 
 version: 2
 updates:
-  # npm dependencies
-  - package-ecosystem: "npm"
+  # Bun dependencies.
+  #
+  # This MUST stay "bun" rather than "npm" now that the repo uses bun.lock.
+  # The npm ecosystem updates package.json but never regenerates bun.lock, so
+  # every PR it opened would arrive with a drifted lockfile and fail
+  # `bun install --frozen-lockfile` in CI.
+  - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"
@@ -16,7 +21,7 @@ updates:
       - "vespo92"
     labels:
       - "dependencies"
-      - "npm"
+      - "bun"
     commit-message:
       prefix: "chore(deps)"
     groups:
