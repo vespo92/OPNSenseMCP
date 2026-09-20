@@ -20,7 +20,7 @@
     "start:bun": "bun run src/index.ts",
     "dev": "tsx src/index.ts",
     "dev:bun": "bun run --watch src/index.ts",
-    "test": "tsx src/test-resources.ts",
+    "test": "vitest run",
     "test:api": "node test-simple.js",
     "test:vlan": "node test-vlan-comprehensive.js",
     "test:minecraft": "node create-minecraft-vlan.js",
