@@ -75,7 +75,7 @@
     "@types/xml2js": "^0.4.14",
     "axios": "^1.6.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.1",
+    "dotenv": "^18.0.0",
     "drizzle-orm": "^0.45.0",
     "express": "^5.2.1",
     "ioredis": "^5.6.1",
