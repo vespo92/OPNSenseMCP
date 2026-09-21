@@ -99,7 +99,7 @@
     "rimraf": "^6.0.1",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^5.0.1"
   },
   "overrides": {
     "esbuild": "^0.28.2"
