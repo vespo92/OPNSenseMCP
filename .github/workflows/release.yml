@@ -22,7 +22,7 @@ jobs:
     # Node is still set up here: the build runs on Bun, but `npm publish` stays
     # on npm, which is the battle-tested path for pushing to the registry.
     - name: Setup Node.js
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v7
       with:
         node-version: '20.x'
         registry-url: 'https://registry.npmjs.org'
