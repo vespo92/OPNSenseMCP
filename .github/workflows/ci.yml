@@ -64,7 +64,7 @@ jobs:
         node-version: ${{ matrix.node-version }}
 
     - name: Download build artifacts
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v8
       with:
         name: build-artifacts
 
