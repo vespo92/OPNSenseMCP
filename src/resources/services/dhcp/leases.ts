@@ -1,5 +1,5 @@
 // DHCP Lease Management Resource - FIXED VERSION
-import { OPNSenseAPIClient } from '../../../api/client.js';
+import { OPNSenseAPIClient, OPNSenseAPIError } from '../../../api/client.js';
 import { logger } from '../../../utils/logger.js';
 
 export interface DhcpLease {
@@ -136,7 +136,16 @@ export class DhcpLeaseResource {
       if (this.debugMode) {
         logger.error('[DHCP] Failed to list leases:', error);
       }
-      
+
+      // A permissions failure is not "no leases" - surface it instead of [].
+      if (error instanceof OPNSenseAPIError && (error.statusCode === 401 || error.statusCode === 403)) {
+        throw new OPNSenseAPIError(
+          `DHCP lease lookup was denied (${error.statusCode}); the API key likely lacks the DHCP/dnsmasq/Kea privilege: ${error.message}`,
+          error.statusCode,
+          error.apiResponse
+        );
+      }
+
       // Try alternative endpoint
       try {
         if (this.debugMode) {
@@ -152,9 +161,7 @@ export class DhcpLeaseResource {
           }
         }
       } catch (altError) {
-        if (this.debugMode) {
-          logger.error('[DHCP] Alternative endpoint also failed:', altError);
-        }
+        logger.error('[DHCP] Alternative endpoint also failed:', altError instanceof Error ? altError.message : altError);
       }
       
       logger.error('Failed to list DHCP leases:', error instanceof Error ? error.message : 'Unknown error');

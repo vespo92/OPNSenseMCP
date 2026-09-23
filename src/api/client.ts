@@ -615,6 +615,24 @@ export class OPNSenseAPIClient {
    */
   async detectDhcpBackend(force: boolean = false): Promise<'dnsmasq' | 'kea' | 'isc'> {
     if (this.dhcpBackend && !force) return this.dhcpBackend;
+    // Concurrent first calls share one probe instead of racing to set the cache.
+    if (!this.dhcpBackendProbe) {
+      this.dhcpBackendProbe = this.probeDhcpBackend()
+        .then(backend => (this.dhcpBackend = backend))
+        .finally(() => { this.dhcpBackendProbe = undefined; });
+    }
+    return this.dhcpBackendProbe;
+  }
+
+  private dhcpBackendProbe?: Promise<'dnsmasq' | 'kea' | 'isc'>;
+
+  private async probeDhcpBackend(): Promise<'dnsmasq' | 'kea' | 'isc'> {
+    // Only a 404 means "this backend isn't installed". A 401/403, timeout or
+    // network error must propagate uncached: treating it as absence would pin
+    // every DHCP call to the dead ISC paths for the life of the client.
+    const absentOnly404 = (err: unknown) => {
+      if (!(err instanceof OPNSenseAPIError && err.statusCode === 404)) throw err;
+    };
 
     // dnsmasq (OPNsense 25.x default)
     try {
@@ -622,25 +640,21 @@ export class OPNSenseAPIClient {
       const dm = r?.dnsmasq;
       const ranges = dm?.dhcp_ranges;
       const hasRanges = ranges && typeof ranges === 'object' && Object.keys(ranges).length > 0;
-      if (dm?.enable === '1' && hasRanges) {
-        return (this.dhcpBackend = 'dnsmasq');
-      }
-    } catch {
-      // plugin not present -> 404
+      if (dm?.enable === '1' && hasRanges) return 'dnsmasq';
+    } catch (err) {
+      absentOnly404(err);
     }
 
     // Kea
     try {
       const r: any = await this.get('/kea/dhcpv4/get');
-      if (r?.dhcpv4?.general?.enabled === '1') {
-        return (this.dhcpBackend = 'kea');
-      }
-    } catch {
-      // not installed
+      if (r?.dhcpv4?.general?.enabled === '1') return 'kea';
+    } catch (err) {
+      absentOnly404(err);
     }
 
     // ISC dhcpd (OPNsense <= 24.7)
-    return (this.dhcpBackend = 'isc');
+    return 'isc';
   }
 
   /** Backend currently in use, if already detected. */
