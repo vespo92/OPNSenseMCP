@@ -598,56 +598,221 @@ export class OPNSenseAPIClient {
   // ===== DHCP METHODS =====
 
   /**
+   * Cached DHCP backend for this firewall.
+   *
+   * OPNsense 25.x removed ISC dhcpd; installs now run dnsmasq or Kea, which
+   * expose completely different API surfaces (/dnsmasq/*, /kea/*). Calling the
+   * old /dhcpv4/* paths on such a box returns 404 "Endpoint not found", which
+   * the lease resource swallows into an empty list - so DHCP silently looks
+   * empty instead of misconfigured. Detect once, then route accordingly.
+   */
+  private dhcpBackend?: 'dnsmasq' | 'kea' | 'isc';
+
+  /**
+   * Determine which DHCP server is actually serving leases.
+   * Prefers a backend that has DHCP ranges/subnets configured, since dnsmasq
+   * may be enabled for DNS only while another backend does DHCP.
+   */
+  async detectDhcpBackend(force: boolean = false): Promise<'dnsmasq' | 'kea' | 'isc'> {
+    if (this.dhcpBackend && !force) return this.dhcpBackend;
+    // Concurrent first calls share one probe instead of racing to set the cache.
+    if (!this.dhcpBackendProbe) {
+      this.dhcpBackendProbe = this.probeDhcpBackend()
+        .then(backend => (this.dhcpBackend = backend))
+        .finally(() => { this.dhcpBackendProbe = undefined; });
+    }
+    return this.dhcpBackendProbe;
+  }
+
+  private dhcpBackendProbe?: Promise<'dnsmasq' | 'kea' | 'isc'>;
+
+  private async probeDhcpBackend(): Promise<'dnsmasq' | 'kea' | 'isc'> {
+    // Only a 404 means "this backend isn't installed". A 401/403, timeout or
+    // network error must propagate uncached: treating it as absence would pin
+    // every DHCP call to the dead ISC paths for the life of the client.
+    const absentOnly404 = (err: unknown) => {
+      if (!(err instanceof OPNSenseAPIError && err.statusCode === 404)) throw err;
+    };
+
+    // dnsmasq (OPNsense 25.x default)
+    try {
+      const r: any = await this.get('/dnsmasq/settings/get');
+      const dm = r?.dnsmasq;
+      const ranges = dm?.dhcp_ranges;
+      const hasRanges = ranges && typeof ranges === 'object' && Object.keys(ranges).length > 0;
+      if (dm?.enable === '1' && hasRanges) return 'dnsmasq';
+    } catch (err) {
+      absentOnly404(err);
+    }
+
+    // Kea
+    try {
+      const r: any = await this.get('/kea/dhcpv4/get');
+      if (r?.dhcpv4?.general?.enabled === '1') return 'kea';
+    } catch (err) {
+      absentOnly404(err);
+    }
+
+    // ISC dhcpd (OPNsense <= 24.7)
+    return 'isc';
+  }
+
+  /** Backend currently in use, if already detected. */
+  getDhcpBackend(): 'dnsmasq' | 'kea' | 'isc' | undefined {
+    return this.dhcpBackend;
+  }
+
+  private buildLeaseQuery(params: any = {}): string {
+    const current = params.current || 1;
+    const rowCount = params.rowCount || 1000;
+    const phrase = params.searchPhrase || '';
+    return `current=${current}&rowCount=${rowCount}&searchPhrase=${encodeURIComponent(phrase)}`;
+  }
+
+  /**
    * Search DHCP leases
    */
   async searchDhcpLeases(params: any = {}): Promise<any> {
-    const searchParams = {
-      current: params.current || 1,
-      rowCount: params.rowCount || 1000,
-      sort: params.sort || {},
-      searchPhrase: params.searchPhrase || ''
-    };
-    return this.post('/dhcpv4/leases/searchLease', searchParams);
+    const backend = await this.detectDhcpBackend();
+    const qs = this.buildLeaseQuery(params);
+
+    switch (backend) {
+      case 'dnsmasq':
+        return this.get(`/dnsmasq/leases/search?${qs}`);
+      case 'kea':
+        return this.get(`/kea/leases4/search?${qs}`);
+      default:
+        return this.post('/dhcpv4/leases/searchLease', {
+          current: params.current || 1,
+          rowCount: params.rowCount || 1000,
+          sort: params.sort || {},
+          searchPhrase: params.searchPhrase || ''
+        });
+    }
   }
 
   /**
    * Get DHCP settings
    */
   async getDhcpSettings(): Promise<any> {
+    const backend = await this.detectDhcpBackend();
+    if (backend === 'dnsmasq') return this.get('/dnsmasq/settings/get');
+    if (backend === 'kea') return this.get('/kea/dhcpv4/get');
     return this.get('/dhcpv4/settings/get');
   }
 
   /**
-   * Search static mappings
+   * Search static mappings / reservations
    */
   async searchStaticMappings(params: any = {}): Promise<any> {
+    const backend = await this.detectDhcpBackend();
     const searchParams = {
       current: params.current || 1,
       rowCount: params.rowCount || 1000,
       sort: params.sort || {},
       searchPhrase: params.searchPhrase || ''
     };
+
+    if (backend === 'dnsmasq') {
+      return this.get(`/dnsmasq/settings/searchHost?${this.buildLeaseQuery(params)}`);
+    }
+    if (backend === 'kea') {
+      return this.post('/kea/dhcpv4/searchReservation', searchParams);
+    }
     return this.post('/dhcpv4/settings/searchStaticMap', searchParams);
+  }
+
+  /**
+   * Translate the canonical {mac, ipaddr, hostname, descr} mapping shape into
+   * the payload the detected backend expects.
+   *
+   * On create, unsupplied fields get backend defaults. On update, only the
+   * fields the caller supplied are sent: OPNsense merges set* payloads into
+   * the stored record, so sending a blank would wipe the existing value.
+   */
+  private toBackendMapping(backend: string, m: any, mode: 'create' | 'update' = 'create'): any {
+    const pick = (...keys: string[]) => {
+      for (const k of keys) if (m[k] !== undefined) return m[k];
+      return undefined;
+    };
+    const shape = (fields: Record<string, any>, defaults: Record<string, any>) => {
+      const out: Record<string, any> = {};
+      for (const [k, v] of Object.entries(fields)) {
+        if (v !== undefined) out[k] = v;
+        else if (mode === 'create') out[k] = defaults[k] ?? '';
+      }
+      return out;
+    };
+
+    const mac = pick('mac', 'hwaddr');
+    const ip = pick('ipaddr', 'ip', 'ip_address');
+    const hostname = pick('hostname', 'host');
+    const descr = pick('descr', 'description');
+
+    if (backend === 'dnsmasq') {
+      return {
+        host: shape(
+          {
+            host: hostname,
+            domain: m.domain,
+            local: m.local,
+            ip,
+            cnames: m.cnames,
+            client_id: m.client_id,
+            hwaddr: mac,
+            lease_time: m.lease_time,
+            ignore: m.ignore,
+            set_tag: m.set_tag,
+            descr,
+            comments: m.comments,
+            aliases: m.aliases
+          },
+          { local: '0', ignore: '0' }
+        )
+      };
+    }
+    if (backend === 'kea') {
+      // Kea reservations are scoped to a subnet UUID; the caller must supply
+      // it on create. On update it is omitted unless given, keeping the stored one.
+      return {
+        reservation: shape(
+          { subnet: m.subnet, hw_address: mac, ip_address: ip, hostname, description: descr },
+          {}
+        )
+      };
+    }
+    return { staticmap: m };
   }
 
   /**
    * Add static mapping
    */
   async addStaticMapping(mappingData: any): Promise<any> {
-    return this.post('/dhcpv4/settings/addStaticMap', { staticmap: mappingData });
+    const backend = await this.detectDhcpBackend();
+    const payload = this.toBackendMapping(backend, mappingData);
+    if (backend === 'dnsmasq') return this.post('/dnsmasq/settings/addHost', payload);
+    if (backend === 'kea') return this.post('/kea/dhcpv4/addReservation', payload);
+    return this.post('/dhcpv4/settings/addStaticMap', payload);
   }
 
   /**
    * Update static mapping
    */
   async setStaticMapping(uuid: string, mappingData: any): Promise<any> {
-    return this.post(`/dhcpv4/settings/setStaticMap/${uuid}`, { staticmap: mappingData });
+    const backend = await this.detectDhcpBackend();
+    const payload = this.toBackendMapping(backend, mappingData, 'update');
+    if (backend === 'dnsmasq') return this.post(`/dnsmasq/settings/setHost/${uuid}`, payload);
+    if (backend === 'kea') return this.post(`/kea/dhcpv4/setReservation/${uuid}`, payload);
+    return this.post(`/dhcpv4/settings/setStaticMap/${uuid}`, payload);
   }
 
   /**
    * Delete static mapping
    */
   async delStaticMapping(uuid: string): Promise<any> {
+    const backend = await this.detectDhcpBackend();
+    if (backend === 'dnsmasq') return this.post(`/dnsmasq/settings/delHost/${uuid}`);
+    if (backend === 'kea') return this.post(`/kea/dhcpv4/delReservation/${uuid}`);
     return this.post(`/dhcpv4/settings/delStaticMap/${uuid}`);
   }
 
@@ -655,6 +820,9 @@ export class OPNSenseAPIClient {
    * Apply DHCP changes
    */
   async applyDhcpChanges(): Promise<any> {
+    const backend = await this.detectDhcpBackend();
+    if (backend === 'dnsmasq') return this.post('/dnsmasq/service/reconfigure');
+    if (backend === 'kea') return this.post('/kea/service/reconfigure');
     return this.post('/dhcpv4/service/reconfigure');
   }
 
