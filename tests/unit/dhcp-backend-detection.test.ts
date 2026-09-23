@@ -95,3 +95,37 @@ describe('detectDhcpBackend', () => {
     expect(mockAxiosInstance.get).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('static mapping payloads (dnsmasq)', () => {
+  beforeEach(() => {
+    routeGets({ '/dnsmasq/settings/get': () => res(200, DNSMASQ_WITH_RANGES) });
+    mockAxiosInstance.post.mockResolvedValue(res(200, { result: 'saved' }));
+  });
+
+  it('fills backend defaults on create', async () => {
+    await client().addStaticMapping({ mac: '00:00:5e:00:53:01', ipaddr: '192.0.2.10', hostname: 'h' });
+    const [path, body] = mockAxiosInstance.post.mock.calls[0];
+    expect(path).toBe('/dnsmasq/settings/addHost');
+    expect(body.host).toMatchObject({ host: 'h', ip: '192.0.2.10', hwaddr: '00:00:5e:00:53:01', local: '0', ignore: '0', domain: '' });
+  });
+
+  it('sends only supplied fields on update so stored values are not wiped', async () => {
+    await client().setStaticMapping('uuid-1', { descr: 'renamed' });
+    const [path, body] = mockAxiosInstance.post.mock.calls[0];
+    expect(path).toBe('/dnsmasq/settings/setHost/uuid-1');
+    expect(body).toEqual({ host: { descr: 'renamed' } });
+  });
+});
+
+describe('lease interface normalization', () => {
+  it('prefers the interface key over the display name', async () => {
+    const { DhcpLeaseResource } = await import('../../src/resources/services/dhcp/leases.js');
+    routeGets({
+      '/dnsmasq/settings/get': () => res(200, DNSMASQ_WITH_RANGES),
+      '/dnsmasq/leases/search?current=1&rowCount=1000&searchPhrase=': () =>
+        res(200, { rows: [{ address: '192.0.2.10', hwaddr: '00:00:5e:00:53:01', if: 'lan', if_descr: 'LAN' }] }),
+    });
+    const leases = await new DhcpLeaseResource(client()).listLeases();
+    expect(leases[0].if).toBe('lan');
+  });
+});

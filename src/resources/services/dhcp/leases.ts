@@ -84,7 +84,9 @@ export class DhcpLeaseResource {
       state,
       act: rawLease.act || rawLease.action || (reserved ? 'static' : ''),
       wstatus: rawLease.wstatus || rawLease.status || '',
-      if: rawLease.if_descr || rawLease.if || rawLease.interface || rawLease.intf || rawLease.if_name || '',
+      // Interface key (e.g. 'lan') first: list_dhcp_leases filters on it. The
+      // display name (if_descr, e.g. 'LAN') is only a fallback.
+      if: rawLease.if || rawLease.interface || rawLease.intf || rawLease.if_name || rawLease.if_descr || '',
       man: rawLease.mac_info || rawLease.man || '',
       type: reserved ? 'static' : (rawLease.type || 'dynamic')
     };

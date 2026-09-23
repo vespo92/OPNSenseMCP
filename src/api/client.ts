@@ -725,42 +725,60 @@ export class OPNSenseAPIClient {
   /**
    * Translate the canonical {mac, ipaddr, hostname, descr} mapping shape into
    * the payload the detected backend expects.
+   *
+   * On create, unsupplied fields get backend defaults. On update, only the
+   * fields the caller supplied are sent: OPNsense merges set* payloads into
+   * the stored record, so sending a blank would wipe the existing value.
    */
-  private toBackendMapping(backend: string, m: any): any {
-    const mac = m.mac || m.hwaddr || '';
-    const ip = m.ipaddr || m.ip || m.ip_address || '';
-    const hostname = m.hostname || m.host || '';
-    const descr = m.descr || m.description || '';
+  private toBackendMapping(backend: string, m: any, mode: 'create' | 'update' = 'create'): any {
+    const pick = (...keys: string[]) => {
+      for (const k of keys) if (m[k] !== undefined) return m[k];
+      return undefined;
+    };
+    const shape = (fields: Record<string, any>, defaults: Record<string, any>) => {
+      const out: Record<string, any> = {};
+      for (const [k, v] of Object.entries(fields)) {
+        if (v !== undefined) out[k] = v;
+        else if (mode === 'create') out[k] = defaults[k] ?? '';
+      }
+      return out;
+    };
+
+    const mac = pick('mac', 'hwaddr');
+    const ip = pick('ipaddr', 'ip', 'ip_address');
+    const hostname = pick('hostname', 'host');
+    const descr = pick('descr', 'description');
 
     if (backend === 'dnsmasq') {
       return {
-        host: {
-          host: hostname,
-          domain: m.domain || '',
-          local: '0',
-          ip,
-          cnames: '',
-          client_id: m.client_id || '',
-          hwaddr: mac,
-          lease_time: m.lease_time || '',
-          ignore: '0',
-          set_tag: m.set_tag || '',
-          descr,
-          comments: '',
-          aliases: ''
-        }
+        host: shape(
+          {
+            host: hostname,
+            domain: m.domain,
+            local: m.local,
+            ip,
+            cnames: m.cnames,
+            client_id: m.client_id,
+            hwaddr: mac,
+            lease_time: m.lease_time,
+            ignore: m.ignore,
+            set_tag: m.set_tag,
+            descr,
+            comments: m.comments,
+            aliases: m.aliases
+          },
+          { local: '0', ignore: '0' }
+        )
       };
     }
     if (backend === 'kea') {
-      // Kea reservations are scoped to a subnet UUID; caller must supply it.
+      // Kea reservations are scoped to a subnet UUID; the caller must supply
+      // it on create. On update it is omitted unless given, keeping the stored one.
       return {
-        reservation: {
-          subnet: m.subnet || '',
-          hw_address: mac,
-          ip_address: ip,
-          hostname,
-          description: descr
-        }
+        reservation: shape(
+          { subnet: m.subnet, hw_address: mac, ip_address: ip, hostname, description: descr },
+          {}
+        )
       };
     }
     return { staticmap: m };
@@ -782,7 +800,7 @@ export class OPNSenseAPIClient {
    */
   async setStaticMapping(uuid: string, mappingData: any): Promise<any> {
     const backend = await this.detectDhcpBackend();
-    const payload = this.toBackendMapping(backend, mappingData);
+    const payload = this.toBackendMapping(backend, mappingData, 'update');
     if (backend === 'dnsmasq') return this.post(`/dnsmasq/settings/setHost/${uuid}`, payload);
     if (backend === 'kea') return this.post(`/kea/dhcpv4/setReservation/${uuid}`, payload);
     return this.post(`/dhcpv4/settings/setStaticMap/${uuid}`, payload);
