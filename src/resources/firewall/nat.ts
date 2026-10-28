@@ -70,6 +70,15 @@ export interface NPTRule {
 export type NATMode = 'automatic' | 'hybrid' | 'manual' | 'disabled';
 
 /**
+ * Write a boolean flag for config.xml. OPNsense evaluates these with PHP's
+ * `!empty()` (Firewall\Rule::parseIsComment / parseBool), so an empty element
+ * such as `<disabled/>` counts as unset — only "1" sets a flag.
+ */
+function xmlFlag(set: boolean): string {
+  return set ? '1' : '0';
+}
+
+/**
  * Read a boolean flag out of an xml2js-parsed `/conf/config.xml` element.
  *
  * OPNsense writes these elements with "0" or "1" as their text content, so the
@@ -326,19 +335,19 @@ export class NATResource {
         descr: rule.description || ''
       };
 
-      // Handle no-NAT rules
-      if (rule.nonat === '1' || rule.target === '') {
-        xmlRule.nonat = '';
-      } else if (rule.target) {
+      // Handle no-NAT rules. An empty target is not a no-NAT rule: OPNsense
+      // translates to the interface address when no target is given.
+      xmlRule.nonat = xmlFlag(rule.nonat === '1');
+      if (rule.nonat !== '1' && rule.target) {
         xmlRule.target = rule.target;
       }
 
       // Add optional fields
-      if (rule.enabled !== undefined) xmlRule.disabled = rule.enabled === '0' ? '' : undefined;
+      xmlRule.disabled = xmlFlag(rule.enabled === '0');
       if (rule.source_port) xmlRule.sourceport = rule.source_port;
       if (rule.destination_port) xmlRule.dstport = rule.destination_port;
       if (rule.poolopts) xmlRule.poolopts = rule.poolopts;
-      if (rule.log === '1') xmlRule.log = '';
+      xmlRule.log = xmlFlag(rule.log === '1');
 
       // Ensure rule array is an array
       if (!Array.isArray(config.nat.outbound.rule)) {
@@ -531,14 +540,10 @@ export class NATResource {
       }
 
       // Handle enabled/disabled
-      if (rule.enabled === '0') {
-        xmlRule.disabled = '';
-      }
+      xmlRule.disabled = xmlFlag(rule.enabled === '0');
 
       // Handle logging
-      if (rule.log === '1') {
-        xmlRule.log = '';
-      }
+      xmlRule.log = xmlFlag(rule.log === '1');
 
       // Ensure rule array is an array
       if (!Array.isArray(config.nat.rule)) {

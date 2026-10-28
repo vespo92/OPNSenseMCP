@@ -2301,7 +2301,7 @@ class OPNSenseMCPServer {
               interface: { type: 'string', description: 'Outbound interface (e.g., wan)' },
               source_net: { type: 'string', description: 'Source network (e.g., 10.0.6.0/24)' },
               destination_net: { type: 'string', description: 'Destination network (e.g., any)' },
-              target: { type: 'string', description: 'NAT target IP (empty for no NAT)' },
+              target: { type: 'string', description: 'NAT target IP (omit to translate to the interface address; use nonat for no NAT)' },
               nonat: { type: 'string', description: 'Set to "1" for no NAT (exception rule)' },
               description: { type: 'string', description: 'Rule description' },
               enabled: { type: 'string', description: '1 to enable, 0 to disable', default: '1' }
