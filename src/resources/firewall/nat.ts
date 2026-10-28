@@ -229,6 +229,20 @@ export class NATResource {
         }
       }
 
+      // Newer OPNsense releases keep outbound NAT in the MVC firewall model
+      // (Firewall > NAT > Source NAT) instead of nat.outbound. Both stores can
+      // be populated at once, so read the MVC one as well — skipping it
+      // reported an empty list for firewalls whose rules all live there.
+      const snatRules = config.OPNsense?.Firewall?.Filter?.snatrules?.rule;
+      if (snatRules) {
+        const list = Array.isArray(snatRules) ? snatRules : [snatRules];
+        rules = rules.concat(
+          list
+            .filter((rule: any) => rule && typeof rule === 'object')
+            .map((rule: any) => this.normalizeSourceNATRuleFromXML(rule))
+        );
+      }
+
       if (this.debugMode) {
         logger.debug(`[NATResource] Found ${rules.length} outbound NAT rules`);
       }
@@ -982,6 +996,31 @@ export class NATResource {
       nonat: xmlFlagSet(rule.nonat) ? '1' : '0',
       log: xmlFlagSet(rule.log) ? '1' : '0',
       description: rule.descr || ''
+    };
+  }
+
+  /**
+   * Normalize an outbound NAT rule from the MVC firewall model
+   * (OPNsense.Firewall.Filter.snatrules). Unlike the legacy nat.outbound
+   * format it stores an `enabled` flag, flat `*_net`/`*_port` fields and
+   * `description` instead of `descr`.
+   */
+  private normalizeSourceNATRuleFromXML(rule: any): OutboundNATRule {
+    return {
+      // The model defaults `enabled` to 1, so an absent element means enabled.
+      enabled: rule.enabled === undefined || xmlFlagSet(rule.enabled) ? '1' : '0',
+      sequence: rule.sequence,
+      interface: rule.interface,
+      source_net: rule.source_net || 'any',
+      source_port: rule.source_port || undefined,
+      destination_net: rule.destination_net || 'any',
+      destination_port: rule.destination_port || undefined,
+      target: rule.target || '',
+      poolopts: rule.poolopts || undefined,
+      sourceHash: rule.poolopts_sourcehashkey || undefined,
+      nonat: xmlFlagSet(rule.nonat) ? '1' : '0',
+      log: xmlFlagSet(rule.log) ? '1' : '0',
+      description: rule.description || ''
     };
   }
 
