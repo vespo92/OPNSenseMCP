@@ -87,6 +87,31 @@ function xmlFlagSet(value: unknown): boolean {
   return String(value).trim() === '1';
 }
 
+/**
+ * Replace the top-level `<nat>` element of a raw config.xml with `natXml`,
+ * leaving every other byte of the document untouched.
+ *
+ * NAT writes used to re-serialize the whole document from an xml2js parse.
+ * That parse dropped attributes, so a single NAT change stripped every
+ * `uuid="..."` from config.xml (MVC firewall rules, aliases, source NAT ...),
+ * and an xml2js round trip also loses comments and the order of interleaved
+ * sibling elements. Splicing confines the rewrite to the section we changed.
+ *
+ * Throws unless exactly one `<nat>` element is found, rather than guessing
+ * which one to replace.
+ */
+export function spliceNATSection(configXml: string, natXml: string): string {
+  const matches = [...configXml.matchAll(/<nat(?:\s[^>]*)?(?:\/>|>[\s\S]*?<\/nat>)/g)];
+  if (matches.length !== 1) {
+    throw new Error(
+      `Expected exactly one <nat> element in config.xml, found ${matches.length}; refusing to write`
+    );
+  }
+  const [match] = matches;
+  const start = match.index!;
+  return configXml.slice(0, start) + natXml + configXml.slice(start + match[0].length);
+}
+
 export class NATResource {
   private client: OPNSenseAPIClient;
   private interfaceMapper: InterfaceMapper;
@@ -128,9 +153,10 @@ export class NATResource {
     }
 
     try {
+      // Attributes are kept (under `$`) so that a rule's uuid="..." survives
+      // being written back by saveNATConfigViaSSH().
       const config = await parseStringPromise(result.stdout, {
-        explicitArray: false,
-        ignoreAttrs: true
+        explicitArray: false
       });
       return config.opnsense || config;
     } catch (error) {
@@ -146,12 +172,18 @@ export class NATResource {
       throw new Error('SSH not configured');
     }
 
-    // Convert config back to XML
+    // Serialize only the NAT section and splice it into the current file;
+    // see spliceNATSection() for why the rest of the document is not rebuilt.
+    const current = await this.sshExecutor.execute('cat /conf/config.xml');
+    if (!current.success) {
+      throw new Error(`Failed to read config.xml: ${current.stderr}`);
+    }
     const builder = new Builder({
-      xmldec: { version: '1.0', encoding: 'UTF-8' },
+      headless: true,
       renderOpts: { pretty: true, indent: '  ' }
     });
-    const xml = builder.buildObject({ opnsense: config });
+    const natXml = builder.buildObject({ nat: config.nat || {} });
+    const xml = spliceNATSection(current.stdout, natXml);
 
     // Save to temporary file and then move to config.xml
     const tempFile = `/tmp/config_nat_${Date.now()}.xml`;
@@ -501,6 +533,7 @@ export class NATResource {
       // Build the port forward rule XML structure
       // OPNsense port forward format in config.xml
       const xmlRule: any = {
+        $: { uuid },
         interface: rule.interface || 'wan',
         protocol: rule.protocol || 'tcp',
         target: rule.target,
